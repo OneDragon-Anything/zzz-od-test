@@ -33,9 +33,11 @@ class ZzzTestBase(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.ctx = ZContext(instance_idx=99)  # 使用特定的实例id
+        self.ctx = ZContext()
         self.ctx.env_config.is_debug = True
         self.ctx.init_by_config()
+        self.ctx.current_instance_idx = 99  # 使用特定的实例id
+        self.ctx.load_instance_config()
         self.ctx.ocr.init_model()
         self.ctx.controller = MockController(self.ctx.game_config,
                                              self.ctx.project_config.screen_standard_width,
