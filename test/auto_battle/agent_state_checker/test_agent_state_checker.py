@@ -1,8 +1,6 @@
 import test
 from zzz_od.auto_battle.agent_state import agent_state_checker
 from zzz_od.game_data.agent import AgentEnum
-from zzz_od.operation.hollow_zero.event import event_utils
-from zzz_od.operation.hollow_zero.event.call_for_support import CallForSupport
 
 
 class TestAgentStateChecker(test.ZzzTestBase):

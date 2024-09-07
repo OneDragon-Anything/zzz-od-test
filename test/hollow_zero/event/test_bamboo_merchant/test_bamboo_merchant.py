@@ -1,5 +1,5 @@
 import test
-from zzz_od.operation.hollow_zero.event.bamboo_merchant import BambooMerchant
+from zzz_od.hollow_zero.event.bamboo_merchant import BambooMerchant
 
 
 class TestChooseSimUniNum(test.ZzzTestBase):

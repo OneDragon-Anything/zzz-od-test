@@ -22,11 +22,15 @@ class MockController(ControllerBase):
         self.game_config: GameConfig = game_config
         self.standard_width: int = standard_width
         self.standard_height: int = standard_height
+        self.mock_screenshot: MatLike = None
 
     def click(self, pos: Point = None, press_time: float = 0, pc_alt: bool = False) -> bool:
         if pos is None:
             return True
         return 0 <= pos.x < self.standard_width and 0 <= pos.y < self.standard_height
+
+    def screenshot(self, independent: bool = False) -> MatLike:
+        return self.mock_screenshot
 
 
 class ZzzTestBase(unittest.TestCase):
@@ -65,3 +69,12 @@ class ZzzTestBase(unittest.TestCase):
         self.assertTrue(os.path.exists(img_path), '图片不存在')
         return cv2_utils.read_image(img_path)
 
+    def add_mock_screenshot(self, file_name: str) -> MatLike:
+        """
+        将图片放到controller中 方便op使用
+        :param file_name: 同上
+        :return:
+        """
+        screen = self.get_test_image(file_name)
+        self.ctx.controller.mock_screenshot = screen
+        return screen

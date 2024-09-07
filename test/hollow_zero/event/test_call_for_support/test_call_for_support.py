@@ -1,8 +1,8 @@
 import test
 from zzz_od.game_data.agent import AgentEnum
 from zzz_od.hollow_zero.hollow_zero_challenge_config import HollowZeroChallengeConfig
-from zzz_od.operation.hollow_zero.event import event_utils
-from zzz_od.operation.hollow_zero.event.call_for_support import CallForSupport
+from zzz_od.hollow_zero.event import hollow_event_utils
+from zzz_od.hollow_zero.event.call_for_support import CallForSupport
 
 
 class TestChooseSimUniNum(test.ZzzTestBase):
