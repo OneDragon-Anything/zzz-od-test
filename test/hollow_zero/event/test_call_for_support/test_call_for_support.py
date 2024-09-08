@@ -5,7 +5,7 @@ from zzz_od.hollow_zero.event import hollow_event_utils
 from zzz_od.hollow_zero.event.call_for_support import CallForSupport
 
 
-class TestChooseSimUniNum(test.ZzzTestBase):
+class TestCallForSupport(test.ZzzTestBase):
 
     def __init__(self, *args, **kwargs):
         test.ZzzTestBase.__init__(self, *args, **kwargs)
@@ -17,7 +17,7 @@ class TestChooseSimUniNum(test.ZzzTestBase):
         """
         screen = self.get_test_image('no_agent.png')
         op = CallForSupport(self.ctx)
-        result = event_utils.check_event_text_and_run(op, screen, op._handlers)
+        result = hollow_event_utils.check_event_text_and_run(op, screen, op._handlers)
         self.assertEqual('事件文本', result.status)
 
     def test_new_agent_pos(self):
