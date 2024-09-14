@@ -31,9 +31,21 @@ class TestCallForSupport(test.ZzzTestBase):
         op = CallForSupport(self.ctx)
 
         # 现在是 朱鸢 来的是妮可
-        self.assertEqual(2, op._should_call_backup(
+        self.assertEqual(1, op._should_call_backup(
             [AgentEnum.ZHU_YUAN.value, None, None],
             AgentEnum.NICOLE.value
+        ))
+
+        # 现在是 朱鸢 来的是青衣
+        self.assertEqual(2, op._should_call_backup(
+            [AgentEnum.ZHU_YUAN.value, None, None],
+            AgentEnum.QINGYI.value
+        ))
+
+        # 现在是 朱鸢 来的是莱卡恩
+        self.assertEqual(2, op._should_call_backup(
+            [AgentEnum.ZHU_YUAN.value, None, None],
+            AgentEnum.LYCAON.value
         ))
 
         # 现在是 朱鸢+妮可 来的是青衣
@@ -61,14 +73,26 @@ class TestCallForSupport(test.ZzzTestBase):
         ))
 
         # 现在是 青衣 来的是朱鸢
-        self.assertEqual(2, op._should_call_backup(
+        self.assertEqual(1, op._should_call_backup(
             [AgentEnum.QINGYI.value, None, None],
             AgentEnum.ZHU_YUAN.value
+        ))
+
+        # 现在是 青衣 来的是妮可
+        self.assertEqual(2, op._should_call_backup(
+            [AgentEnum.QINGYI.value, None, None],
+            AgentEnum.NICOLE.value
         ))
 
         # 现在是 青衣+朱鸢 来的是妮可
         self.assertEqual(2, op._should_call_backup(
             [AgentEnum.QINGYI.value, AgentEnum.ZHU_YUAN.value, None],
             AgentEnum.NICOLE.value
+        ))
+
+        # 现在是 朱鸢+青衣+妮可 来的是莱卡恩
+        self.assertIsNone(op._should_call_backup(
+            [AgentEnum.ZHU_YUAN.value, AgentEnum.QINGYI.value, AgentEnum.NICOLE.value],
+            AgentEnum.LYCAON.value
         ))
 
