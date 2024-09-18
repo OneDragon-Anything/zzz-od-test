@@ -112,3 +112,9 @@ class TestEnergy(test.ZzzTestBase):
         ans = agent_state_checker.check_length_by_foreground_gray(self.ctx, screen, CommonAgentStateEnum.ENERGY_22.value)
         print(ans)
         self.assertTrue(ans == 120)
+
+    def test_11(self):
+        screen = self.get_test_image('11_120.png')
+        ans = agent_state_checker.check_length_by_foreground_gray(self.ctx, screen, CommonAgentStateEnum.ENERGY_21.value)
+        print(ans)
+        self.assertTrue(ans == 120)
