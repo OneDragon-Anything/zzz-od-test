@@ -20,4 +20,9 @@ class TestQingyi(test.ZzzTestBase):
         screen = self.get_test_image('qingyi_lt_75')
         ans = agent_state_checker.check_length_by_background_gray(self.ctx, screen, agent.state_list[0])
         print(ans)
-        self.assertTrue(ans < 75)
+        self.assertTrue(ans < 75)  # 64
+
+        screen = self.get_test_image('qingyi_gt_75')
+        ans = agent_state_checker.check_length_by_background_gray(self.ctx, screen, agent.state_list[0])
+        print(ans)
+        self.assertTrue(ans > 75)  # 91
