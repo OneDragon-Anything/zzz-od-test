@@ -16,7 +16,7 @@ class TestHollowEventUtils(test.ZzzTestBase):
         result = hollow_event_utils.check_full_in_bag(self.ctx, screen)
         self.assertIsNotNone(result)
 
-        result = hollow_event_utils.check_screen(self.ctx, screen)
+        result = hollow_event_utils.check_screen(self.ctx, screen, set())
         self.assertEqual(HollowZeroSpecialEvent.FULL_IN_BAG.value.event_name, result)
 
     def test_opts(self):
