@@ -8,7 +8,7 @@ class TestSoukaku(test.ZzzTestBase):
     def __init__(self, *args, **kwargs):
         test.ZzzTestBase.__init__(self, *args, **kwargs)
 
-    def test_ellen(self):
+    def test_soukaku(self):
         agent = AgentEnum.SOUKAKU.value
         state = agent.state_list[0]
 
