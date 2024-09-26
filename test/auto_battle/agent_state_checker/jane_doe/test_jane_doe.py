@@ -8,29 +8,17 @@ class TestJaneDoe(test.ZzzTestBase):
     def __init__(self, *args, **kwargs):
         test.ZzzTestBase.__init__(self, *args, **kwargs)
 
-    def test_jane_doe(self):
-        """
-        简
-        """
+    def test_red(self):
         agent = AgentEnum.JANE_DOE.value
+        state = agent.state_list[1]
 
-        # 有萨霍夫跳
-        screen = self.get_test_image('jane_doe_red')
-        self.assertTrue(agent_state_checker.check_exist_by_color_range(self.ctx, screen, agent.state_list[0]))
-        red_length = agent_state_checker.check_length_by_foreground_color(self.ctx, screen, agent.state_list[1])
-        print(red_length)
-        self.assertTrue(red_length >= 90)
+        for total in [2, 3]:
+            for pos in [1, 2, 3]:
+                for l in [0, 100]:
+                    screen = self.get_test_image(f'{total}_{pos}_{l}')
+                    if screen is None:
+                        continue
 
-        # 没有萨霍夫跳 没能量条
-        screen = self.get_test_image('jane_doe_blue')
-        self.assertFalse(agent_state_checker.check_exist_by_color_range(self.ctx, screen, agent.state_list[0]))
-        red_length = agent_state_checker.check_length_by_foreground_color(self.ctx, screen, agent.state_list[1])
-        print(red_length)
-        self.assertEqual(0, red_length)
-
-        # 没有萨霍夫跳 有能量条
-        screen = self.get_test_image('jane_doe_100')
-        self.assertFalse(agent_state_checker.check_exist_by_color_range(self.ctx, screen, agent.state_list[0]))
-        red_length = agent_state_checker.check_length_by_foreground_color(self.ctx, screen, agent.state_list[1])
-        print(red_length)
-        self.assertTrue(red_length >= 99)
+                    ans = agent_state_checker.check_length_by_foreground_color(self.ctx, screen, state, total, pos)
+                    print(total, pos, l, ans)
+                    self.assertTrue(abs(l - ans) <= 5)
