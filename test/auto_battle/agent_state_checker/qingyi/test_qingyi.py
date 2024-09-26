@@ -10,19 +10,15 @@ class TestQingyi(test.ZzzTestBase):
 
     def test_qingyi(self):
         agent = AgentEnum.QINGYI.value
-        for i in ['0', '75', '100']:
-            screen = self.get_test_image(f'qingyi_{i}')
-            for state in agent.state_list:
-                ans = agent_state_checker.check_length_by_background_gray(self.ctx, screen, state)
-                print(ans)
-                self.assertTrue(ans >= int(i))
+        state = agent.state_list[0]
 
-        screen = self.get_test_image('qingyi_lt_75')
-        ans = agent_state_checker.check_length_by_background_gray(self.ctx, screen, agent.state_list[0])
-        print(ans)
-        self.assertTrue(ans < 75)  # 64
+        for total in [2, 3]:
+            for pos in [1, 2, 3]:
+                for l in [0, 100]:
+                    screen = self.get_test_image(f'{total}_{pos}_{l}')
+                    if screen is None:
+                        continue
 
-        screen = self.get_test_image('qingyi_gt_75')
-        ans = agent_state_checker.check_length_by_background_gray(self.ctx, screen, agent.state_list[0])
-        print(ans)
-        self.assertTrue(ans > 75)  # 91
+                    ans = agent_state_checker.check_length_by_background_gray(self.ctx, screen, state, total, pos)
+                    print(total, pos, l, ans)
+                    self.assertTrue(abs(l - ans) <= 5)
