@@ -22,3 +22,18 @@ class TestJaneDoe(test.ZzzTestBase):
                     ans = agent_state_checker.check_length_by_foreground_color(self.ctx, screen, state, total, pos)
                     print(total, pos, l, ans)
                     self.assertTrue(abs(l - ans) <= 5)
+
+    def test_attack(self):
+        agent = AgentEnum.JANE_DOE.value
+        state = agent.state_list[0]
+
+        for total in [2, 3]:
+            for pos in [1, 2, 3]:
+                for l in [100]:
+                    screen = self.get_test_image(f'{total}_{pos}_{l}')
+                    if screen is None:
+                        continue
+
+                    ans = agent_state_checker.check_exist_by_color_range(self.ctx, screen, state, total, pos)
+                    print(total, pos, l, ans)
+                    self.assertTrue(ans)
