@@ -4,6 +4,7 @@ import sys
 import os
 import unittest
 from cv2.typing import MatLike
+from typing import Optional
 
 from one_dragon.base.controller.controller_base import ControllerBase
 from one_dragon.base.geometry.point import Point
@@ -31,6 +32,54 @@ class MockController(ControllerBase):
 
     def screenshot(self, independent: bool = False) -> MatLike:
         return self.mock_screenshot
+
+    def dodge(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
+        pass
+
+    def switch_next(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
+        pass
+
+    def switch_prev(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
+        pass
+
+    def normal_attack(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
+        pass
+
+    def special_attack(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
+        pass
+
+    def ultimate(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
+        pass
+
+    def chain_left(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
+        pass
+
+    def chain_right(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
+        pass
+
+    def move_w(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
+        pass
+
+    def move_s(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
+        pass
+
+    def move_a(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
+        pass
+
+    def move_d(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
+        pass
+
+    def interact(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
+        pass
+
+    def turn_by_distance(self, d: float):
+        pass
+
+    def lock(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
+        pass
+
+    def chain_cancel(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
+        pass
 
 
 class ZzzTestBase(unittest.TestCase):
