@@ -14,7 +14,7 @@ class TestBurniceWhite(test.ZzzTestBase):
 
         for total in [2, 3]:
             for pos in [1, 2, 3]:
-                for l in [0, 100]:
+                for l in [0, 60, 100]:
                     screen = self.get_test_image(f'{total}_{pos}_{l}')
                     if screen is None:
                         continue
