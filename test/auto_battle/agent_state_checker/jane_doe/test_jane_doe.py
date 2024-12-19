@@ -29,11 +29,14 @@ class TestJaneDoe(test.ZzzTestBase):
 
         for total in [2, 3]:
             for pos in [1, 2, 3]:
-                for l in [100]:
+                for l in [0, 100]:
                     screen = self.get_test_image(f'{total}_{pos}_{l}')
                     if screen is None:
                         continue
 
                     ans = agent_state_checker.check_exist_by_color_range(self.ctx, screen, state, total, pos)
                     print(total, pos, l, ans)
-                    self.assertTrue(ans)
+                    if l == 0:
+                        self.assertFalse(ans)
+                    else:
+                        self.assertTrue(ans)
