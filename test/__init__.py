@@ -86,6 +86,11 @@ class ZzzTestBase(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+    def setUp(self) -> None:
+        """
+        在每个测试方法运行前执行初始化
+        """
         self.ctx = ZContext()
         self.ctx.env_config.is_debug = True
         self.ctx.init_by_config()
