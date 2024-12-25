@@ -8,14 +8,14 @@ class TestUltimate(test.ZzzTestBase):
     def __init__(self, *args, **kwargs):
         test.ZzzTestBase.__init__(self, *args, **kwargs)
 
-    def test_ultimate(self):
+    def test_special(self):
         state_map = {
-            2: [CommonAgentStateEnum.ULTIMATE_21.value, CommonAgentStateEnum.ULTIMATE_22.value],
-            3: [CommonAgentStateEnum.ULTIMATE_31.value, CommonAgentStateEnum.ULTIMATE_32.value, CommonAgentStateEnum.ULTIMATE_33.value]
+            2: [CommonAgentStateEnum.SPECIAL_21.value, CommonAgentStateEnum.SPECIAL_22.value],
+            3: [CommonAgentStateEnum.SPECIAL_31.value, CommonAgentStateEnum.SPECIAL_32.value, CommonAgentStateEnum.SPECIAL_33.value]
         }
 
         for agent_num in [2, 3]:
-            for ultimate_pos in [0, 1, 2, 3]:
+            for ultimate_pos in [1, 2, 3]:
                 screen = self.get_test_image(f'{agent_num}_{ultimate_pos}')
                 if screen is None:
                     continue
