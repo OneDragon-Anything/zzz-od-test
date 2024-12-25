@@ -3,7 +3,7 @@ from zzz_od.auto_battle.agent_state import agent_state_checker
 from zzz_od.game_data.agent import AgentEnum, CommonAgentStateEnum, AgentStateCheckWay
 
 
-class TestUltimate(test.ZzzTestBase):
+class TestSpecial(test.ZzzTestBase):
 
     def __init__(self, *args, **kwargs):
         test.ZzzTestBase.__init__(self, *args, **kwargs)
@@ -15,8 +15,8 @@ class TestUltimate(test.ZzzTestBase):
         }
 
         for agent_num in [2, 3]:
-            for ultimate_pos in [1, 2, 3]:
-                screen = self.get_test_image(f'{agent_num}_{ultimate_pos}')
+            for special_pos in [0, 1, 2, 3]:
+                screen = self.get_test_image(f'{agent_num}_{special_pos}')
                 if screen is None:
                     continue
 
@@ -29,10 +29,12 @@ class TestUltimate(test.ZzzTestBase):
                     agent_pos = state_idx + 1
                     state = state_list[state_idx]
 
-                    if state.check_way == AgentStateCheckWay.COLOR_RANGE_EXIST:
-                        ans = agent_state_checker.check_exist_by_color_range(self.ctx, screen, state)
+                    if state.check_way == AgentStateCheckWay.COLOR_CHANNEL_MAX_RANGE_EXIST:
+                        ans = agent_state_checker.check_exist_by_color_channel_max_range(self.ctx, screen, state)
                     elif state.check_way == AgentStateCheckWay.TEMPLATE_NOT_FOUND:
                         ans = agent_state_checker.check_template_not_found(self.ctx, screen, state)
+                    else:
+                        self.fail(f'未支持的 {state.check_way}')
 
-                    print(agent_num, ultimate_pos, agent_pos, ans)
-                    self.assertEqual(ultimate_pos == agent_pos, ans)
+                    print(agent_num, special_pos, agent_pos, ans)
+                    self.assertEqual((1 if special_pos == agent_pos else 0), ans)

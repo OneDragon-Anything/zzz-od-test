@@ -37,6 +37,6 @@ class TestJaneDoe(test.ZzzTestBase):
                     ans = agent_state_checker.check_exist_by_color_range(self.ctx, screen, state, total, pos)
                     print(total, pos, l, ans)
                     if l == 0:
-                        self.assertFalse(ans)
+                        self.assertEqual(0, ans)
                     else:
-                        self.assertTrue(ans)
+                        self.assertEqual(1, ans)

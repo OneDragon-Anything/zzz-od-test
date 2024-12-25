@@ -33,6 +33,8 @@ class TestUltimate(test.ZzzTestBase):
                         ans = agent_state_checker.check_exist_by_color_range(self.ctx, screen, state)
                     elif state.check_way == AgentStateCheckWay.TEMPLATE_NOT_FOUND:
                         ans = agent_state_checker.check_template_not_found(self.ctx, screen, state)
+                    else:
+                        self.fail(f'未支持的 {state.check_way}')
 
                     print(agent_num, ultimate_pos, agent_pos, ans)
                     self.assertEqual(ultimate_pos == agent_pos, ans)
