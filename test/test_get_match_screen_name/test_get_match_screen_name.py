@@ -14,7 +14,15 @@ class TestGetMatchScreenName(test.ZzzTestBase):
             'storage_wengine': '仓库-音擎仓库',
             'storage_drive_disc': '仓库-驱动仓库',
             'drive_disc_dismantle': '仓库-驱动仓库-驱动盘拆解',
-            'compendium_train': '快捷手册-训练'
+            'compendium_train': '快捷手册-训练',
+            'lost_void_entry': '迷失之地-入口',
+            'lost_void_purge': '迷失之地-战线肃清',
+            'lost_void_normal_world': '迷失之地-大世界',
+            'lost_void_choose_common': '迷失之地-通用选择',
+            'lost_void_choose_common_2': '迷失之地-通用选择',
+            'lost_void_choose_common_3': '迷失之地-通用选择',
+            'lost_void_choose_eval': '迷失之地-业绩选择',
+            'lost_void_bangboo_store': '迷失之地-邦布商店',
         }
         for image_name, screen_name in screen_map.items():
             screen = self.get_test_image(image_name)
