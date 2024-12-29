@@ -21,8 +21,10 @@ class TestGetMatchScreenName(test.ZzzTestBase):
             'lost_void_choose_common': '迷失之地-通用选择',
             'lost_void_choose_common_2': '迷失之地-通用选择',
             'lost_void_choose_common_3': '迷失之地-通用选择',
-            'lost_void_choose_eval': '迷失之地-业绩选择',
             'lost_void_bangboo_store': '迷失之地-邦布商店',
+            'lost_void_choose_no_detail': '迷失之地-无详情选择',
+            'lost_void_choose_no_detail_2': '迷失之地-无详情选择',
+            'lost_void_battle_result': '迷失之地-挑战结果'
         }
         for image_name, screen_name in screen_map.items():
             screen = self.get_test_image(image_name)
