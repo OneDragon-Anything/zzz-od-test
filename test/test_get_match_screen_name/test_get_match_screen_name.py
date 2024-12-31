@@ -15,6 +15,10 @@ class TestGetMatchScreenName(test.ZzzTestBase):
             'storage_drive_disc': '仓库-驱动仓库',
             'drive_disc_dismantle': '仓库-驱动仓库-驱动盘拆解',
             'compendium_train': '快捷手册-训练',
+            'compendium_train_2': '快捷手册-训练',
+            'compendium_daily': '快捷手册-日常',
+            'compendium_daily_2': '快捷手册-日常',
+            'compendium_combat': '快捷手册-作战',
             'lost_void_entry': '迷失之地-入口',
             'lost_void_purge': '迷失之地-战线肃清',
             'lost_void_normal_world': '迷失之地-大世界',
@@ -26,6 +30,7 @@ class TestGetMatchScreenName(test.ZzzTestBase):
             'lost_void_choose_no_detail_2': '迷失之地-无详情选择',
             'lost_void_battle_result': '迷失之地-挑战结果'
         }
+        route = self.ctx.screen_loader.get_screen_route('菜单', '快捷手册-训练')
         for image_name, screen_name in screen_map.items():
             screen = self.get_test_image(image_name)
             result = screen_utils.get_match_screen_name(self.ctx, screen)
