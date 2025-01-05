@@ -11,6 +11,7 @@ class TestGetMatchScreenName(test.ZzzTestBase):
         screen_map = {
             'normal_world_basic': '大世界-普通',
             'menu': '菜单',
+            'menu_more': '菜单-更多功能',
             'storage_wengine': '仓库-音擎仓库',
             'storage_drive_disc': '仓库-驱动仓库',
             'drive_disc_dismantle': '仓库-驱动仓库-驱动盘拆解',
@@ -19,6 +20,7 @@ class TestGetMatchScreenName(test.ZzzTestBase):
             'compendium_daily': '快捷手册-日常',
             'compendium_daily_2': '快捷手册-日常',
             'compendium_combat': '快捷手册-作战',
+            'battle_menu': '战斗-菜单',
             'lost_void_entry': '迷失之地-入口',
             'lost_void_purge': '迷失之地-战线肃清',
             'lost_void_normal_world': '迷失之地-大世界',
@@ -30,6 +32,7 @@ class TestGetMatchScreenName(test.ZzzTestBase):
             'lost_void_choose_no_detail_2': '迷失之地-无详情选择',
             'lost_void_battle_result': '迷失之地-挑战结果',
             'lost_void_battle_result_fail': '迷失之地-挑战结果',
+            'lost_void_battle_fail': '迷失之地-战斗失败',
         }
         self.ctx.screen_loader.update_current_screen_name('菜单')
         for image_name, screen_name in screen_map.items():
