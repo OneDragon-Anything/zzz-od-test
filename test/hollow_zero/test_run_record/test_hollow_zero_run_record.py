@@ -1,11 +1,7 @@
 import test
 from one_dragon.base.operation.application_run_record import AppRunRecord
 from one_dragon.utils import os_utils
-from zzz_od.application.hollow_zero.hollow_zero_config import HollowZeroExtraTask
-from zzz_od.game_data.agent import AgentEnum
-from zzz_od.hollow_zero.hollow_zero_challenge_config import HollowZeroChallengeConfig
-from zzz_od.hollow_zero.event import hollow_event_utils
-from zzz_od.hollow_zero.event.call_for_support import CallForSupport
+from zzz_od.application.hollow_zero.withered_domain.hollow_zero_config import HollowZeroExtraTask
 
 
 class TestHollowZeroRunRecord(test.ZzzTestBase):
