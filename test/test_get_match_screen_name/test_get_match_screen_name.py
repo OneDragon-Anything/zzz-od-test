@@ -30,6 +30,7 @@ class TestGetMatchScreenName(test.ZzzTestBase):
             'lost_void_bangboo_store': '迷失之地-邦布商店',
             'lost_void_choose_no_detail': '迷失之地-无详情选择',
             'lost_void_choose_no_detail_2': '迷失之地-无详情选择',
+            'lost_void_choose_no_num': '迷失之地-无数量选择',
             'lost_void_battle_result': '迷失之地-挑战结果',
             'lost_void_battle_result_fail': '迷失之地-挑战结果',
             'lost_void_battle_fail': '迷失之地-战斗失败',
@@ -38,4 +39,10 @@ class TestGetMatchScreenName(test.ZzzTestBase):
         for image_name, screen_name in screen_map.items():
             screen = self.get_test_image(image_name)
             result = screen_utils.get_match_screen_name(self.ctx, screen)
+            self.assertEqual(screen_name, result)
+
+        screen_name_list = [i for i in screen_map.values()]
+        for image_name, screen_name in screen_map.items():
+            screen = self.get_test_image(image_name)
+            result = screen_utils.get_match_screen_name(self.ctx, screen, screen_name_list=screen_name_list)
             self.assertEqual(screen_name, result)
