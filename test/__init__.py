@@ -96,7 +96,7 @@ class ZzzTestBase(unittest.TestCase):
         self.ctx.init_by_config()
         self.ctx.current_instance_idx = 99  # 使用特定的实例id
         self.ctx.load_instance_config()
-        self.ctx.ocr.init_model()
+        self.ctx.init_ocr()
         self.ctx.controller = MockController(self.ctx.game_config,
                                              self.ctx.project_config.screen_standard_width,
                                              self.ctx.project_config.screen_standard_height)

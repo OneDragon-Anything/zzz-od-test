@@ -9,7 +9,7 @@ class TestLostVoidContext(test.ZzzTestBase):
 
     def test_get_artifact_by_priority_1(self):
         """
-        https://github.com/DoctorReid/ZenlessZoneZero-OneDragon/issues/644
+        https://github.com/OneDragon-Anything/ZenlessZoneZero-OneDragon/issues/644
         确认第一个优先级可以匹配
         :return:
         """
