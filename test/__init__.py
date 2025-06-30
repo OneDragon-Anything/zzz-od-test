@@ -9,7 +9,7 @@ from typing import Optional
 from one_dragon.base.controller.controller_base import ControllerBase
 from one_dragon.base.geometry.point import Point
 from one_dragon.utils import cv2_utils
-from one_dragon.utils.log_utils import log
+from one_dragon.utils.log_utils import log, set_log_level
 from zzz_od.config.game_config import GameConfig
 from zzz_od.context.zzz_context import ZContext
 
@@ -110,6 +110,8 @@ class ZzzTestBase(unittest.TestCase):
         sub_file_path = os.path.abspath(subclass_file)
         # 获取子类所在的包路径
         self.sub_package_path: str = os.path.dirname(sub_file_path)
+
+        set_log_level(logging.DEBUG)
 
     def get_test_image(self, file_name: str) -> MatLike:
         """

@@ -1,5 +1,4 @@
 import test
-from one_dragon.base.screen import screen_utils
 
 
 class TestGetScreenRote(test.ZzzTestBase):
