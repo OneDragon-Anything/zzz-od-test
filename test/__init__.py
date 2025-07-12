@@ -2,6 +2,7 @@ import logging
 import sys
 
 import os
+import time
 import unittest
 from cv2.typing import MatLike
 from typing import Optional
@@ -30,8 +31,8 @@ class MockController(ControllerBase):
             return True
         return 0 <= pos.x < self.standard_width and 0 <= pos.y < self.standard_height
 
-    def screenshot(self, independent: bool = False) -> MatLike:
-        return self.mock_screenshot
+    def screenshot(self, independent: bool = False) -> tuple[float, MatLike]:
+        return time.time(), self.mock_screenshot
 
     def dodge(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
         pass
