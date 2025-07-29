@@ -2,7 +2,7 @@ import os
 
 import test
 from one_dragon.utils import cv2_utils
-from zzz_od.context.mini_map_service import MiniMapService
+from zzz_od.game_map.mini_map_wrapper import MiniMapWrapper
 
 
 class TestMiniMapService(test.ZzzTestBase):
@@ -17,13 +17,12 @@ class TestMiniMapService(test.ZzzTestBase):
                 continue
 
             mini_map = cv2_utils.read_image(os.path.join(dir_path, file_name))
+            mini_map_wrapper = MiniMapWrapper(mini_map)
             target_angle = file_name.split('_')[0]
-            angle = MiniMapService.cal_angle(mini_map)
+            angle = mini_map_wrapper.view_angle
             print(f'{file_name} {angle}')
 
             angle_diff = abs(float(target_angle) - angle)
             if angle_diff > 180:
                 angle_diff = 360 - angle_diff
             self.assertTrue(angle_diff <= 10)
-
-
