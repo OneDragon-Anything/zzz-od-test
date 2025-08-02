@@ -1,7 +1,7 @@
 import os
 
 from one_dragon.utils import cv2_utils, mini_map_angle_utils
-from zzz_od.game_map.mini_map_wrapper import TOTAL_VIEW_ANGLE, RADIUS_RANGE
+from zzz_od.application.world_patrol.mini_map_wrapper import TOTAL_VIEW_ANGLE, RADIUS_RANGE
 from zzz_od.context.zzz_context import ZContext
 
 

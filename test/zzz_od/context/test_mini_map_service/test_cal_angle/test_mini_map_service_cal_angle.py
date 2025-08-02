@@ -2,7 +2,7 @@ import os
 
 import test
 from one_dragon.utils import cv2_utils
-from zzz_od.game_map.mini_map_wrapper import MiniMapWrapper
+from zzz_od.application.world_patrol.mini_map_wrapper import MiniMapWrapper
 
 
 class TestMiniMapService(test.ZzzTestBase):
