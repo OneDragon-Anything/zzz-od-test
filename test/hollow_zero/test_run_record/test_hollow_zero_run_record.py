@@ -1,10 +1,10 @@
 import test
 from one_dragon.base.operation.application_run_record import AppRunRecord
 from one_dragon.utils import os_utils
-from zzz_od.application.hollow_zero.withered_domain.hollow_zero_config import HollowZeroExtraTask
+from zzz_od.application.hollow_zero.withered_domain.withered_domain_config import HollowZeroExtraTask
 
 
-class TestHollowZeroRunRecord(test.ZzzTestBase):
+class TestWitheredDomainRunRecord(test.ZzzTestBase):
 
     def __init__(self, *args, **kwargs):
         test.ZzzTestBase.__init__(self, *args, **kwargs)
