@@ -2,26 +2,29 @@ import time
 
 import cv2
 import numpy as np
+import pytest
 
-import test
 from one_dragon.base.geometry.rectangle import Rect
 from one_dragon.base.matcher.ocr.ocr_service import OcrService
 from one_dragon.base.matcher.ocr.onnx_ocr_matcher import OnnxOcrMatcher
 
 
-class TestOcrService(test.ZzzTestBase):
+@pytest.fixture(scope='class')
+def ocr_service_fixture():
+    """
+    OCR服务夹具
+    """
+    # 初始化OCR
+    ocr_matcher = OnnxOcrMatcher()
+    print("正在初始化OCR模型...")
+    if not ocr_matcher.init_model(download_by_github=True):
+        pytest.fail("OCR模型初始化失败，跳过测试")
+    return OcrService(ocr_matcher)
 
-    def __init__(self, *args, **kwargs):
-        test.ZzzTestBase.__init__(self, *args, **kwargs)
 
-        # 初始化OCR
-        ocr_matcher = OnnxOcrMatcher()
-        print("正在初始化OCR模型...")
-        if not ocr_matcher.init_model(download_by_github=True):
-            self.fail("OCR模型初始化失败，跳过测试")
-        self.ocr_service =  OcrService(ocr_matcher)
+class TestOcrService:
 
-    def test_basic_functionality(self):
+    def test_basic_functionality(self, ocr_service_fixture):
         """测试基本功能"""
         print("=== 测试基本功能 ===")
 
@@ -31,7 +34,7 @@ class TestOcrService(test.ZzzTestBase):
         # 测试全图OCR
         print("执行全图OCR...")
         start_time = time.time()
-        full_result = self.ocr_service.get_ocr_result_list(test_image)
+        full_result = ocr_service_fixture.get_ocr_result_list(test_image)
         first_ocr_time = time.time() - start_time
         print(f"首次OCR耗时: {first_ocr_time:.3f}秒")
         print(f"识别到的文本: {[i.data for i in full_result]}")
@@ -39,14 +42,14 @@ class TestOcrService(test.ZzzTestBase):
         # 测试缓存命中
         print("再次执行全图OCR（应该命中缓存）...")
         start_time = time.time()
-        cached_result = self.ocr_service.get_ocr_result_list(test_image)
+        cached_result = ocr_service_fixture.get_ocr_result_list(test_image)
         cached_ocr_time = time.time() - start_time
         print(f"缓存OCR耗时: {cached_ocr_time:.3f}秒")
 
         # 验证结果一致性
-        self.assertTrue([i.data for i in full_result] == [i.data for i in cached_result], "缓存结果与原始结果不一致")
+        assert [i.data for i in full_result] == [i.data for i in cached_result], "缓存结果与原始结果不一致"
 
-    def test_area_ocr(self):
+    def test_area_ocr(self, ocr_service_fixture):
         """测试区域OCR"""
         print("\n=== 测试区域OCR ===")
 
@@ -59,29 +62,29 @@ class TestOcrService(test.ZzzTestBase):
 
         # 测试左侧区域OCR
         print("测试左侧区域OCR...")
-        left_result = self.ocr_service.get_ocr_result_list(test_image, rect=left_area)
+        left_result = ocr_service_fixture.get_ocr_result_list(test_image, rect=left_area)
         print(f"左侧区域识别到的文本: {[i.data for i in left_result]}")
 
         # 测试右侧区域OCR
         print("测试右侧区域OCR...")
-        right_result = self.ocr_service.get_ocr_result_list(test_image, rect=right_area)
+        right_result = ocr_service_fixture.get_ocr_result_list(test_image, rect=right_area)
         print(f"右侧区域识别到的文本: {[i.data for i in right_result]}")
 
         # 测试文本查找
         print("测试文本查找功能...")
-        found_start = self.ocr_service.find_text_in_area(test_image, left_area, "Start Game")
-        found_level = self.ocr_service.find_text_in_area(test_image, right_area, "Level")
-        found_nonexistent = self.ocr_service.find_text_in_area(test_image, left_area, "NonExistent")
+        found_start = ocr_service_fixture.find_text_in_area(test_image, left_area, "Start Game")
+        found_level = ocr_service_fixture.find_text_in_area(test_image, right_area, "Level")
+        found_nonexistent = ocr_service_fixture.find_text_in_area(test_image, left_area, "NonExistent")
 
         print(f"在左侧区域找到'Start Game': {found_start}")
         print(f"在右侧区域找到'Level': {found_level}")
         print(f"在左侧区域找到'NonExistent': {found_nonexistent}")
 
-        self.assertTrue(found_start, "应该能找到'Start Game'文本")
-        self.assertTrue(found_level, "应该能找到'Level'文本")
-        self.assertFalse(found_nonexistent, "不应该找到'NonExistent'文本")
+        assert found_start is True, "应该能找到'Start Game'文本"
+        assert found_level is True, "应该能找到'Level'文本"
+        assert found_nonexistent is False, "不应该找到'NonExistent'文本"
 
-    def test_color_range_filtering(self):
+    def test_color_range_filtering(self, ocr_service_fixture):
         """测试颜色范围过滤"""
         print("\n=== 测试颜色范围过滤 ===")
 
@@ -95,19 +98,19 @@ class TestOcrService(test.ZzzTestBase):
         full_area = Rect(0, 0, test_image.shape[1], test_image.shape[0])
 
         # 无颜色过滤
-        no_filter_result = self.ocr_service.get_ocr_result_list(test_image, rect=full_area)
+        no_filter_result = ocr_service_fixture.get_ocr_result_list(test_image, rect=full_area)
         print(f"无颜色过滤识别到: {len(no_filter_result)} 个文本")
-        self.assertTrue(len(no_filter_result) > 0)
+        assert len(no_filter_result) > 0
 
         # 黑色文本过滤
-        black_filter_result = self.ocr_service.get_ocr_result_list(test_image, rect=full_area, color_range=black_range)
+        black_filter_result = ocr_service_fixture.get_ocr_result_list(test_image, rect=full_area, color_range=black_range)
         print(f"黑色过滤识别到: {len(black_filter_result)} 个文本")
-        self.assertTrue(len(black_filter_result) > 0)
+        assert len(black_filter_result) > 0
 
         # 红色文本过滤
-        red_filter_result = self.ocr_service.get_ocr_result_list(test_image, rect=full_area, color_range=red_range)
+        red_filter_result = ocr_service_fixture.get_ocr_result_list(test_image, rect=full_area, color_range=red_range)
         print(f"红色过滤识别到: {len(red_filter_result)} 个文本")
-        self.assertTrue(len(red_filter_result) > 0)
+        assert len(red_filter_result) > 0
 
 
 def create_test_image() -> np.ndarray:

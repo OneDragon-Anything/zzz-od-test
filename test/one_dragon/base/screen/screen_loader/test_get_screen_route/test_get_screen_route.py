@@ -1,12 +1,9 @@
-import test
+from test.conftest import TestContext
 
 
-class TestGetScreenRote(test.ZzzTestBase):
+class TestGetScreenRote:
 
-    def __init__(self, *args, **kwargs):
-        test.ZzzTestBase.__init__(self, *args, **kwargs)
-
-    def test_get_route(self):
-        route = self.ctx.screen_loader.get_screen_route('快捷手册-训练', '快捷手册-战术')
-        self.assertIsNotNone(route)
-        self.assertTrue(route.can_go)
+    def test_get_route(self, test_context: TestContext):
+        route = test_context.screen_loader.get_screen_route('快捷手册-训练', '快捷手册-战术')
+        assert route is not None
+        assert route.can_go is True

@@ -1,17 +1,15 @@
 import os
 
-import test
+from test.conftest import TestContext
+
 from one_dragon.utils import cv2_utils
 from zzz_od.application.world_patrol.mini_map_wrapper import MiniMapWrapper
 
 
-class TestMiniMapService(test.ZzzTestBase):
+class TestMiniMapService:
 
-    def __init__(self, *args, **kwargs):
-        test.ZzzTestBase.__init__(self, *args, **kwargs)
-
-    def test_cal_angle(self):
-        dir_path = self.sub_package_path
+    def test_cal_angle(self, test_context: TestContext):
+        dir_path = os.path.dirname(__file__)
         for file_name in os.listdir(dir_path):
             if not file_name.endswith('.png'):
                 continue
@@ -25,4 +23,4 @@ class TestMiniMapService(test.ZzzTestBase):
             angle_diff = abs(float(target_angle) - angle)
             if angle_diff > 180:
                 angle_diff = 360 - angle_diff
-            self.assertTrue(angle_diff <= 10)
+            assert angle_diff <= 10
