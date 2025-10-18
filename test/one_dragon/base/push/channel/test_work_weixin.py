@@ -4,21 +4,15 @@ from test.conftest import TestContext
 from test_push_channel_utils import create_test_image
 
 
-class TestDingDingBot:
+class TestWorkWeixin:
 
     def test_push(self, test_context: TestContext):
-        # 配置钉钉机器人
-        channel_id = 'DD_BOT'
+        channel_id = 'QYWX'
         push_config = test_context.push_service.push_config
         push_config.update_channel_config_value(
             channel_id=channel_id,
-            field_name='SECRET',
-            new_value=os.getenv('PUSH_DD_BOT_SECRET')
-        )
-        push_config.update_channel_config_value(
-            channel_id=channel_id,
-            field_name='TOKEN',
-            new_value=os.getenv('PUSH_DD_BOT_TOKEN')
+            field_name='KEY',
+            new_value=os.getenv('PUSH_WORK_WEIXIN_KEY')
         )
 
         # 创建测试图片
