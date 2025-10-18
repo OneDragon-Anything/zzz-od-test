@@ -3,7 +3,7 @@ from test.conftest import TestContext
 from zzz_od.hollow_zero.event.bamboo_merchant import BambooMerchant
 
 
-class TestChooseSimUniNum:
+class TestBambooMerchant:
 
     def test_discount(self, test_context: TestContext):
         """

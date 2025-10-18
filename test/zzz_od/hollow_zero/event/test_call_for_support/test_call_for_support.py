@@ -18,8 +18,8 @@ class TestCallForSupport:
         assert '事件文本' == result.status
 
     def test_new_agent_pos(self, test_context: TestContext):
-        test_context.hollow_zero_challenge_config = HollowZeroChallengeConfig('', is_mock=True)
-        test_context.hollow_zero_challenge_config.target_agents = [
+        test_context.withered_domain.challenge_config = HollowZeroChallengeConfig('', is_mock=True)
+        test_context.withered_domain.challenge_config.target_agents = [
             AgentEnum.ZHU_YUAN.value.agent_id,
             AgentEnum.QINGYI.value.agent_id,
             AgentEnum.NICOLE.value.agent_id
@@ -94,8 +94,8 @@ class TestCallForSupport:
         ) is None
 
     def test_new_agent_pos_2(self, test_context: TestContext):
-        test_context.hollow_zero_challenge_config = HollowZeroChallengeConfig('', is_mock=True)
-        test_context.hollow_zero_challenge_config.target_agents = [
+        test_context.withered_domain.challenge_config = HollowZeroChallengeConfig('', is_mock=True)
+        test_context.withered_domain.challenge_config.target_agents = [
             AgentEnum.ZHU_YUAN.value.agent_id,
             AgentTypeEnum.STUN.value,
             AgentEnum.NICOLE.value.agent_id

@@ -33,6 +33,8 @@ class TestUltimate:
                         ans = agent_state_checker.check_template_not_found(test_context, screen, state)
                     elif state.check_way == AgentStateCheckWay.TEMPLATE_FOUND:
                         ans = agent_state_checker.check_template_found(test_context, screen, state)
+                    elif state.check_way == AgentStateCheckWay.COLOR_RANGE_CONNECT:
+                        ans = agent_state_checker.check_cnt_by_color_range(test_context, screen, state)
                     else:
                         raise AssertionError(f'未支持的 {state.check_way}')
 
