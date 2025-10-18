@@ -13,23 +13,13 @@ class TestFeishu:
         push_config = test_context.push_service.push_config
         push_config.update_channel_config_value(
             channel_id=channel_id,
-            field_name='KEY',
-            new_value=os.getenv('PUSH_FS_KEY')
+            field_name='TOPIC',
+            new_value=os.getenv('PUSH_NTFY_TOPIC')
         )
         push_config.update_channel_config_value(
             channel_id=channel_id,
-            field_name='BOT_SECRET',
-            new_value=os.getenv('PUSH_FS_BOT_SECRET')
-        )
-        push_config.update_channel_config_value(
-            channel_id=channel_id,
-            field_name='APPID',
-            new_value=os.getenv('PUSH_FS_APP_ID')
-        )
-        push_config.update_channel_config_value(
-            channel_id=channel_id,
-            field_name='APPSECRET',
-            new_value=os.getenv('PUSH_FS_APP_SECRET')
+            field_name='TOKEN',
+            new_value=os.getenv('PUSH_NTFY_TOKEN')
         )
 
         # 创建测试图片

@@ -7,14 +7,29 @@ from test_push_channel_utils import create_test_image
 class TestPushPlus:
 
     def test_push(self, test_context: TestContext):
-        channel_id = 'PUSH_PLUS'
+        channel_id = 'TG'
 
         # 配置钉钉机器人
         push_config = test_context.push_service.push_config
         push_config.update_channel_config_value(
             channel_id=channel_id,
-            field_name='TOKEN',
-            new_value=os.getenv('PUSH_PUSH_PLUS_TOKEN')
+            field_name='BOT_TOKEN',
+            new_value=os.getenv('PUSH_TG_BOT_TOKEN', '')
+        )
+        push_config.update_channel_config_value(
+            channel_id=channel_id,
+            field_name='USER_ID',
+            new_value=os.getenv('PUSH_TG_USER_ID', '')
+        )
+        push_config.update_channel_config_value(
+            channel_id=channel_id,
+            field_name='PROXY_HOST',
+            new_value=os.getenv('PUSH_TG_PROXY_HOST', '')
+        )
+        push_config.update_channel_config_value(
+            channel_id=channel_id,
+            field_name='PROXY_PORT',
+            new_value=os.getenv('PUSH_TG_PROXY_PORT', '')
         )
 
         # 创建测试图片
