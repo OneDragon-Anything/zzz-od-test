@@ -7,6 +7,8 @@ from cv2.typing import MatLike
 
 from one_dragon.base.controller.controller_base import ControllerBase
 from one_dragon.base.geometry.point import Point
+from one_dragon.base.push.push_config import PushProxy
+from one_dragon.envs.env_config import ProxyTypeEnum
 from one_dragon.utils import cv2_utils
 from zzz_od.config.game_config import GameConfig
 from zzz_od.context.zzz_context import ZContext
@@ -153,5 +155,16 @@ def test_context() -> TestContext:
         standard_width=ctx.project_config.screen_standard_width,
         standard_height=ctx.project_config.screen_standard_height,
     )
+
+    # 部分配置 统一使用mock 不将运行过程的值写入本地配置
+    ctx.push_service.push_config.file_path = None
+    ctx.env_config.file_path = None
+
+    # 根据环境变量进行设置
+    proxy_url = os.getenv('ENV_PERSONAL_PROXY', '')
+    if len(proxy_url) > 0:
+        ctx.env_config.proxy_type = ProxyTypeEnum.PERSONAL.value.value
+        ctx.env_config.personal_proxy = proxy_url
+    ctx.push_service.push_config.proxy = os.getenv('PUSH_PROXY', PushProxy.NONE.value.value)
 
     return ctx
