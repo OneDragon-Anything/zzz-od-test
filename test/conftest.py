@@ -153,5 +153,7 @@ def test_context() -> TestContext:
         standard_width=ctx.project_config.screen_standard_width,
         standard_height=ctx.project_config.screen_standard_height,
     )
+    ctx.push_service.push_config.is_mock = True  # 统一使用mock 不将运行过程的值写入本地配置
+    ctx.push_service.push_config.file_path = None
 
     return ctx
