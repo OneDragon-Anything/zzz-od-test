@@ -4,7 +4,7 @@ from test.conftest import TestContext
 from test_push_channel_utils import create_test_image
 
 
-class TestFeishu:
+class TestNtfy:
 
     def test_push(self, test_context: TestContext):
         channel_id = 'NTFY'

@@ -68,16 +68,6 @@ class TestWebhook:
             field_name='BODY',
             new_value='{ "content": "$content" }',  # 固定值
         )
-        push_config.update_channel_config_value(
-            channel_id=channel_id,
-            field_name='PROXY_HOST',
-            new_value=os.getenv('PUSH_PROXY_HOST', '')
-        )
-        push_config.update_channel_config_value(
-            channel_id=channel_id,
-            field_name='PROXY_PORT',
-            new_value=os.getenv('PUSH_PROXY_PORT', '')
-        )
 
         # 创建测试图片
         test_image = create_test_image(channel_id)

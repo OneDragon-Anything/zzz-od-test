@@ -4,7 +4,7 @@ from test.conftest import TestContext
 from test_push_channel_utils import create_test_image
 
 
-class TestPushPlus:
+class TestTelegram:
 
     def test_push(self, test_context: TestContext):
         channel_id = 'TG'
@@ -20,16 +20,6 @@ class TestPushPlus:
             channel_id=channel_id,
             field_name='USER_ID',
             new_value=os.getenv('PUSH_TG_USER_ID', '')
-        )
-        push_config.update_channel_config_value(
-            channel_id=channel_id,
-            field_name='PROXY_HOST',
-            new_value=os.getenv('PUSH_PROXY_HOST', '')
-        )
-        push_config.update_channel_config_value(
-            channel_id=channel_id,
-            field_name='PROXY_PORT',
-            new_value=os.getenv('PUSH_PROXY_PORT', '')
         )
 
         # 创建测试图片
