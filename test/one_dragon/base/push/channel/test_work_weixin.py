@@ -21,7 +21,7 @@ class TestWorkWeixin:
         # 发送推送测试
         result, message = test_context.push_service.push(
             channel_id=channel_id,
-            content='这是一条测试推送消息\n\n包含测试标题和内容，验证钉钉机器人的推送功能是否正常工作。',
+            content='这是一条测试推送消息\n\n包含测试标题和内容，验证推送功能是否正常工作。',
             image=test_image,
             title='测试推送通知',
         )

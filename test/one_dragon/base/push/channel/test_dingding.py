@@ -7,7 +7,6 @@ from test_push_channel_utils import create_test_image
 class TestDingDingBot:
 
     def test_push(self, test_context: TestContext):
-        # 配置钉钉机器人
         channel_id = 'DD_BOT'
         push_config = test_context.push_service.push_config
         push_config.update_channel_config_value(
@@ -27,7 +26,7 @@ class TestDingDingBot:
         # 发送推送测试
         result, message = test_context.push_service.push(
             channel_id=channel_id,
-            content='这是一条测试推送消息\n\n包含测试标题和内容，验证钉钉机器人的推送功能是否正常工作。',
+            content='这是一条测试推送消息\n\n包含测试标题和内容，验证推送功能是否正常工作。',
             image=test_image,
             title='测试推送通知',
         )
