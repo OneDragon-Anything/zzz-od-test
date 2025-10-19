@@ -1,11 +1,14 @@
 import os
 
+import pytest
+
 from test.conftest import TestContext
 from test_push_channel_utils import create_test_image
 
 
 class TestWebhook:
 
+    @pytest.mark.requires_secrets
     def test_feishu(self, test_context: TestContext):
         channel_id = 'WEBHOOK'
 
@@ -44,6 +47,7 @@ class TestWebhook:
 
         assert result, f"推送测试失败: {message}"
 
+    @pytest.mark.requires_secrets
     def test_discord(self, test_context: TestContext):
         channel_id = 'WEBHOOK'
 

@@ -1,11 +1,14 @@
 import os
 
+import pytest
+
 from test.conftest import TestContext
 from test_push_channel_utils import create_test_image
 
 
 class TestSmtp:
 
+    @pytest.mark.requires_secrets
     def test_qq(self, test_context: TestContext):
         channel_id = 'SMTP'
         push_config = test_context.push_service.push_config

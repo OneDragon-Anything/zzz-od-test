@@ -1,11 +1,14 @@
 import os
 
+import pytest
+
 from test.conftest import TestContext
 from test_push_channel_utils import create_test_image
 
 
 class TestPushPlus:
 
+    @pytest.mark.requires_secrets
     def test_push(self, test_context: TestContext):
         channel_id = 'PUSH_PLUS'
 
