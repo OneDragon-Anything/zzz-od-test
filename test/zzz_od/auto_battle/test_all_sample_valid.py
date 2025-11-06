@@ -14,6 +14,5 @@ class TestAutoBattle:
         """
         config_list = get_auto_battle_op_config_list('auto_battle')
         for config in config_list:
-            op = AutoBattleOperator(test_context, 'auto_battle', config.value)
-            success, msg = op._init_operator()
-            assert success, msg
+            op = AutoBattleOperator(test_context.auto_battle_context, 'auto_battle', config.value)
+            op.init()
