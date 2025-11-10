@@ -28,9 +28,12 @@ class TestWitheredDomainRunRecord:
         # 先设置成功
         run_record.update_status(AppRunRecord.STATUS_SUCCESS, only_status=True)
 
+        # 固定当前日期 避免测试过程中跨越日期边界导致时间竞态
+        current_dt = os_utils.get_dt()
+
         # 上周运行的 已经完成
         config.extra_task = HollowZeroExtraTask.NONE.value.value
-        run_record.dt = os_utils.add_dt_offset(os_utils.get_dt(), -7)
+        run_record.dt = os_utils.add_dt_offset(current_dt, -7)
         run_record.weekly_run_times = 2
         run_record.daily_run_times = 1
         run_record.no_eval_point = False
@@ -39,7 +42,7 @@ class TestWitheredDomainRunRecord:
 
         # 昨天运行的 每日次数已经完成
         config.extra_task = HollowZeroExtraTask.NONE.value.value
-        run_record.dt = os_utils.add_dt_offset(os_utils.get_dt(), -1)
+        run_record.dt = os_utils.add_dt_offset(current_dt, -1)
         run_record.weekly_run_times = 1
         run_record.daily_run_times = 1
         run_record.no_eval_point = False
@@ -48,7 +51,7 @@ class TestWitheredDomainRunRecord:
 
         # 今天运行的 每日次数已经完成
         config.extra_task = HollowZeroExtraTask.NONE.value.value
-        run_record.dt = os_utils.get_dt()
+        run_record.dt = current_dt
         run_record.weekly_run_times = 1
         run_record.daily_run_times = 1
         run_record.no_eval_point = False
@@ -57,7 +60,7 @@ class TestWitheredDomainRunRecord:
 
         # 今天运行的 但每天次数不满
         config.extra_task = HollowZeroExtraTask.NONE.value.value
-        run_record.dt = os_utils.get_dt()
+        run_record.dt = current_dt
         run_record.weekly_run_times = 1
         run_record.daily_run_times = 0
         run_record.no_eval_point = False
@@ -66,7 +69,7 @@ class TestWitheredDomainRunRecord:
 
         # 今天运行的 但每周次数满了 但业绩没满
         config.extra_task = HollowZeroExtraTask.EVA_POINT.value.value
-        run_record.dt = os_utils.get_dt()
+        run_record.dt = current_dt
         run_record.weekly_run_times = 2
         run_record.daily_run_times = 0
         run_record.no_eval_point = False
@@ -75,7 +78,7 @@ class TestWitheredDomainRunRecord:
 
         # 今天运行的 每周次数满了 每天次数满了 但业绩没满
         config.extra_task = HollowZeroExtraTask.EVA_POINT.value.value
-        run_record.dt = os_utils.get_dt()
+        run_record.dt = current_dt
         run_record.weekly_run_times = 2
         run_record.daily_run_times = 1
         run_record.no_eval_point = False
@@ -84,7 +87,7 @@ class TestWitheredDomainRunRecord:
 
         # 今天运行的 每周次数满了 业绩也满了
         config.extra_task = HollowZeroExtraTask.EVA_POINT.value.value
-        run_record.dt = os_utils.get_dt()
+        run_record.dt = current_dt
         run_record.weekly_run_times = 2
         run_record.daily_run_times = 0
         run_record.no_eval_point = True
@@ -93,7 +96,7 @@ class TestWitheredDomainRunRecord:
 
         # 今天运行的 每周次数满了 周期奖励未满
         config.extra_task = HollowZeroExtraTask.PERIOD_REWARD.value.value
-        run_record.dt = os_utils.get_dt()
+        run_record.dt = current_dt
         run_record.weekly_run_times = 2
         run_record.daily_run_times = 0
         run_record.no_eval_point = True
@@ -102,7 +105,7 @@ class TestWitheredDomainRunRecord:
 
         # 今天运行的 每周次数满了 每天次数满了 周期奖励未满
         config.extra_task = HollowZeroExtraTask.PERIOD_REWARD.value.value
-        run_record.dt = os_utils.get_dt()
+        run_record.dt = current_dt
         run_record.weekly_run_times = 2
         run_record.daily_run_times = 1
         run_record.no_eval_point = True
@@ -111,7 +114,7 @@ class TestWitheredDomainRunRecord:
 
         # 今天运行的 每周次数满了 周期奖励已满
         config.extra_task = HollowZeroExtraTask.PERIOD_REWARD.value.value
-        run_record.dt = os_utils.get_dt()
+        run_record.dt = current_dt
         run_record.weekly_run_times = 2
         run_record.daily_run_times = 0
         run_record.no_eval_point = True
@@ -135,10 +138,13 @@ class TestWitheredDomainRunRecord:
         config.weekly_plan_times = 2
         config.daily_plan_times = 1
 
+        # 固定当前日期 避免测试过程中跨越日期边界导致时间竞态
+        current_dt = os_utils.get_dt()
+
         # 上周运行的 已经完成
         run_record.update_status(AppRunRecord.STATUS_SUCCESS, only_status=True)
         config.extra_task = HollowZeroExtraTask.NONE.value.value
-        run_record.dt = os_utils.add_dt_offset(os_utils.get_dt(), -7)
+        run_record.dt = os_utils.add_dt_offset(current_dt, -7)
         run_record.weekly_run_times = 2
         run_record.daily_run_times = 1
         run_record.no_eval_point = True
@@ -153,7 +159,7 @@ class TestWitheredDomainRunRecord:
         # 昨天运行的 每日次数已经完成
         run_record.update_status(AppRunRecord.STATUS_SUCCESS, only_status=True)
         config.extra_task = HollowZeroExtraTask.NONE.value.value
-        run_record.dt = os_utils.add_dt_offset(os_utils.get_dt(), -1)
+        run_record.dt = os_utils.add_dt_offset(current_dt, -1)
         run_record.weekly_run_times = 1
         run_record.daily_run_times = 1
         run_record.no_eval_point = False
@@ -168,7 +174,7 @@ class TestWitheredDomainRunRecord:
         # 今天运行的 每日次数已经完成
         run_record.update_status(AppRunRecord.STATUS_SUCCESS, only_status=True)
         config.extra_task = HollowZeroExtraTask.NONE.value.value
-        run_record.dt = os_utils.get_dt()
+        run_record.dt = current_dt
         run_record.weekly_run_times = 1
         run_record.daily_run_times = 1
         run_record.no_eval_point = False
@@ -183,7 +189,7 @@ class TestWitheredDomainRunRecord:
         # 今天运行的 但每天次数不满
         run_record.update_status(AppRunRecord.STATUS_SUCCESS, only_status=True)
         config.extra_task = HollowZeroExtraTask.NONE.value.value
-        run_record.dt = os_utils.get_dt()
+        run_record.dt = current_dt
         run_record.weekly_run_times = 1
         run_record.daily_run_times = 0
         run_record.no_eval_point = False
@@ -198,7 +204,7 @@ class TestWitheredDomainRunRecord:
         # 今天运行的 每周次数满了 但业绩没满
         run_record.update_status(AppRunRecord.STATUS_SUCCESS, only_status=True)
         config.extra_task = HollowZeroExtraTask.EVA_POINT.value.value
-        run_record.dt = os_utils.get_dt()
+        run_record.dt = current_dt
         run_record.weekly_run_times = 2
         run_record.daily_run_times = 0
         run_record.no_eval_point = False
@@ -213,7 +219,7 @@ class TestWitheredDomainRunRecord:
         # 今天运行的 每周次数满了 每天次数满了 但业绩没满
         run_record.update_status(AppRunRecord.STATUS_SUCCESS, only_status=True)
         config.extra_task = HollowZeroExtraTask.EVA_POINT.value.value
-        run_record.dt = os_utils.get_dt()
+        run_record.dt = current_dt
         run_record.weekly_run_times = 2
         run_record.daily_run_times = 1
         run_record.no_eval_point = False
@@ -228,7 +234,7 @@ class TestWitheredDomainRunRecord:
         # 今天运行的 每周次数满了 业绩也满了
         run_record.update_status(AppRunRecord.STATUS_SUCCESS, only_status=True)
         config.extra_task = HollowZeroExtraTask.EVA_POINT.value.value
-        run_record.dt = os_utils.get_dt()
+        run_record.dt = current_dt
         run_record.weekly_run_times = 2
         run_record.daily_run_times = 0
         run_record.no_eval_point = True
@@ -243,7 +249,7 @@ class TestWitheredDomainRunRecord:
         # 今天运行的 每周次数满了 周期奖励未满
         run_record.update_status(AppRunRecord.STATUS_SUCCESS, only_status=True)
         config.extra_task = HollowZeroExtraTask.PERIOD_REWARD.value.value
-        run_record.dt = os_utils.get_dt()
+        run_record.dt = current_dt
         run_record.weekly_run_times = 2
         run_record.daily_run_times = 0
         run_record.no_eval_point = True
@@ -258,7 +264,7 @@ class TestWitheredDomainRunRecord:
         # 今天运行的 每周次数满了 每天次数满了 周期奖励未满
         run_record.update_status(AppRunRecord.STATUS_SUCCESS, only_status=True)
         config.extra_task = HollowZeroExtraTask.PERIOD_REWARD.value.value
-        run_record.dt = os_utils.get_dt()
+        run_record.dt = current_dt
         run_record.weekly_run_times = 2
         run_record.daily_run_times = 1
         run_record.no_eval_point = True
@@ -273,7 +279,7 @@ class TestWitheredDomainRunRecord:
         # 今天运行的 每周次数满了 周期奖励已满
         run_record.update_status(AppRunRecord.STATUS_SUCCESS, only_status=True)
         config.extra_task = HollowZeroExtraTask.PERIOD_REWARD.value.value
-        run_record.dt = os_utils.get_dt()
+        run_record.dt = current_dt
         run_record.weekly_run_times = 2
         run_record.daily_run_times = 0
         run_record.no_eval_point = True
