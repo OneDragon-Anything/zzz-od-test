@@ -72,9 +72,9 @@ class TestOcrService:
 
         # 测试文本查找
         print("测试文本查找功能...")
-        found_start = ocr_service_fixture.find_text_in_area(test_image, left_area, "Start Game")
-        found_level = ocr_service_fixture.find_text_in_area(test_image, right_area, "Level")
-        found_nonexistent = ocr_service_fixture.find_text_in_area(test_image, left_area, "NonExistent")
+        found_start = ocr_service_fixture.find_text_in_area(test_image, left_area, True, "Start Game")
+        found_level = ocr_service_fixture.find_text_in_area(test_image, right_area, True, "Level")
+        found_nonexistent = ocr_service_fixture.find_text_in_area(test_image, left_area, True, "NonExistent")
 
         print(f"在左侧区域找到'Start Game': {found_start}")
         print(f"在右侧区域找到'Level': {found_level}")
