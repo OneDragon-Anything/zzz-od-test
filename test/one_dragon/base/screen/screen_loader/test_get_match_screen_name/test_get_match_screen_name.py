@@ -25,6 +25,7 @@ class TestGetMatchScreenName:
             'lost_void_choose_common.png': '迷失之地-通用选择',
             'lost_void_choose_common_2.png': '迷失之地-通用选择',
             'lost_void_choose_common_3.png': '迷失之地-通用选择',
+            'lost_void_choose_common_4.png': '迷失之地-通用选择',
             'lost_void_bangboo_store.png': '迷失之地-邦布商店',
             'lost_void_choose_no_detail.png': '迷失之地-通用选择',
             'lost_void_choose_no_detail_2.png': '迷失之地-通用选择',
@@ -37,10 +38,10 @@ class TestGetMatchScreenName:
         for image_name, screen_name in screen_map.items():
             screen = test_context.get_test_image(image_name)
             result = screen_utils.get_match_screen_name(test_context, screen)
-            assert screen_name == result
+            assert screen_name == result, image_name
 
         screen_name_list = [i for i in screen_map.values()]
         for image_name, screen_name in screen_map.items():
             screen = test_context.get_test_image(image_name)
             result = screen_utils.get_match_screen_name(test_context, screen, screen_name_list=screen_name_list)
-            assert screen_name == result
+            assert screen_name == result, image_name
