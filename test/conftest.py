@@ -1,5 +1,8 @@
+import inspect
 import os
 import time
+from functools import cached_property
+from pathlib import Path
 from typing import Optional
 
 import pytest
@@ -7,9 +10,10 @@ from cv2.typing import MatLike
 
 from one_dragon.base.controller.controller_base import ControllerBase
 from one_dragon.base.geometry.point import Point
+from one_dragon.base.operation.application.plugin_info import PluginSource
 from one_dragon.base.push.push_config import PushProxy
 from one_dragon.envs.env_config import ProxyTypeEnum
-from one_dragon.utils import cv2_utils
+from one_dragon.utils import cv2_utils, file_utils
 from zzz_od.config.game_config import GameConfig
 from zzz_od.context.zzz_context import ZContext
 
@@ -87,6 +91,27 @@ class TestContext(ZContext):
         ZContext.__init__(self)
 
         self.controller: MockController | None = None
+
+    @cached_property
+    def application_plugin_dirs(self) -> list[tuple[Path, PluginSource]]:
+        """覆盖父类属性，使用 ZContext 的文件位置来定位应用目录"""
+        dirs: list[tuple[Path, PluginSource]] = []
+
+        cls_file = inspect.getfile(ZContext)
+        parent_dir = Path(cls_file).parent.parent
+
+        application_dir = parent_dir / 'application'
+        if application_dir.is_dir():
+            dirs.append((application_dir, PluginSource.BUILTIN))
+
+        src_dir = file_utils.find_src_dir(cls_file)
+        if src_dir is not None:
+            project_root = src_dir.parent
+            plugins_dir = project_root / 'plugins'
+            if plugins_dir.is_dir():
+                dirs.append((plugins_dir, PluginSource.THIRD_PARTY))
+
+        return dirs
 
     def get_test_image(self, file_name: str, check_image_exist: bool = True) -> MatLike:
         """

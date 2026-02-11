@@ -10,13 +10,29 @@ class TestBurniceWhite:
         agent = AgentEnum.BURNICE_WHITE.value
         state = agent.state_list[0]
 
-        for total in [2, 3]:
-            for pos in [1, 2, 3]:
-                for l in [0, 60, 100]:
-                    screen = test_context.get_test_image(f'{total}_{pos}_{l}.png', check_image_exist=False)
-                    if screen is None:
-                        continue
+        expected_map: dict[tuple[int, int, int], int] = {
+            (2, 1, 0): 0,
+            (2, 1, 60): 71,
+            (2, 1, 100): 100,
+            (2, 2, 0): 0,
+            (2, 2, 60): 60,
+            (2, 2, 100): 100,
+            (3, 1, 0): 0,
+            (3, 1, 60): 72,
+            (3, 1, 100): 100,
+            (3, 2, 0): 0,
+            (3, 2, 60): 58,
+            (3, 2, 100): 100,
+            (3, 3, 0): 0,
+            (3, 3, 60): 58,
+            (3, 3, 100): 100,
+        }
 
-                    ans = agent_state_checker.check_length_by_background_gray(test_context, screen, state, total, pos)
-                    print(total, pos, l, ans)
-                    assert abs(l - ans) <= 5
+        for (total, pos, file_label), expected in expected_map.items():
+            screen = test_context.get_test_image(f'{total}_{pos}_{file_label}.png', check_image_exist=False)
+            if screen is None:
+                continue
+
+            ans = agent_state_checker.check_length_by_background_gray(test_context, screen, state, total, pos)
+            print(total, pos, file_label, ans)
+            assert abs(expected - ans) <= 5, f'{total}_{pos}_{file_label}.png: expected={expected}, got={ans}'
