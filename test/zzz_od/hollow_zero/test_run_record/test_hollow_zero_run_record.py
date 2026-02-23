@@ -159,13 +159,17 @@ class TestWitheredDomainRunRecord:
         # 昨天运行的 每日次数已经完成
         run_record.update_status(AppRunRecord.STATUS_SUCCESS, only_status=True)
         config.extra_task = HollowZeroExtraTask.NONE.value.value
-        run_record.dt = os_utils.add_dt_offset(current_dt, -1)
+        yesterday = os_utils.add_dt_offset(current_dt, -1)
+        # 标记是否跨周
+        yesterday_is_cross_week = yesterday.isocalendar().week != current_dt.isocalendar().week
+        run_record.dt = yesterday
         run_record.weekly_run_times = 1
         run_record.daily_run_times = 1
         run_record.no_eval_point = False
         run_record.period_reward_complete = False
         run_record.check_and_update_status()
-        assert 1 == run_record.weekly_run_times
+        expect_weekly_run_times = 0 if yesterday_is_cross_week else 1
+        assert expect_weekly_run_times == run_record.weekly_run_times
         assert 0 == run_record.daily_run_times
         assert False == run_record.no_eval_point
         assert False == run_record.period_reward_complete
