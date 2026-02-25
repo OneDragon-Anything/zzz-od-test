@@ -1,3 +1,4 @@
+from datetime import datetime
 from one_dragon.base.operation.application import application_const
 from one_dragon.base.operation.application_run_record import AppRunRecord
 from one_dragon.utils import os_utils
@@ -161,7 +162,7 @@ class TestWitheredDomainRunRecord:
         config.extra_task = HollowZeroExtraTask.NONE.value.value
         yesterday = os_utils.add_dt_offset(current_dt, -1)
         # 标记是否跨周
-        yesterday_is_cross_week = yesterday.isocalendar().week != current_dt.isocalendar().week
+        yesterday_is_cross_week = datetime.fromisoformat(yesterday).isocalendar().week != datetime.fromisoformat(current_dt).isocalendar().week
         run_record.dt = yesterday
         run_record.weekly_run_times = 1
         run_record.daily_run_times = 1
