@@ -1,4 +1,3 @@
-from datetime import datetime
 from one_dragon.base.operation.application import application_const
 from one_dragon.base.operation.application_run_record import AppRunRecord
 from one_dragon.utils import os_utils
@@ -30,7 +29,7 @@ class TestWitheredDomainRunRecord:
         run_record.update_status(AppRunRecord.STATUS_SUCCESS, only_status=True)
 
         # 固定当前日期 避免测试过程中跨越日期边界导致时间竞态
-        current_dt = os_utils.get_dt()
+        current_dt = run_record.get_current_dt()
 
         # 上周运行的 已经完成
         config.extra_task = HollowZeroExtraTask.NONE.value.value
@@ -140,7 +139,7 @@ class TestWitheredDomainRunRecord:
         config.daily_plan_times = 1
 
         # 固定当前日期 避免测试过程中跨越日期边界导致时间竞态
-        current_dt = os_utils.get_dt()
+        current_dt = run_record.get_current_dt()
 
         # 上周运行的 已经完成
         run_record.update_status(AppRunRecord.STATUS_SUCCESS, only_status=True)
@@ -162,7 +161,7 @@ class TestWitheredDomainRunRecord:
         config.extra_task = HollowZeroExtraTask.NONE.value.value
         yesterday = os_utils.add_dt_offset(current_dt, -1)
         # 标记是否跨周
-        yesterday_is_cross_week = datetime.fromisoformat(yesterday).isocalendar().week != datetime.fromisoformat(current_dt).isocalendar().week
+        yesterday_is_cross_week = os_utils.get_sunday_dt(yesterday) != os_utils.get_sunday_dt(current_dt)
         run_record.dt = yesterday
         run_record.weekly_run_times = 1
         run_record.daily_run_times = 1
