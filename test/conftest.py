@@ -29,7 +29,7 @@ class MockController(ControllerBase):
         self.standard_height: int = standard_height
         self.mock_screenshot: MatLike = None
 
-    def click(self, pos: Point = None, press_time: float = 0, pc_alt: bool = False) -> bool:
+    def click(self, pos: Point = None, press_time: float = 0, pc_alt: bool = False, gamepad_key: str | None = None) -> bool:
         if pos is None:
             return True
         return 0 <= pos.x < self.standard_width and 0 <= pos.y < self.standard_height
