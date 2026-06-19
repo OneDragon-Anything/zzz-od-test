@@ -8,6 +8,8 @@ class TestGetMatchScreenName:
     def test(self, test_context: TestContext):
         screen_map = {
             'normal_world_basic.png': '大世界-普通',
+            'normal_world_basic_2.png': '大世界-普通',
+            'normal_world_investigation.png': '大世界-勘域',
             'menu.png': '菜单',
             'menu_more.png': '菜单-更多功能',
             'storage_wengine.png': '仓库-音擎仓库',
@@ -17,6 +19,7 @@ class TestGetMatchScreenName:
             'compendium_train_2.png': '快捷手册-训练',
             'compendium_daily.png': '快捷手册-日常',
             'compendium_daily_2.png': '快捷手册-日常',
+            'compendium_daily_3.png': '快捷手册-日常',
             'compendium_combat.png': '快捷手册-作战',
             'battle_menu.png': '战斗-菜单',
             'lost_void_entry.png': '迷失之地-入口',
