@@ -85,9 +85,10 @@ def test_run_init_failed(slot, mock_ctx):
 
 def test_run_exception(slot):
     _, fut = slot._start_run('mcp', _make_op(raises=RuntimeError('boom')))
-    fut.result(timeout=5)
+    result = fut.result(timeout=5)
     assert slot.terminal_state == RunState.FAILED
     assert slot.last_status == '执行异常'
+    assert result is not None and result.success is False   # future 解析值非 None,适配器 block=True 取 .success 不崩
 
 
 def test_run_syncs_current_instance_idx(slot, mock_ctx):
