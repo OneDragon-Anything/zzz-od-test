@@ -147,3 +147,33 @@ def test_stop_running_signals_stop(slot, mock_ctx):
         assert mock_ctx.run_context.stop_running.called
     finally:
         event.set()
+
+
+def test_context_start_run_delegates(slot, mock_ctx):
+    """ZzzBackendContext.start_run 转发 run_slot._start_run,返回 (ok, future)。"""
+    from zzz_od.backend.backend_context import ZzzBackendContext
+
+    backend = ZzzBackendContext(mock_ctx)
+    backend.run_slot = slot
+    event = threading.Event(); event.set()
+    ok, fut = backend.start_run('mcp', _make_op(OperationResult(success=True)))
+    assert ok is True and fut is not None
+    fut.result(timeout=5)
+
+
+def test_context_query_status_delegates(slot, mock_ctx):
+    """ZzzBackendContext.query_status 转发 run_slot._query_status。"""
+    from zzz_od.backend.backend_context import ZzzBackendContext
+
+    backend = ZzzBackendContext(mock_ctx)
+    backend.run_slot = slot
+    assert backend.query_status().state == 'idle'
+
+
+def test_context_stop_delegates(slot, mock_ctx):
+    """ZzzBackendContext.stop 封装 run_slot._stop,无运行时返 {stopped:False, error}。"""
+    from zzz_od.backend.backend_context import ZzzBackendContext
+
+    backend = ZzzBackendContext(mock_ctx)
+    backend.run_slot = slot
+    assert backend.stop() == {'stopped': False, 'error': '当前无运行'}
