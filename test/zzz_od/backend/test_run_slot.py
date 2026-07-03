@@ -1,8 +1,10 @@
 import threading
+import time
 from unittest.mock import MagicMock
 
 from one_dragon.base.operation.operation_base import OperationResult
 from zzz_od.backend.backend_context import RunState
+from zzz_od.backend.schemas import RunStatusResult
 
 
 def _make_op(result=None, raises=None, node_cn='进入游戏'):
@@ -93,3 +95,38 @@ def test_run_syncs_current_instance_idx(slot, mock_ctx):
     _, fut = slot._start_run('mcp', _make_op(OperationResult(success=True)))
     fut.result(timeout=5)
     assert mock_ctx.run_context.current_instance_idx == 7
+
+
+def test_query_status_idle(slot):
+    r = slot._query_status()
+    assert isinstance(r, RunStatusResult)
+    assert r.state == 'idle' and r.source is None
+
+
+def test_query_status_running(slot):
+    event = threading.Event()
+    slot._start_run('mcp', _make_blocking_op(event, OperationResult(success=True)))
+    try:
+        # 等后台线程进入 blocking op(设置了 current_op 后才阻塞在 event.wait)。
+        deadline = time.time() + 5
+        while slot.current_op is None and time.time() < deadline:
+            time.sleep(0.01)
+        r = slot._query_status()
+        assert r.state == 'running'
+        assert r.source == 'mcp'
+        assert r.current_node == '等待游戏打开'
+        assert r.retry_count == 0
+        assert r.started_at is not None and r.duration_seconds is not None
+    finally:
+        event.set()
+
+
+def test_query_status_terminal_failed(slot):
+    _, fut = slot._start_run('mcp', _make_op(OperationResult(success=False, status='打开游戏失败')))
+    fut.result(timeout=5)
+    r = slot._query_status()
+    assert r.state == 'failed'
+    assert r.last_status == '打开游戏失败'
+    assert r.failed_node == '进入游戏'
+    assert r.app == 'OpenAndEnterGame'
+    assert r.current_node is None
