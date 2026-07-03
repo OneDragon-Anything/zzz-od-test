@@ -130,3 +130,20 @@ def test_query_status_terminal_failed(slot):
     assert r.failed_node == '进入游戏'
     assert r.app == 'OpenAndEnterGame'
     assert r.current_node is None
+
+
+def test_stop_idle_returns_false(slot):
+    """无运行时 _stop 返回 (False, None),不调 stop_running。"""
+    assert slot._stop() == (False, None)
+
+
+def test_stop_running_signals_stop(slot, mock_ctx):
+    """运行中 _stop 读出 source、锁外调 stop_running,返回 (True, source)。"""
+    event = threading.Event()
+    slot._start_run('http', _make_blocking_op(event, OperationResult(success=True)))
+    try:
+        stopped, source = slot._stop()
+        assert stopped is True and source == 'http'
+        assert mock_ctx.run_context.stop_running.called
+    finally:
+        event.set()
