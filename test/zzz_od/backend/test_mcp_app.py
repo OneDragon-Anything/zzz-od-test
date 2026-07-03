@@ -69,3 +69,10 @@ def test_stop_run_delegates() -> None:
     res = app_mod.make_stop_run(backend)()
     assert res['stopped'] is False
     backend.stop.assert_called_once()
+
+
+def test_close_game_tool_registered() -> None:
+    """close_game tool 用内联 @mcp.tool() 注册(同 check_game_window),用 list_tools 验名字。"""
+    mcp = app_mod.create_mcp_server(MagicMock(name='ZzzBackendContext'))
+    tools = asyncio.run(mcp.list_tools())
+    assert any(t.name == 'close_game' for t in tools)

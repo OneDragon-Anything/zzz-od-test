@@ -60,3 +60,11 @@ def test_handle_game_status():
 def test_handle_game_stop():
     resp = asyncio.run(routes_mod.handle_game_stop(_mock_backend(), _FakeRequest({})))
     assert resp.status_code == 200
+
+
+def test_handle_game_close_ok():
+    backend = _mock_backend()
+    backend.close_game.return_value = '已发送关闭游戏信号,可用 check_game_window 验证'
+    resp = asyncio.run(routes_mod.handle_game_close(backend, _FakeRequest({})))
+    assert resp.status_code == 200
+    assert json.loads(resp.body)['result'] == '已发送关闭游戏信号,可用 check_game_window 验证'
