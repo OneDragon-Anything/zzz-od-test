@@ -57,7 +57,7 @@ def test_python_launcher_fetch_latest_code_passes_progress_callback(
 
     git_service = FakeGitService()
     ctx = SimpleNamespace(
-        env_config=SimpleNamespace(auto_update=True),
+        env_config=SimpleNamespace(auto_update_code=True),
         git_service=git_service,
     )
 
@@ -88,7 +88,7 @@ def test_python_launcher_fetch_latest_code_silences_framework_console_log(
 
     messages: list[tuple[str, str]] = []
     ctx = SimpleNamespace(
-        env_config=SimpleNamespace(auto_update=True),
+        env_config=SimpleNamespace(auto_update_code=True),
         git_service=FakeGitService(),
     )
 
@@ -150,7 +150,7 @@ def test_runtime_launcher_sync_code_uses_framework_log(monkeypatch) -> None:
     messages: list[str] = []
 
     class FakeEnvConfig:
-        auto_update = True
+        auto_update_code = True
 
     class FakeGitService:
         instances: list['FakeGitService'] = []

@@ -39,13 +39,18 @@ class FakeRemote:
 
 
 class TestFetchProgressRemoteCallbacks:
+    """测试 _FetchProgressRemoteCallbacks 的当前行为。
 
-    def test_transfer_progress_maps_to_stage_range(self) -> None:
+    注意：当前实现中 stage 映射已上移到 GitService._create_fetch_callbacks，
+    此处回调只接收 progress_callback，并直接传出原始进度（0.0~1.0）；
+    消息格式包含百分比，例如「拉取对象 3/10 (30%)」。
+    """
+
+    def test_transfer_progress_reports_object_progress_with_percentage(self) -> None:
         events: list[tuple[float, str]] = []
+        # 当前构造器只接收 progress_callback，不再接收 stage_start/stage_end
         callbacks = _FetchProgressRemoteCallbacks(
             lambda progress, message: events.append((progress, message)),
-            0.4,
-            0.6,
         )
 
         stats = SimpleNamespace(received_objects=3, total_objects=10, received_bytes=4096)
@@ -53,15 +58,14 @@ class TestFetchProgressRemoteCallbacks:
 
         assert len(events) == 1
         progress, message = events[0]
-        assert progress == pytest.approx(0.46)
-        assert message == '拉取对象 3/10'
+        # 不做 stage 映射，直接传 received/total 原始进度
+        assert progress == pytest.approx(0.3)
+        assert message == '拉取对象 3/10 (30%)'
 
     def test_transfer_progress_falls_back_to_received_bytes(self) -> None:
         events: list[tuple[float, str]] = []
         callbacks = _FetchProgressRemoteCallbacks(
             lambda progress, message: events.append((progress, message)),
-            0.2,
-            0.4,
         )
 
         stats = SimpleNamespace(received_objects=0, total_objects=0, received_bytes=3 * 1024 * 1024)
@@ -69,15 +73,14 @@ class TestFetchProgressRemoteCallbacks:
 
         assert len(events) == 1
         progress, message = events[0]
-        assert progress == pytest.approx(0.2)
+        # total_objects 为 0 时进度回退为 0.0，消息用 MB
+        assert progress == pytest.approx(0.0)
         assert message == '拉取对象 3.00 MB'
 
     def test_transfer_progress_deduplicates_identical_messages(self) -> None:
         events: list[tuple[float, str]] = []
         callbacks = _FetchProgressRemoteCallbacks(
             lambda progress, message: events.append((progress, message)),
-            0.2,
-            0.4,
         )
 
         stats = SimpleNamespace(received_objects=12, total_objects=12, received_bytes=2048)
@@ -85,7 +88,7 @@ class TestFetchProgressRemoteCallbacks:
         callbacks.transfer_progress(stats)
 
         assert events == [
-            (0.4, '拉取对象 12/12'),
+            (1.0, '拉取对象 12/12 (100%)'),
         ]
 
 
@@ -127,5 +130,5 @@ class TestGitServiceFetchRemote:
         assert remote.fetch_calls[0]['depth'] == 1
         assert remote.fetch_calls[0]['refspecs'] == ['+refs/heads/main:refs/remotes/origin/main']
         assert events[0][0] == pytest.approx(0.3)
-        assert events[0][1] == '拉取对象 2/4'
-        assert events[-1] == (0.4, '获取远程代码成功')
+        assert events[0][1] == '拉取对象 2/4 (50%)'
+        assert events[-1] == (0.4, '拉取远程代码成功')
