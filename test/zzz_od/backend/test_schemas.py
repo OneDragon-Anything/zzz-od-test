@@ -1,7 +1,12 @@
-from dataclasses import asdict
+from dataclasses import asdict, fields
 
 from one_dragon.base.screen.screen_match import AreaMatchDetail, AreaType, ScreenMatch
-from zzz_od.backend.schemas import AnalyzeScreenResult, OcrText, WindowStatus
+from zzz_od.backend.schemas import (
+    AnalyzeScreenResult,
+    OcrText,
+    RunStatusResult,
+    WindowStatus,
+)
 
 
 def test_ocr_text_fields() -> None:
@@ -46,3 +51,19 @@ def test_analyze_result_asdict_nested_serializable() -> None:
     r = AnalyzeScreenResult(success=True, ocr_texts=[], screens=[match], error=None)
     d = asdict(r)
     assert d['screens'][0]['areas'][0]['area_type'] == AreaType.TEXT  # str Enum 原值
+
+
+def test_run_status_result_fields() -> None:
+    """校验 RunStatusResult 的字段集合。"""
+    names = {f.name for f in fields(RunStatusResult)}
+    assert names == {
+        'state', 'source', 'app', 'started_at', 'duration_seconds',
+        'current_node', 'retry_count', 'last_status', 'failed_node',
+    }
+
+
+def test_run_status_result_defaults() -> None:
+    """校验 RunStatusResult 除 state 外其余字段默认为 None。"""
+    r = RunStatusResult(state='idle')
+    assert r.source is None and r.app is None
+    assert r.current_node is None and r.last_status is None and r.failed_node is None

@@ -1,20 +1,26 @@
 """MCP 适配器的单元测试。
 
 测试使用 MagicMock 伪造 backend，避免依赖真实游戏窗口与 ZContext。
-通过 FastMCP 的 ``_tool_manager._tools`` 探测已注册的工具，并直接调用其
-``Tool.fn`` 验证行为（已注册 ``Tool`` 的可调用对象属性为 ``fn``）。
+
+包含两类用例（互补）：
+- ``_mcp_with_backend`` + 直接 await/调用 ``Tool.fn``：覆盖 check/capture/analyze
+  + close_game 工具的注册与行为（来自 understand-game 主仓归一）。
+- ``_mock_backend`` + ``app_mod.make_*`` 工厂：覆盖 open_and_enter_game/get_run_status
+  /stop_run 的委托与 block/nonblock/失败分支（来自 backend/run-status-schema）。
 """
 
+import asyncio
+from concurrent.futures import Future
 from unittest.mock import MagicMock
 
-from mcp.server.fastmcp import FastMCP
-
+from one_dragon.base.operation.operation_base import OperationResult
 from zzz_od.backend.backend_context import BackendNotReadyError
+from zzz_od.backend.mcp import app as app_mod
 from zzz_od.backend.mcp.app import create_mcp_server
-from zzz_od.backend.schemas import AnalyzeScreenResult, WindowStatus
+from zzz_od.backend.schemas import AnalyzeScreenResult, RunStatusResult, WindowStatus
 
 
-def _mcp_with_backend() -> tuple[FastMCP, MagicMock]:
+def _mcp_with_backend() -> tuple[object, MagicMock]:
     """构造一个 MCP 服务器与对应的伪造 backend。
 
     Returns:
@@ -26,6 +32,23 @@ def _mcp_with_backend() -> tuple[FastMCP, MagicMock]:
     mcp = create_mcp_server(backend)
     return mcp, backend
 
+
+def _mock_backend(start_ok: bool = True) -> MagicMock:
+    """构造一个 mock ZzzBackendContext,start_run 返回 (start_ok, Future)。"""
+    b = MagicMock(name='ZzzBackendContext')
+    b.start_run.return_value = (start_ok, Future())
+    b.query_status.return_value = RunStatusResult(
+        state='running',
+        source='mcp',
+        app='OpenAndEnterGame',
+        started_at='2026-07-02T00:00:00',
+        duration_seconds=1.0,
+    )
+    b.stop.return_value = {'stopped': False, 'error': '当前无运行'}
+    return b
+
+
+# ===== check/capture/analyze/close_game 工具注册与行为 =====
 
 def test_registers_all_tools() -> None:
     """create_mcp_server 应注册 6 个 game 工具。"""
@@ -114,8 +137,6 @@ def test_check_game_window_formats_status() -> None:
 
 def test_close_game_tool_registered() -> None:
     """create_mcp_server 应注册内联 close_game tool(同 check_game_window,非工厂)。"""
-    import asyncio
-
     mcp, _ = _mcp_with_backend()
     tools = asyncio.run(mcp.list_tools())
     assert any(t.name == "close_game" for t in tools)
@@ -143,3 +164,52 @@ def test_capture_game_screen_returns_path() -> None:
     path = fn()
     assert isinstance(path, str)
     assert path.endswith(".png")
+
+
+# ===== open_and_enter_game/get_run_status/stop_run 工厂委托 =====
+
+def test_open_and_enter_game_nonblock_returns_started() -> None:
+    backend = _mock_backend()
+    tool = app_mod.make_open_and_enter_game(backend)
+    res = asyncio.run(tool(block=False))
+    assert res['started'] is True
+    backend.start_run.assert_called_once()
+
+
+def test_open_and_enter_game_concurrent_reject() -> None:
+    backend = _mock_backend(start_ok=False)
+    tool = app_mod.make_open_and_enter_game(backend)
+    res = asyncio.run(tool(block=False))
+    assert res['started'] is False and 'source' in res
+
+
+def test_open_and_enter_game_block_success() -> None:
+    backend = _mock_backend()
+    fut: Future = Future()
+    fut.set_result(OperationResult(success=True, status='成功'))
+    backend.start_run.return_value = (True, fut)
+    tool = app_mod.make_open_and_enter_game(backend)
+    assert asyncio.run(tool(block=True)) == '成功打开并进入绝区零游戏'
+
+
+def test_open_and_enter_game_block_failed() -> None:
+    backend = _mock_backend()
+    fut: Future = Future()
+    fut.set_result(OperationResult(success=False, status='打开游戏失败'))
+    backend.start_run.return_value = (True, fut)
+    tool = app_mod.make_open_and_enter_game(backend)
+    assert asyncio.run(tool(block=True)) == '打开游戏失败: 打开游戏失败'
+
+
+def test_get_run_status_delegates() -> None:
+    backend = _mock_backend()
+    res = app_mod.make_get_run_status(backend)()
+    assert isinstance(res, RunStatusResult)
+    backend.query_status.assert_called_once()
+
+
+def test_stop_run_delegates() -> None:
+    backend = _mock_backend()
+    res = app_mod.make_stop_run(backend)()
+    assert res['stopped'] is False
+    backend.stop.assert_called_once()
