@@ -50,7 +50,7 @@ def test_analyze_result_asdict_nested_serializable() -> None:
     match = ScreenMatch(screen_name='菜单', is_precise=True, areas=[detail])
     r = AnalyzeScreenResult(success=True, ocr_texts=[], screens=[match], error=None)
     d = asdict(r)
-    assert d['screens'][0]['areas'][0]['area_type'] == AreaType.TEXT  # str Enum 原值
+    assert d['screens'][0]['areas'][0]['area_type'] == 'text'  # str Enum 序列化为 .value 字符串(asdict 后保留 Enum 实例, == 'text' 验证 str 值非枚举自比)
 
 
 def test_run_status_result_fields() -> None:
