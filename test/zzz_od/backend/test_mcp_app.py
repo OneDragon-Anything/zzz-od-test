@@ -5,7 +5,7 @@
 包含两类用例（互补）：
 - ``_mcp_with_backend`` + 直接 await/调用 ``Tool.fn``：覆盖 check/capture/analyze
   + close_game 工具的注册与行为（来自 understand-game 主仓归一）。
-- ``_mock_backend`` + ``app_mod.make_*`` 工厂：覆盖 open_and_enter_game/get_run_status
+- ``_mock_backend`` + ``app_mod.make_*`` 工厂：覆盖 open_game/get_run_status
   /stop_run 的委托与 block/nonblock/失败分支（来自 backend/run-status-schema）。
 """
 
@@ -24,8 +24,9 @@ def _mcp_with_backend() -> tuple[object, MagicMock]:
     """构造一个 MCP 服务器与对应的伪造 backend。
 
     Returns:
-        ``(mcp, backend)`` 元组：mcp 为注册了 6 个工具的 FastMCP 实例
-        （check/capture/analyze + open_and_enter_game/get_run_status/stop_run），
+        ``(mcp, backend)`` 元组：mcp 为注册了全部 game 工具的 FastMCP 实例
+        （check/capture/analyze + close_game/click_game/input_text
+        + open_game/get_run_status/stop_run），
         backend 为 MagicMock，可在测试中配置其方法返回值或副作用。
     """
     backend = MagicMock()
@@ -51,14 +52,16 @@ def _mock_backend(start_ok: bool = True) -> MagicMock:
 # ===== check/capture/analyze/close_game 工具注册与行为 =====
 
 def test_registers_all_tools() -> None:
-    """create_mcp_server 应注册 6 个 game 工具。"""
+    """create_mcp_server 应注册全部 game 工具(open_game 替换 open_and_enter_game + 新增 click/input)。"""
     mcp, _ = _mcp_with_backend()
     names = set(mcp._tool_manager._tools.keys())
     assert {
         "check_game_window",
         "capture_game_screen",
         "analyze_screen",
-        "open_and_enter_game",
+        "open_game",
+        "click_game",
+        "input_text",
         "get_run_status",
         "stop_run",
     } <= names
@@ -166,39 +169,75 @@ def test_capture_game_screen_returns_path() -> None:
     assert path.endswith(".png")
 
 
-# ===== open_and_enter_game/get_run_status/stop_run 工厂委托 =====
+# ===== open_game 工厂委托(enter 选 op)+ get_run_status/stop_run =====
 
-def test_open_and_enter_game_nonblock_returns_started() -> None:
+def test_open_game_nonblock_returns_started() -> None:
     backend = _mock_backend()
-    tool = app_mod.make_open_and_enter_game(backend)
-    res = asyncio.run(tool(block=False))
+    tool = app_mod.make_open_game(backend)
+    res = asyncio.run(tool(enter=True, block=False))
     assert res['started'] is True
     backend.start_run.assert_called_once()
 
 
-def test_open_and_enter_game_concurrent_reject() -> None:
+def test_open_game_concurrent_reject() -> None:
     backend = _mock_backend(start_ok=False)
-    tool = app_mod.make_open_and_enter_game(backend)
-    res = asyncio.run(tool(block=False))
+    tool = app_mod.make_open_game(backend)
+    res = asyncio.run(tool(enter=True, block=False))
     assert res['started'] is False and 'source' in res
 
 
-def test_open_and_enter_game_block_success() -> None:
+def test_open_game_block_success_enter_true() -> None:
     backend = _mock_backend()
     fut: Future = Future()
     fut.set_result(OperationResult(success=True, status='成功'))
     backend.start_run.return_value = (True, fut)
-    tool = app_mod.make_open_and_enter_game(backend)
-    assert asyncio.run(tool(block=True)) == '成功打开并进入绝区零游戏'
+    tool = app_mod.make_open_game(backend)
+    assert asyncio.run(tool(enter=True, block=True)) == '成功打开并进入绝区零游戏'
 
 
-def test_open_and_enter_game_block_failed() -> None:
+def test_open_game_block_success_enter_false() -> None:
+    """enter=False 成功 → 返回「打开游戏(未登录)」文案。"""
+    backend = _mock_backend()
+    fut: Future = Future()
+    fut.set_result(OperationResult(success=True, status='成功'))
+    backend.start_run.return_value = (True, fut)
+    tool = app_mod.make_open_game(backend)
+    assert asyncio.run(tool(enter=False, block=True)) == '成功打开游戏(未登录)'
+
+
+def test_open_game_block_failed() -> None:
     backend = _mock_backend()
     fut: Future = Future()
     fut.set_result(OperationResult(success=False, status='打开游戏失败'))
     backend.start_run.return_value = (True, fut)
-    tool = app_mod.make_open_and_enter_game(backend)
-    assert asyncio.run(tool(block=True)) == '打开游戏失败: 打开游戏失败'
+    tool = app_mod.make_open_game(backend)
+    assert asyncio.run(tool(enter=True, block=True)) == '打开游戏失败: 打开游戏失败'
+
+
+def test_open_game_enter_false_selects_open_game_op() -> None:
+    """enter=False 时传给 start_run 的 op_factory 构造出的是 OpenGame(非 OpenAndEnterGame)。冒烟验证 Task 1 重构。"""
+    from unittest.mock import MagicMock
+    from zzz_od.operation.enter_game.open_game import OpenGame
+
+    backend = _mock_backend()
+    tool = app_mod.make_open_game(backend)
+    asyncio.run(tool(enter=False, block=False))
+    op_factory = backend.start_run.call_args[0][1]
+    op = op_factory(MagicMock(name='ZContext'))
+    assert isinstance(op, OpenGame)
+
+
+def test_open_game_enter_true_selects_open_and_enter_game_op() -> None:
+    """enter=True 时 op_factory 构造出的是 OpenAndEnterGame。"""
+    from unittest.mock import MagicMock
+    from zzz_od.operation.enter_game.open_and_enter_game import OpenAndEnterGame
+
+    backend = _mock_backend()
+    tool = app_mod.make_open_game(backend)
+    asyncio.run(tool(enter=True, block=False))
+    op_factory = backend.start_run.call_args[0][1]
+    op = op_factory(MagicMock(name='ZContext'))
+    assert isinstance(op, OpenAndEnterGame)
 
 
 def test_get_run_status_delegates() -> None:
@@ -213,3 +252,39 @@ def test_stop_run_delegates() -> None:
     res = app_mod.make_stop_run(backend)()
     assert res['stopped'] is False
     backend.stop.assert_called_once()
+
+
+# ===== click_game / input_text 工具(内联注册,同 close_game) =====
+
+def test_click_game_tool_registered() -> None:
+    mcp, _ = _mcp_with_backend()
+    tools = asyncio.run(mcp.list_tools())
+    assert any(t.name == "click_game" for t in tools)
+
+
+def test_click_game_tool_delegates() -> None:
+    """click_game tool 直调 backend.click_game() 并原样返回。"""
+    mcp, backend = _mcp_with_backend()
+    backend.click_game.return_value = {'success': True, 'x': 960, 'y': 540, 'in_window': True}
+    tool = mcp._tool_manager._tools['click_game']
+    fn = getattr(tool, 'fn', None) or getattr(tool, 'func', None)
+    result = fn(x=960, y=540)
+    backend.click_game.assert_called_once_with(960, 540, 0.0)
+    assert result['success'] is True
+
+
+def test_input_text_tool_registered() -> None:
+    mcp, _ = _mcp_with_backend()
+    tools = asyncio.run(mcp.list_tools())
+    assert any(t.name == "input_text" for t in tools)
+
+
+def test_input_text_tool_delegates() -> None:
+    """input_text tool 直调 backend.input_text() 并原样返回。"""
+    mcp, backend = _mcp_with_backend()
+    backend.input_text.return_value = {'success': True, 'method': 'clipboard', 'masked_text': '***'}
+    tool = mcp._tool_manager._tools['input_text']
+    fn = getattr(tool, 'fn', None) or getattr(tool, 'func', None)
+    result = fn(text='abc', use_clipboard=True)
+    backend.input_text.assert_called_once_with('abc', True)
+    assert result['method'] == 'clipboard'
