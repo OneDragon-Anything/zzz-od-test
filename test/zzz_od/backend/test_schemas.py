@@ -67,3 +67,11 @@ def test_run_status_result_defaults() -> None:
     r = RunStatusResult(state='idle')
     assert r.source is None and r.app is None
     assert r.current_node is None and r.last_status is None and r.failed_node is None
+
+
+def test_analyze_result_default_screenshot_path_none() -> None:
+    """AnalyzeScreenResult 默认 screenshot_path=None。"""
+    from zzz_od.backend.schemas import AnalyzeScreenResult
+
+    r = AnalyzeScreenResult(success=True, ocr_texts=[], error=None)
+    assert r.screenshot_path is None
