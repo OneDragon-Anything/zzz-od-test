@@ -312,3 +312,23 @@ def test_analyze_save_image_capture_fails_no_path() -> None:
     result = backend.analyze(save_image=True)
     assert result.success is False
     assert result.screenshot_path is None
+
+
+def test_analyze_save_image_then_ocr_fail_returns_path(monkeypatch) -> None:
+    """存盘成功但后续 OCR 异常 → success=False, screenshot_path 仍回传(排障)。"""
+    import numpy as np
+    import zzz_od.backend.backend_context as bc
+
+    monkeypatch.setattr(bc, '_save_screenshot', lambda img: '/tmp/fake.png')
+    controller = MagicMock()
+    controller.is_game_window_ready = True
+    controller.get_screenshot.return_value = np.zeros((4, 4, 3), dtype=np.uint8)
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    ctx.controller = controller
+    ctx.ocr_service.get_ocr_result_list.side_effect = RuntimeError('ocr boom')
+    backend = ZzzBackendContext(ctx)
+    result = backend.analyze(save_image=True)
+    assert result.success is False
+    assert result.screenshot_path == '/tmp/fake.png'
+    assert result.error is not None
