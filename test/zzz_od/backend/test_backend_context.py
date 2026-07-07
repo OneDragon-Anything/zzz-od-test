@@ -235,3 +235,100 @@ def test_close_game_delegates() -> None:
     msg = backend.close_game()
     controller.close_game.assert_called_once()
     assert msg == '已发送关闭游戏信号,可用 check_game_window 验证'
+
+
+def test_analyze_save_image_persists_and_returns_path(monkeypatch) -> None:
+    """analyze(save_image=True) 实时模式:存盘 + screenshot_path 回传路径。"""
+    import numpy as np
+    import zzz_od.backend.backend_context as bc
+
+    saved_args: list = []
+
+    def fake_save(image):
+        saved_args.append(image)
+        return '/tmp/fake_screenshot.png'
+
+    monkeypatch.setattr(bc, '_save_screenshot', fake_save)
+    controller = MagicMock()
+    controller.is_game_window_ready = True
+    controller.get_screenshot.return_value = np.zeros((4, 4, 3), dtype=np.uint8)
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    ctx.controller = controller
+    ctx.ocr_service.get_ocr_result_list.return_value = []
+    backend = ZzzBackendContext(ctx)
+    result = backend.analyze(save_image=True)
+    assert result.success is True
+    assert result.screenshot_path == '/tmp/fake_screenshot.png'
+    assert len(saved_args) == 1
+
+
+def test_analyze_save_image_false_does_not_persist(monkeypatch) -> None:
+    """analyze() 默认 save_image=False:不存盘,screenshot_path=None。"""
+    import zzz_od.backend.backend_context as bc
+
+    called: list = []
+    monkeypatch.setattr(bc, '_save_screenshot', lambda img: called.append(img) or '/tmp/x.png')
+    controller = MagicMock()
+    controller.is_game_window_ready = True
+    controller.get_screenshot.return_value = object()
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    ctx.controller = controller
+    ctx.ocr_service.get_ocr_result_list.return_value = []
+    backend = ZzzBackendContext(ctx)
+    result = backend.analyze()
+    assert result.success is True
+    assert result.screenshot_path is None
+    assert called == []
+
+
+def test_analyze_offline_ignores_save_image(monkeypatch, tmp_path) -> None:
+    """analyze(screenshot=path) 离线模式:save_image 被忽略,screenshot_path=None。"""
+    import cv2
+    import numpy as np
+    import zzz_od.backend.backend_context as bc
+
+    called: list = []
+    monkeypatch.setattr(bc, '_save_screenshot', lambda img: called.append(img) or '/tmp/x.png')
+    img_path = tmp_path / 'shot.png'
+    cv2.imwrite(str(img_path), np.zeros((4, 4, 3), dtype=np.uint8))
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    ctx.ocr_service.get_ocr_result_list.return_value = []
+    backend = ZzzBackendContext(ctx)
+    result = backend.analyze(screenshot=str(img_path), save_image=True)
+    assert result.success is True
+    assert result.screenshot_path is None
+    assert called == []
+
+
+def test_analyze_save_image_capture_fails_no_path() -> None:
+    """实时捕获失败(get_screenshot None)→ success=False,screenshot_path=None。"""
+    controller = MagicMock()
+    controller.is_game_window_ready = True
+    controller.get_screenshot.return_value = None
+    backend = _backend(ready=True, controller=controller)
+    result = backend.analyze(save_image=True)
+    assert result.success is False
+    assert result.screenshot_path is None
+
+
+def test_analyze_save_image_then_ocr_fail_returns_path(monkeypatch) -> None:
+    """存盘成功但后续 OCR 异常 → success=False, screenshot_path 仍回传(排障)。"""
+    import numpy as np
+    import zzz_od.backend.backend_context as bc
+
+    monkeypatch.setattr(bc, '_save_screenshot', lambda img: '/tmp/fake.png')
+    controller = MagicMock()
+    controller.is_game_window_ready = True
+    controller.get_screenshot.return_value = np.zeros((4, 4, 3), dtype=np.uint8)
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    ctx.controller = controller
+    ctx.ocr_service.get_ocr_result_list.side_effect = RuntimeError('ocr boom')
+    backend = ZzzBackendContext(ctx)
+    result = backend.analyze(save_image=True)
+    assert result.success is False
+    assert result.screenshot_path == '/tmp/fake.png'
+    assert result.error is not None
