@@ -166,6 +166,30 @@ class TestContext(ZContext):
         assert screen is not None and isinstance(screen, MatLike)
         self.controller.mock_screenshot = screen
 
+    def load_screen(self, screen_name: str, state: str) -> MatLike:
+        """从中央存档 ``screens/<screen_name>/<state>.webp`` 读一张截图。
+
+        Args:
+            screen_name: 画面名(对应 docs/game/screens/ + screen_info,如 ``打开游戏``)。
+            state: 子态可读名(如 ``ready``、``账号密码登录``),即存档文件名(不带后缀)。
+
+        Returns:
+            RGB 图像;底层 cv2_utils.read_image 支持中文路径 + webp。
+        """
+        screens_dir = Path(__file__).parent.parent / 'screens'
+        path = screens_dir / screen_name / f'{state}.webp'
+        assert path.exists(), f'存档截图不存在: {path}'
+        return cv2_utils.read_image(str(path))
+
+    def mock_screen(self, screen_name: str, state: str) -> None:
+        """从存档读截图并设为 controller 下一帧(= load_screen + add_mock_screenshot)。
+
+        Args:
+            screen_name: 画面名。
+            state: 子态名。
+        """
+        self.add_mock_screenshot(self.load_screen(screen_name, state))
+
 
 @pytest.fixture(scope='session')
 def test_context() -> TestContext:
