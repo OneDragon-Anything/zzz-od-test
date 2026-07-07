@@ -129,6 +129,31 @@ async def test_handle_game_analyze_returns_screens() -> None:
 
 
 @pytest.mark.asyncio
+async def test_handle_game_analyze_save_image_param() -> None:
+    """handle_game_analyze 从 query 读 save_image 并透传,响应含 screenshot_path。"""
+    backend = MagicMock()
+    backend.analyze.return_value = AnalyzeScreenResult(
+        success=True, ocr_texts=[], error=None, screenshot_path='/tmp/x.png')
+    request = MagicMock()
+    request.query_params = {'save_image': 'true'}
+    resp = await handle_game_analyze(backend, request)
+    assert resp.status_code == 200
+    data = json.loads(resp.body.decode('utf-8'))
+    assert data['screenshot_path'] == '/tmp/x.png'
+    backend.analyze.assert_called_once_with(None, True)
+
+
+@pytest.mark.asyncio
+async def test_handle_game_analyze_save_image_default_false() -> None:
+    """无 request 时 save_image 默认 False(向后兼容旧调用)。"""
+    backend = MagicMock()
+    backend.analyze.return_value = AnalyzeScreenResult(success=True, ocr_texts=[], error=None)
+    resp = await handle_game_analyze(backend)  # request 默认 None
+    assert resp.status_code == 200
+    backend.analyze.assert_called_once_with(None, False)
+
+
+@pytest.mark.asyncio
 async def test_handle_game_enter_ok() -> None:
     """handle_game_enter 应委托 backend.start_run，返回 started/result JSON。
 
