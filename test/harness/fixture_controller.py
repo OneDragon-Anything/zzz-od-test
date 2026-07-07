@@ -27,9 +27,6 @@ from one_dragon.base.geometry.point import Point
 from one_dragon.base.operation.application.application_run_context import (
     ApplicationRunContextStateEnum,
 )
-from one_dragon.base.operation.operation_round_result import (
-    OperationRoundResultEnum,
-)
 from test.conftest import MockController
 
 if TYPE_CHECKING:
@@ -367,11 +364,9 @@ def reset_running_state(ctx: TestContext, op: object) -> None:
     ctx.run_context.event_bus.unlisten_all_event(op)  # noqa: SLF001
 
 
-# 便于测试判断轮次结果类型时的引用。
 __all__ = [
     'FixtureController',
     'WatchdogOperationMixin',
     'enter_running_state',
     'reset_running_state',
-    'OperationRoundResultEnum',
 ]

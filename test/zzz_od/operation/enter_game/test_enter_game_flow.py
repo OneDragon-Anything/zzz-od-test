@@ -7,8 +7,11 @@
 
 验证：
 - op 完整跑完 ``execute()`` 并到达大世界（成功）；
-- 记录到了 ``点击进入游戏`` 的流程 click；
-- 恢复性 click（如 ``国服-返回按钮``）即使误触发也不会让剧本失步。
+- 记录到了 ``点击进入游戏`` 的流程 click。
+
+恢复性 click（如 ``国服-返回按钮``）的门控（``on_click_in`` 只认流程 click）按
+§4.2 实现，但 happy-path 不会实际触发该恢复 click——由 :class:`TestOnClickInGating`
+专项单测直接覆盖，本流程不重复断言。
 
 不测 OpenGame/OpenAndEnterGame（写注册表 + 拉 exe，§5）——
 ``is_game_window_ready=True`` 绕过框架注入的“检测游戏窗口→打开游戏”前置链。
@@ -26,6 +29,7 @@ from test.harness.fixture_controller import (
 )
 
 from one_dragon.base.config.basic_game_config import TypeInputWay
+from one_dragon.base.geometry.point import Point
 from zzz_od.operation.enter_game.enter_game import EnterGame
 
 
@@ -68,16 +72,28 @@ def _build_phases() -> list[dict]:
 
 
 @pytest.fixture()
-def fixture_controller(test_context: TestContext) -> FixtureController:
-    """注入 FixtureController 并 pin 键盘输入方式（避免写真实 OS 剪贴板，§4.3）。"""
+def fixture_controller(
+    test_context: TestContext,
+    monkeypatch: pytest.MonkeyPatch,
+) -> FixtureController:
+    """注入 FixtureController 并 pin 键盘输入方式（避免写真实 OS 剪贴板，§4.3）。
+
+    用 ``monkeypatch.setattr`` 改写 ``controller``/``type_input_way``，pytest 在
+    测试结束后自动还原——避免污染 session 级 ``test_context``（否则后续测试拿到
+    FixtureController 而非 MockController，且其 screenshot 忽略 mock_screenshot）。
+    """
     ctrl = FixtureController(
         ctx=test_context,
         standard_width=test_context.project_config.screen_standard_width,
         standard_height=test_context.project_config.screen_standard_height,
     )
-    test_context.controller = ctrl
+    monkeypatch.setattr(test_context, 'controller', ctrl)
     # 强制走 keyboard.type 分支，避免 PcClipboard.copy_and_paste 写真实剪贴板。
-    test_context.game_config.type_input_way = TypeInputWay.INPUT.value.value
+    monkeypatch.setattr(
+        test_context.game_config,
+        'type_input_way',
+        TypeInputWay.INPUT.value.value,
+    )
     return ctrl
 
 
@@ -128,3 +144,43 @@ class TestEnterGameFlow:
 
 def _fmt_clicks(clicks: list) -> str:
     return ', '.join(f'({p.x},{p.y})' for p in clicks) or '<empty>'
+
+
+class TestOnClickInGating:
+    """``FixtureController`` 的 ``on_click_in`` 门控专项单测（§4.2）。
+
+    happy-path 流程不会实际触发恢复性 click（``国服-返回按钮`` 在 ``ready`` fixture
+    上不会命中），这里直接驱动 :meth:`FixtureController.click` 锁定门控判定：
+    落在声明 region 内才推进 phase，region 外只记录不推进。无需跑完整 op。
+    """
+
+    def test_on_click_in_region_gating(self, test_context: TestContext) -> None:
+        # 直接构造 FixtureController（不经过 fixture_controller fixture，不改写
+        # ctx.controller，零污染）。frame 仅 screenshot() 时才会读取，本用例不触达。
+        ctrl = FixtureController(
+            ctx=test_context,
+            standard_width=test_context.project_config.screen_standard_width,
+            standard_height=test_context.project_config.screen_standard_height,
+        )
+        ctrl.set_phases(
+            [
+                # phase 0：只在 [100,100]-[200,200] 矩形内 click 才推进。
+                {
+                    'frame': ('打开游戏', 'ready'),
+                    'exit': ('on_click_in', [100, 100, 200, 200]),
+                },
+                # phase 1：terminal，无 exit。
+                {'frame': ('打开游戏', '登录服务器中')},
+            ]
+        )
+
+        # region 外 click：不应推进，但应被记录。
+        ctrl.click(Point(500, 500))
+        assert ctrl.phase_idx == 0, 'region 外 click 不应推进 phase'
+        assert len(ctrl.recorded_clicks) == 1, 'region 外 click 应被记录'
+        assert (ctrl.recorded_clicks[0].x, ctrl.recorded_clicks[0].y) == (500, 500)
+
+        # region 内 click：应推进到 phase 1。
+        ctrl.click(Point(150, 150))
+        assert ctrl.phase_idx == 1, 'region 内 click 应推进 phase'
+        assert len(ctrl.recorded_clicks) == 2
