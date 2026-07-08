@@ -12,7 +12,7 @@ class TestCallForSupport:
         """
         没有代理人的情况 不会识别到任何选项 因此点击的是事件文本
         """
-        screen = test_context.get_test_image('no_agent.png')
+        screen = test_context.get_test_image('no_agent.webp')
         op = CallForSupport(test_context)
         result = hollow_event_utils.check_event_text_and_run(op, screen, op._handlers)
         assert '事件文本' == result.status
