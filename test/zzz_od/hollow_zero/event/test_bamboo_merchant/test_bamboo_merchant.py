@@ -9,7 +9,7 @@ class TestBambooMerchant:
         """
         有折扣的时候 价格都是0
         """
-        screen = test_context.get_test_image('0.png')
+        screen = test_context.get_test_image('0.webp')
         op = BambooMerchant(test_context)
         ocr_result_map = op._ocr_price_area(screen)
         assert 1 == len(ocr_result_map)
@@ -19,7 +19,7 @@ class TestBambooMerchant:
         """
         显示2个价格
         """
-        screen = test_context.get_test_image('2_price.png')
+        screen = test_context.get_test_image('2_price.webp')
         op = BambooMerchant(test_context)
         ocr_result_map = op._ocr_price_area(screen)
         print(ocr_result_map)
@@ -29,7 +29,7 @@ class TestBambooMerchant:
         """
         没有价格
         """
-        screen = test_context.get_test_image('no_price.png')
+        screen = test_context.get_test_image('no_price.webp')
         op = BambooMerchant(test_context)
         ocr_result_map = op._ocr_price_area(screen)
         assert 0 == len(ocr_result_map)

@@ -8,7 +8,7 @@ from zzz_od.hollow_zero.game_data.hollow_zero_event import HollowZeroSpecialEven
 class TestHollowEventUtils:
 
     def test_check_event(self, test_context: TestContext):
-        screen = test_context.get_test_image('full_in_bag.png')
+        screen = test_context.get_test_image('full_in_bag.webp')
         result = hollow_event_utils.check_full_in_bag(test_context, screen)
         assert result is not None
 
@@ -17,7 +17,7 @@ class TestHollowEventUtils:
 
     def test_opts(self, test_context: TestContext):
         op = FullInBag(test_context)
-        test_context.add_mock_screenshot_by_path('full_in_bag.png')
+        test_context.add_mock_screenshot_by_path('full_in_bag.webp')
         op.screenshot()
         result = op.drop()
         assert result.is_success is True
