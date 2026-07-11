@@ -1,5 +1,3 @@
-import pytest
-
 from test.conftest import TestContext
 
 
@@ -10,7 +8,6 @@ class TestScreenInfoTemplateExist:
     ``template_sub_dir`` 跨整个 ``assets/template/``)。证明「被画面引用的模板都存在且能读」。
     """
 
-    @pytest.mark.xfail(reason='已知:battle/btn_switch_backup_1 模板缺失,见 issue #2463', strict=True)
     def test_screen_info_template(self, test_context: TestContext):
         missing = []
         for screen_info in test_context.screen_loader.screen_info_list:
