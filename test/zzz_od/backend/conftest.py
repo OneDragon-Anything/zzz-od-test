@@ -11,6 +11,7 @@ def mock_ctx():
     ctx = MagicMock(name='ZContext')
     ctx.run_context.start_running.return_value = True
     ctx.run_context.stop_running.return_value = None
+    ctx.run_context.current_application = None     # 无运行时 current_application 为 None
     ctx.current_instance_idx = 0
     return ctx
 
