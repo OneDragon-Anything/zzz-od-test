@@ -257,7 +257,7 @@ def test_stop_running_signals_stop(slot, mock_ctx):
         event.set()
 
 
-# ============ ZzzBackendContext 委托(中间态:仍双槽,start_run 走 run_slot) ============
+# ============ ZzzBackendContext 委托(单槽:start_run/query_status/stop 都走 run_slot) ============
 
 def test_context_start_run_delegates(slot, mock_ctx):
     """ZzzBackendContext.start_run 转发 run_slot._start,返回 (ok, future)。"""
@@ -270,16 +270,20 @@ def test_context_start_run_delegates(slot, mock_ctx):
     fut.result(timeout=5)
 
 
-def test_context_start_run_rejected_when_app_running(slot, mock_ctx):
-    """app_run_slot 在跑时 start_run(op 路径)返 (False, None)。"""
+def test_context_start_run_rejected_when_slot_running(slot, mock_ctx):
+    """单槽:run_slot 已在跑时,start_run 返 (False, None)。"""
     from zzz_od.backend.backend_context import ZzzBackendContext
 
     backend = ZzzBackendContext(mock_ctx)
     backend.run_slot = slot
-    # 让 app_run_slot 报正在跑
-    backend.app_run_slot.is_running = lambda: True
-    ok, fut = backend.start_run('mcp', _make_op(OperationResult(success=True)))
-    assert ok is False and fut is None
+    # 先占住单跑道(blocking op),再 start_run 应被拒。
+    event = threading.Event()
+    slot._start('mcp', op_factory=_make_blocking_op(event, OperationResult(success=True)))
+    try:
+        ok, fut = backend.start_run('mcp', _make_op(OperationResult(success=True)))
+        assert ok is False and fut is None
+    finally:
+        event.set()  # 释放后台线程
 
 
 def test_context_start_run_display_name_passthrough(slot, mock_ctx):
@@ -295,7 +299,7 @@ def test_context_start_run_display_name_passthrough(slot, mock_ctx):
 
 
 def test_context_query_status_delegates(slot, mock_ctx):
-    """ZzzBackendContext.query_status 转发(中间态仍双槽仲裁,idle 可达)。"""
+    """ZzzBackendContext.query_status 单槽转发(idle 可达)。"""
     from zzz_od.backend.backend_context import ZzzBackendContext
 
     backend = ZzzBackendContext(mock_ctx)
@@ -304,7 +308,7 @@ def test_context_query_status_delegates(slot, mock_ctx):
 
 
 def test_context_stop_delegates(slot, mock_ctx):
-    """ZzzBackendContext.stop 封装(无运行时返 {stopped:False, error})。"""
+    """ZzzBackendContext.stop 单槽封装(无运行时返 {stopped:False, error})。"""
     from zzz_od.backend.backend_context import ZzzBackendContext
 
     backend = ZzzBackendContext(mock_ctx)
