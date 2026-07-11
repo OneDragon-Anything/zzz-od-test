@@ -302,3 +302,135 @@ def test_handle_game_status():
 def test_handle_game_stop():
     resp = asyncio.run(routes_mod.handle_game_stop(_mock_backend(), _FakeRequest({})))
     assert resp.status_code == 200
+
+
+# ===== /game/operations / /game/operations/describe / /game/run/operation(自定义 op)=====
+
+_OPEN_AND_ENTER = 'zzz_od.operation.enter_game.open_and_enter_game.OpenAndEnterGame'
+_MAP_TRANSPORT = 'zzz_od.operation.map_transport.MapTransport'
+_CHARGE_PLAN_ITEM = 'zzz_od.application.charge_plan.charge_plan_config.ChargePlanItem'
+
+
+def _request_with_body(query: dict, body: dict | None) -> MagicMock:
+    """构造带 query_params 与 async json() body 的 fake request。"""
+    request = MagicMock()
+    request.query_params = query
+
+    async def _json() -> dict:
+        return body if body is not None else {}
+
+    request.json = _json
+    return request
+
+
+def test_handle_game_operations_list() -> None:
+    """GET /game/operations 返回 operation 列表(含 OpenAndEnterGame)。"""
+    from zzz_od.backend.http.service_routes import handle_game_operations
+
+    backend = MagicMock()
+    resp = asyncio.run(handle_game_operations(backend))
+    assert resp.status_code == 200
+    data = json.loads(resp.body.decode('utf-8'))
+    op_ids = [o['op_id'] for o in data['operations']]
+    assert _OPEN_AND_ENTER in op_ids
+
+
+def test_handle_game_operations_describe() -> None:
+    """GET /game/operations/describe?op_id= 返回参数 schema(op_id 走 query)。"""
+    from zzz_od.backend.http.service_routes import handle_game_operations_describe
+
+    backend = MagicMock()
+    request = MagicMock()
+    request.query_params = {'op_id': _MAP_TRANSPORT}
+    resp = asyncio.run(handle_game_operations_describe(backend, request))
+    assert resp.status_code == 200
+    data = json.loads(resp.body.decode('utf-8'))
+    assert data['class_name'] == 'MapTransport'
+    assert [p['name'] for p in data['params']] == ['area_name', 'tp_name']
+
+
+def test_handle_game_operations_describe_missing_op_id() -> None:
+    """无 op_id query → 200 + {error}。"""
+    from zzz_od.backend.http.service_routes import handle_game_operations_describe
+
+    backend = MagicMock()
+    request = MagicMock()
+    request.query_params = {}
+    resp = asyncio.run(handle_game_operations_describe(backend, request))
+    assert resp.status_code == 200
+    assert 'error' in json.loads(resp.body.decode('utf-8'))
+
+
+def test_handle_game_run_operation_op_id_via_query_args_via_body() -> None:
+    """POST /game/run/operation:op_id 走 query、args 走 body;成功启动(_start 被调)。"""
+    from zzz_od.backend.http.service_routes import handle_game_run_operation
+
+    backend = MagicMock()
+    backend.run_slot._start.return_value = (True, Future())
+    backend.query_status.return_value = RunStatusResult(
+        state='running', source='http', started_at='2026-07-02T00:00:00', duration_seconds=1.0)
+    request = _request_with_body({'op_id': _OPEN_AND_ENTER, 'block': 'false'}, {'some': 'arg'})
+    resp = asyncio.run(handle_game_run_operation(backend, request))
+    assert resp.status_code == 200
+    data = json.loads(resp.body.decode('utf-8'))
+    assert data['started'] is True
+    backend.run_slot._start.assert_called_once()
+    call = backend.run_slot._start.call_args
+    assert call.args[0] == 'http'
+    assert call.kwargs.get('display_name') == _OPEN_AND_ENTER
+
+
+def test_handle_game_run_operation_rejects_non_operation() -> None:
+    """op_id 非 Operation → 200 + {started: False, error}。"""
+    from zzz_od.backend.http.service_routes import handle_game_run_operation
+
+    backend = MagicMock()
+    request = _request_with_body({'op_id': _CHARGE_PLAN_ITEM}, {})
+    resp = asyncio.run(handle_game_run_operation(backend, request))
+    assert resp.status_code == 200
+    data = json.loads(resp.body.decode('utf-8'))
+    assert data['started'] is False and 'error' in data
+    backend.run_slot._start.assert_not_called()
+
+
+def test_handle_game_run_operation_rejects_missing_param() -> None:
+    """缺必填参数(MapTransport.tp_name)→ 200 + {started: False, error}。"""
+    from zzz_od.backend.http.service_routes import handle_game_run_operation
+
+    backend = MagicMock()
+    request = _request_with_body({'op_id': _MAP_TRANSPORT}, {'area_name': '六分街'})
+    resp = asyncio.run(handle_game_run_operation(backend, request))
+    assert resp.status_code == 200
+    data = json.loads(resp.body.decode('utf-8'))
+    assert data['started'] is False
+    assert 'tp_name' in data['error']
+
+
+def test_handle_game_run_operation_concurrent_reject() -> None:
+    """单跑道已有运行 → 200 + {started: False, source}。"""
+    from zzz_od.backend.http.service_routes import handle_game_run_operation
+
+    backend = MagicMock()
+    backend.run_slot._start.return_value = (False, None)
+    backend.query_status.return_value = RunStatusResult(state='running', source='mcp')
+    request = _request_with_body({'op_id': _OPEN_AND_ENTER}, {})
+    resp = asyncio.run(handle_game_run_operation(backend, request))
+    data = json.loads(resp.body.decode('utf-8'))
+    assert data['started'] is False
+    assert data['error'] == '已有运行在进行中'
+    assert data['source'] == 'mcp'
+
+
+def test_register_service_routes_adds_operation_routes() -> None:
+    """register_http_routes 应挂载 /game/operations 系列端点。"""
+    from mcp.server.fastmcp import FastMCP
+
+    from zzz_od.backend.http.routes import register_http_routes
+
+    mcp = FastMCP('test')
+    register_http_routes(mcp, MagicMock())
+    app = mcp.streamable_http_app()
+    paths = {getattr(r, 'path', None) for r in app.routes}
+    assert '/game/operations' in paths
+    assert '/game/operations/describe' in paths
+    assert '/game/run/operation' in paths

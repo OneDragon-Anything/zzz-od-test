@@ -180,7 +180,7 @@ def test_analyze_exception_no_writeback(monkeypatch) -> None:
 
 
 def test_start_run_delegates_to_run_slot() -> None:
-    """start_run 应委托 run_slot._start_run，返回 (ok, future) 元组。
+    """start_run 应委托 run_slot._start(op 路径)，返回 (ok, future) 元组。
 
     覆盖旧的 enter_game 用例：不再有同步 enter_game 方法，运行由
     run_slot 异步派发；此处直接 mock run_slot，验证透传与返回结构。
@@ -191,7 +191,7 @@ def test_start_run_delegates_to_run_slot() -> None:
     fut: Future = Future()
     fut.set_result(object())
     backend.run_slot = MagicMock()
-    backend.run_slot._start_run.return_value = (True, fut)
+    backend.run_slot._start.return_value = (True, fut)
 
     def _factory(_ctx: object) -> object:
         return object()
@@ -199,7 +199,9 @@ def test_start_run_delegates_to_run_slot() -> None:
     ok, future = backend.start_run("mcp", _factory)
     assert ok is True
     assert future is fut
-    backend.run_slot._start_run.assert_called_once_with("mcp", _factory)
+    backend.run_slot._start.assert_called_once_with(
+        "mcp", op_factory=_factory, display_name=None
+    )
 
 
 def test_query_status_delegates_to_run_slot() -> None:
@@ -224,6 +226,28 @@ def test_stop_delegates_to_run_slot() -> None:
 
     assert backend.stop() == {"stopped": False, "error": "当前无运行"}
     backend.run_slot._stop.assert_called_once()
+
+
+def test_list_applications_no_refresh(monkeypatch) -> None:
+    """list_applications 是只读路径,不应调用 _refresh_runtime_config。"""
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    ctx.standalone_app_config.active_app_id = ''
+    ctx.standalone_app_config.app_list = []
+    group_config = MagicMock()
+    group_config.app_list = []
+    ctx.app_group_manager.get_one_dragon_group_config.return_value = group_config
+    ctx.run_context.is_app_registered.return_value = False
+    ctx.run_context.default_group_apps = []
+    ctx.current_instance_idx = 0
+    backend = ZzzBackendContext(ctx)
+
+    called: list = []
+    monkeypatch.setattr(backend, '_refresh_runtime_config', lambda: called.append(True))
+
+    result = backend.list_applications()
+    assert result.applications == []
+    assert called == []                          # 只读路径不刷新配置
 
 
 def test_close_game_delegates() -> None:
