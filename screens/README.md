@@ -21,6 +21,7 @@
 - `仓库-驱动仓库-驱动盘拆解/`:默认、快速选择(drive_disc_dismantle;拆解确认待补)
 - `快捷手册-日常/`:默认(engagement_reward 今日活跃度;领取弹窗待补)
 - `丽都城募/`:默认、成长任务(city_fund 大月卡;5 tab)
+- `报刊亭/`:默认、刮态(scratch_card;嗷呜对话/确认待补)
 
 > `警告_游戏前详阅` 用下划线(screen_name `警告:游戏前详阅` 带冒号,Windows 目录名非法)。
 
