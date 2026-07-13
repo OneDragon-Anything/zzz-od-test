@@ -8,7 +8,6 @@ from one_dragon.base.operation.application.application_finalizer import (
     AfterDoneRequest,
     execute_after_done,
     get_after_done_request_from_config,
-    should_execute_after_done,
 )
 from one_dragon.base.operation.application.application_run_context import (
     ApplicationRunContext,
@@ -529,29 +528,6 @@ class TestApplicationFinalizer:
         assert ctx.controller.close_game_calls == 0
         assert shutdown_calls == []
 
-    def test_should_execute_after_done_non_completed_reasons_return_false(self) -> None:
-        non_completed_reasons = [
-            RunFinishReason.STOPPED_BY_USER,
-            RunFinishReason.STOPPED_BY_FLOW,
-            RunFinishReason.FAILED,
-            RunFinishReason.INIT_FAILED,
-            RunFinishReason.INIT_TIMEOUT,
-            RunFinishReason.APP_SHUTDOWN,
-        ]
-
-        for finish_reason in non_completed_reasons:
-            result = ApplicationRunResult(
-                finish_reason=finish_reason,
-                app_id="dummy",
-                instance_idx=1,
-                group_id="group",
-            )
-
-            assert should_execute_after_done(
-                result,
-                AfterDoneRequest(close_game=True, shutdown_seconds=60),
-            ) is False
-
     def test_execute_after_done_none_request_noop(self, monkeypatch) -> None:
         """空 AfterDoneRequest()（配置 NONE）在 COMPLETED 下也不执行收尾。"""
         ctx = DummyContext(controller=DummyController())
@@ -592,23 +568,6 @@ class TestApplicationFinalizer:
         assert ctx.controller.close_game_calls == 0
         assert shutdown_calls == []
 
-    def test_should_execute_after_done_completed_with_none_request_returns_false(self) -> None:
-        """空 AfterDoneRequest() 在 COMPLETED 下返回 False。"""
-        result = ApplicationRunResult(
-            finish_reason=RunFinishReason.COMPLETED,
-            app_id="dummy",
-            instance_idx=1,
-            group_id="group",
-        )
-
-        assert should_execute_after_done(result, AfterDoneRequest()) is False
-
-    def test_should_execute_after_done_run_result_none_returns_false(self) -> None:
-        """run_result 字面 None 时返回 False。"""
-        assert should_execute_after_done(
-            None,
-            AfterDoneRequest(close_game=True, shutdown_seconds=60),
-        ) is False
 
     def test_get_after_done_request_from_config_shutdown(self) -> None:
         request = get_after_done_request_from_config(
