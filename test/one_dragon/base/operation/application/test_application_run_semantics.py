@@ -97,6 +97,16 @@ class FailedApp:
         raise RuntimeError("boom")
 
 
+class AppShutdownApp:
+    """模拟程序退出清理：运行中触发 after_app_shutdown。"""
+
+    def __init__(self, ctx: DummyContext):
+        self.ctx: DummyContext = ctx
+
+    def execute(self) -> None:
+        self.ctx.run_context.after_app_shutdown()
+
+
 class TestApplicationRunContext:
 
     def test_run_application_completed(self) -> None:
@@ -205,6 +215,34 @@ class TestApplicationRunContext:
 
         assert result.finish_reason == RunFinishReason.STOPPED_BY_FLOW
 
+    def test_run_application_stopped_by_flow_skips_after_done_request(
+        self, monkeypatch
+    ) -> None:
+        ctx = DummyContext(controller=DummyController())
+        ctx.run_context.registry_application(
+            DummyFactory("dummy", FlowStoppedApp(ctx))
+        )
+        shutdown_calls: list[int] = []
+
+        monkeypatch.setattr(
+            "one_dragon.base.operation.application.application_finalizer.cmd_utils.shutdown_sys",
+            lambda seconds: shutdown_calls.append(seconds),
+        )
+
+        result = ctx.run_context.run_application(
+            "dummy",
+            1,
+            "group",
+            after_done_request=AfterDoneRequest(
+                close_game=True,
+                shutdown_seconds=60,
+            ),
+        )
+
+        assert result.finish_reason == RunFinishReason.STOPPED_BY_FLOW
+        assert ctx.controller.close_game_calls == 0
+        assert shutdown_calls == []
+
     def test_run_application_failed(self) -> None:
         ctx = DummyContext(controller=DummyController())
         ctx.run_context.registry_application(
@@ -214,6 +252,60 @@ class TestApplicationRunContext:
         result = ctx.run_context.run_application("dummy", 1, "group")
 
         assert result.finish_reason == RunFinishReason.FAILED
+
+    def test_run_application_failed_skips_after_done_request(
+        self, monkeypatch
+    ) -> None:
+        ctx = DummyContext(controller=DummyController())
+        ctx.run_context.registry_application(
+            DummyFactory("dummy", FailedApp())
+        )
+        shutdown_calls: list[int] = []
+
+        monkeypatch.setattr(
+            "one_dragon.base.operation.application.application_finalizer.cmd_utils.shutdown_sys",
+            lambda seconds: shutdown_calls.append(seconds),
+        )
+
+        result = ctx.run_context.run_application(
+            "dummy",
+            1,
+            "group",
+            after_done_request=AfterDoneRequest(
+                close_game=True,
+                shutdown_seconds=60,
+            ),
+        )
+
+        assert result.finish_reason == RunFinishReason.FAILED
+        assert ctx.controller.close_game_calls == 0
+        assert shutdown_calls == []
+
+    def test_run_application_completed_with_none_request_skips_actions(
+        self, monkeypatch
+    ) -> None:
+        """结束后配置为 NONE（空 AfterDoneRequest）时，自然完成也不触发收尾。"""
+        ctx = DummyContext(controller=DummyController())
+        ctx.run_context.registry_application(
+            DummyFactory("dummy", CompletedApp())
+        )
+        shutdown_calls: list[int] = []
+
+        monkeypatch.setattr(
+            "one_dragon.base.operation.application.application_finalizer.cmd_utils.shutdown_sys",
+            lambda seconds: shutdown_calls.append(seconds),
+        )
+
+        result = ctx.run_context.run_application(
+            "dummy",
+            1,
+            "group",
+            after_done_request=AfterDoneRequest(),
+        )
+
+        assert result.finish_reason == RunFinishReason.COMPLETED
+        assert ctx.controller.close_game_calls == 0
+        assert shutdown_calls == []
 
     def test_run_application_init_timeout(self) -> None:
         ctx = DummyContext(
@@ -225,6 +317,35 @@ class TestApplicationRunContext:
 
         assert result.finish_reason == RunFinishReason.INIT_TIMEOUT
 
+    def test_run_application_init_timeout_skips_after_done_request(
+        self, monkeypatch
+    ) -> None:
+        ctx = DummyContext(
+            controller=DummyController(),
+            ready_for_application=False,
+        )
+        shutdown_calls: list[int] = []
+
+        monkeypatch.setattr(
+            "one_dragon.base.operation.application.application_finalizer.cmd_utils.shutdown_sys",
+            lambda seconds: shutdown_calls.append(seconds),
+        )
+
+        result = ctx.run_context.run_application(
+            "dummy",
+            1,
+            "group",
+            init_timeout=0,
+            after_done_request=AfterDoneRequest(
+                close_game=True,
+                shutdown_seconds=60,
+            ),
+        )
+
+        assert result.finish_reason == RunFinishReason.INIT_TIMEOUT
+        assert ctx.controller.close_game_calls == 0
+        assert shutdown_calls == []
+
     def test_run_application_init_failed(self) -> None:
         ctx = DummyContext(controller=None)
         ctx.run_context.registry_application(
@@ -234,6 +355,32 @@ class TestApplicationRunContext:
         result = ctx.run_context.run_application("dummy", 1, "group")
 
         assert result.finish_reason == RunFinishReason.INIT_FAILED
+
+    def test_run_application_init_failed_skips_after_done_request(
+        self, monkeypatch
+    ) -> None:
+        """未注册应用导致 INIT_FAILED 时，不执行关游戏/关机。"""
+        ctx = DummyContext(controller=DummyController())
+        shutdown_calls: list[int] = []
+
+        monkeypatch.setattr(
+            "one_dragon.base.operation.application.application_finalizer.cmd_utils.shutdown_sys",
+            lambda seconds: shutdown_calls.append(seconds),
+        )
+
+        result = ctx.run_context.run_application(
+            "unregistered",
+            1,
+            "group",
+            after_done_request=AfterDoneRequest(
+                close_game=True,
+                shutdown_seconds=60,
+            ),
+        )
+
+        assert result.finish_reason == RunFinishReason.INIT_FAILED
+        assert ctx.controller.close_game_calls == 0
+        assert shutdown_calls == []
 
     def test_after_app_shutdown_marks_app_shutdown(self) -> None:
         ctx = DummyContext(controller=DummyController())
@@ -247,6 +394,35 @@ class TestApplicationRunContext:
             ctx.run_context.last_run_result.finish_reason
             == RunFinishReason.APP_SHUTDOWN
         )
+
+    def test_run_application_app_shutdown_skips_after_done_request(
+        self, monkeypatch
+    ) -> None:
+        """运行中触发 after_app_shutdown 时，不执行关游戏/关机。"""
+        ctx = DummyContext(controller=DummyController())
+        ctx.run_context.registry_application(
+            DummyFactory("dummy", AppShutdownApp(ctx))
+        )
+        shutdown_calls: list[int] = []
+
+        monkeypatch.setattr(
+            "one_dragon.base.operation.application.application_finalizer.cmd_utils.shutdown_sys",
+            lambda seconds: shutdown_calls.append(seconds),
+        )
+
+        result = ctx.run_context.run_application(
+            "dummy",
+            1,
+            "group",
+            after_done_request=AfterDoneRequest(
+                close_game=True,
+                shutdown_seconds=60,
+            ),
+        )
+
+        assert result.finish_reason == RunFinishReason.APP_SHUTDOWN
+        assert ctx.controller.close_game_calls == 0
+        assert shutdown_calls == []
 
 
 class TestApplicationFinalizer:
@@ -309,6 +485,30 @@ class TestApplicationFinalizer:
         ctx = DummyContext(controller=DummyController())
         result = ApplicationRunResult(
             finish_reason=RunFinishReason.STOPPED_BY_USER,
+            app_id="dummy",
+            instance_idx=1,
+            group_id="group",
+        )
+        shutdown_calls: list[int] = []
+
+        monkeypatch.setattr(
+            "one_dragon.base.operation.application.application_finalizer.cmd_utils.shutdown_sys",
+            lambda seconds: shutdown_calls.append(seconds),
+        )
+
+        execute_after_done(
+            ctx,
+            result,
+            AfterDoneRequest(close_game=True, shutdown_seconds=60),
+        )
+
+        assert ctx.controller.close_game_calls == 0
+        assert shutdown_calls == []
+
+    def test_execute_after_done_app_shutdown_noop(self, monkeypatch) -> None:
+        ctx = DummyContext(controller=DummyController())
+        result = ApplicationRunResult(
+            finish_reason=RunFinishReason.APP_SHUTDOWN,
             app_id="dummy",
             instance_idx=1,
             group_id="group",
