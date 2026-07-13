@@ -553,6 +553,7 @@ class TestApplicationFinalizer:
             ) is False
 
     def test_execute_after_done_none_request_noop(self, monkeypatch) -> None:
+        """空 AfterDoneRequest()（配置 NONE）在 COMPLETED 下也不执行收尾。"""
         ctx = DummyContext(controller=DummyController())
         result = ApplicationRunResult(
             finish_reason=RunFinishReason.COMPLETED,
@@ -572,7 +573,27 @@ class TestApplicationFinalizer:
         assert ctx.controller.close_game_calls == 0
         assert shutdown_calls == []
 
+    def test_execute_after_done_run_result_none_noop(self, monkeypatch) -> None:
+        """run_result 字面 None 时不关闭游戏、不触发关机。"""
+        ctx = DummyContext(controller=DummyController())
+        shutdown_calls: list[int] = []
+
+        monkeypatch.setattr(
+            "one_dragon.base.operation.application.application_finalizer.cmd_utils.shutdown_sys",
+            lambda seconds: shutdown_calls.append(seconds),
+        )
+
+        execute_after_done(
+            ctx,
+            None,
+            AfterDoneRequest(close_game=True, shutdown_seconds=60),
+        )
+
+        assert ctx.controller.close_game_calls == 0
+        assert shutdown_calls == []
+
     def test_should_execute_after_done_completed_with_none_request_returns_false(self) -> None:
+        """空 AfterDoneRequest() 在 COMPLETED 下返回 False。"""
         result = ApplicationRunResult(
             finish_reason=RunFinishReason.COMPLETED,
             app_id="dummy",
@@ -581,6 +602,13 @@ class TestApplicationFinalizer:
         )
 
         assert should_execute_after_done(result, AfterDoneRequest()) is False
+
+    def test_should_execute_after_done_run_result_none_returns_false(self) -> None:
+        """run_result 字面 None 时返回 False。"""
+        assert should_execute_after_done(
+            None,
+            AfterDoneRequest(close_game=True, shutdown_seconds=60),
+        ) is False
 
     def test_get_after_done_request_from_config_shutdown(self) -> None:
         request = get_after_done_request_from_config(
