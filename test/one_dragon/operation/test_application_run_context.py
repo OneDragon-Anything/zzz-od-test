@@ -30,9 +30,9 @@ def test_run_application_exception_writes_failed_result() -> None:
     rc.start_running = lambda: True  # type: ignore[assignment]
     rc.stop_running = lambda: None  # type: ignore[assignment]
 
-    started = rc.run_application('failing', 0, 'default')
+    run_result = rc.run_application('failing', 0, 'default')
 
-    assert started is True  # 启动成功语义不变
+    assert run_result.finish_reason.name == 'FAILED'
     assert rc.last_application_result is not None
     assert rc.last_application_result.success is False  # 关键：异常不再留 None
     assert isinstance(rc.last_application_result, OperationResult)
