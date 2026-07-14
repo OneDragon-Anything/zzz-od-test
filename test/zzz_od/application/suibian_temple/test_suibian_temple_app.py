@@ -10,6 +10,11 @@
 - ``SuibianTempleGoodGoods.goto_linli_jiefang``(好物铺,已在邻里街坊):OCR「好物铺」→ status=已在邻里街坊-进入好物铺。
 - ``handle_pawnshop``:德丰大押代码未开启 → status=未开启(不需 mock)。
 
+覆盖 app config 分支(开关关 → ``round_success('未开启')``,守住下游 ``@node_from`` 匹配词契约):
+- ``handle_auto_manage``(auto_manage_enabled=False)→ status=未开启自动托管(= ``handle_adventure_squad`` 的 ``@node_from`` 匹配词,关托管才走子玩法链)。
+- ``handle_yum_cha_sin_submit``(yum_cha_sin=False)→ status=未开启(= ``handle_craft`` 的 ``@node_from`` 匹配词)。
+- ``handle_good_goods`` / ``handle_boo_box``(默认关)→ status=未开启。
+
 未覆盖(留标记,见 `随便观.md` 备注):
 - ``Transport`` / interact 狮耶 / move:run_operation Transport + controller interact(朝向 + 时机,手动难复现)。
 - ``SuibianTempleAutoManage``(自动托管/经营日志画面无独立 screen_info,误匹配委托助手;且 ``check_and_stop_hosting`` 循环 click 停止托管/开始托管,单帧 mock 难覆盖完整停止→重启流程)。
@@ -21,8 +26,9 @@ fixture(`screens/随便观/`):入口-手动态 / 入口-自动托管中 / 自动
 
 注:各 ``goto_X`` 的 ``check_and_update_current_screen`` 命中对应 screen → ``round_success(status=screen_name)``。
 """
+import pytest
 from test.conftest import TestContext
-from zzz_od.application.suibian_temple.suibian_temple_app import SuibianTempleApp
+
 from zzz_od.application.suibian_temple.operations.suibian_temple_adventure_squad import (
     SuibianTempleAdventureSquad,
 )
@@ -41,6 +47,8 @@ from zzz_od.application.suibian_temple.operations.suibian_temple_sales_stall imp
 from zzz_od.application.suibian_temple.operations.suibian_temple_yum_cha_sin import (
     SuibianTempleYumChaSin,
 )
+from zzz_od.application.suibian_temple.suibian_temple_app import SuibianTempleApp
+from zzz_od.application.suibian_temple.suibian_temple_config import SuibianTempleConfig
 
 
 class TestSuibianTempleApp:
@@ -138,3 +146,48 @@ class TestSuibianTempleApp:
         app = SuibianTempleApp(test_context)
         result = app.handle_pawnshop()
         assert result.status == '未开启', '德丰大押代码未开启,应直接返回未开启'
+
+    def test_handle_auto_manage_disabled(
+        self, test_context: TestContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """auto_manage_enabled=False → handle_auto_manage → status=未开启自动托管(不跑 SuibianTempleAutoManage)。
+
+        该 status 是 ``handle_adventure_squad`` 的 ``@node_from(from_name='处理自动托管',
+        status='未开启自动托管')`` 匹配词 —— 关托管才走游历/制造等子玩法链。monkeypatch 改 config
+        属性(不写盘、自动还原),守住该编排边契约。
+        """
+        monkeypatch.setattr(SuibianTempleConfig, 'auto_manage_enabled', False)
+        app = SuibianTempleApp(test_context)
+        result = app.handle_auto_manage()
+        assert result.status == '未开启自动托管', '关托管应跳过 SuibianTempleAutoManage 直接返回'
+
+    def test_handle_yum_cha_sin_disabled(
+        self, test_context: TestContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """yum_cha_sin=False → handle_yum_cha_sin_submit → status=未开启。
+
+        该 status 是 ``handle_craft`` 的 ``@node_from(from_name='处理饮茶仙', status='未开启')``
+        匹配词 —— 关饮茶仙则饮茶仙后直接进制造坊(不经「饮茶仙后处理游历」)。
+        """
+        monkeypatch.setattr(SuibianTempleConfig, 'yum_cha_sin', False)
+        app = SuibianTempleApp(test_context)
+        result = app.handle_yum_cha_sin_submit()
+        assert result.status == '未开启', '关饮茶仙应跳过 SuibianTempleYumChaSin 直接返回'
+
+    def test_handle_good_goods_disabled(
+        self, test_context: TestContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """good_goods_purchase_enabled=False(默认)→ handle_good_goods → status=未开启。"""
+        monkeypatch.setattr(SuibianTempleConfig, 'good_goods_purchase_enabled', False)
+        app = SuibianTempleApp(test_context)
+        result = app.handle_good_goods()
+        assert result.status == '未开启', '关好物铺购买应跳过 SuibianTempleGoodGoods 直接返回'
+
+    def test_handle_boo_box_disabled(
+        self, test_context: TestContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """boo_box_purchase_enabled=False(默认)→ handle_boo_box → status=未开启。"""
+        monkeypatch.setattr(SuibianTempleConfig, 'boo_box_purchase_enabled', False)
+        app = SuibianTempleApp(test_context)
+        result = app.handle_boo_box()
+        assert result.status == '未开启', '关邦巢购买应跳过 SuibianTempleBooBox 直接返回'
