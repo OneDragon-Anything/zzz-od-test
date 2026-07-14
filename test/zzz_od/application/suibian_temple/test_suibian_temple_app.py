@@ -15,6 +15,9 @@
 - ``handle_yum_cha_sin_submit``(yum_cha_sin=False)→ status=未开启(= ``handle_craft`` 的 ``@node_from`` 匹配词)。
 - ``handle_good_goods`` / ``handle_boo_box``(默认关)→ status=未开启。
 
+覆盖子 op 薄包装/混合节点分支(方法论范例,见 testing §3 动作一):
+- ``click_squad_team``(混合:守卫 ``not self.claim`` + 薄包装 ocr)3 分支:claim=False→``跳过收获``(守卫)/claim=True+游历→``游历小队``(薄包装命中)/claim=True+制造坊→``未匹配到目标文本``(薄包装未命中 round_retry)。
+
 未覆盖(留标记,见 `随便观.md` 备注):
 - ``Transport`` / interact 狮耶 / move:run_operation Transport + controller interact(朝向 + 时机,手动难复现)。
 - ``SuibianTempleAutoManage``(自动托管/经营日志画面无独立 screen_info,误匹配委托助手;且 ``check_and_stop_hosting`` 循环 click 停止托管/开始托管,单帧 mock 难覆盖完整停止→重启流程)。
@@ -87,6 +90,45 @@ class TestSuibianTempleApp:
         op.screenshot()
         result2 = op.goto_adventure()
         assert result2.is_success, 'click 后进游历画面,按钮-游历消失,应 round_success'
+
+    def test_click_squad_team_skip_claim(self, test_context: TestContext) -> None:
+        """``click_squad_team``(混合节点:守卫+薄包装)claim=False → status=跳过收获(显式守卫分支,不需 mock)。
+
+        混合节点范例:``if not self.claim: return round_success('跳过收获')`` 是显式守卫分支
+        (动作一「混合」类:分支 = 显式 statuses ∪ helper 契约,别只数 helper 那部分)。
+        """
+        op = SuibianTempleAdventureSquad(test_context, claim=False, dispatch=False)
+        result = op.click_squad_team()
+        assert result.status == '跳过收获', 'claim=False 应走守卫分支直接跳过收获'
+
+    def test_click_squad_team_hit(self, test_context: TestContext) -> None:
+        """claim=True + 游历画面(OCR「游历小队」)→ ``click_squad_team`` 薄包装命中 → status=游历小队。
+
+        薄包装命中分支范例:``return round_by_ocr_and_click_priority(['游历小队'])`` 命中 →
+        ``round_success(status=匹配的 target)``。
+        """
+        self._mock(test_context, '游历')
+        op = SuibianTempleAdventureSquad(test_context, claim=True, dispatch=False)
+        op.screenshot()
+        result = op.click_squad_team()
+        assert result.is_success, '游历画面应 OCR 到「游历小队」并点击 → round_success'
+        assert result.status == '游历小队'
+
+    def test_click_squad_team_miss(self, test_context: TestContext) -> None:
+        """claim=True + 制造坊(无「游历小队」)→ ``click_squad_team`` 薄包装未命中 → round_retry。
+
+        薄包装不命中分支范例(现有测试多只测命中,此为补充):OCR 找不到 target →
+        ``round_retry('未匹配到目标文本')``,``is_success=False``。
+
+        注:不能用「入口」做未命中 mock —— 入口右侧「游历」tab 文字与 target「游历小队」
+        LCS 误匹配会命中(印证方法论「mock 哪帧先读 node + 注意 LCS 误匹配」)。
+        """
+        self._mock(test_context, '制造坊')
+        op = SuibianTempleAdventureSquad(test_context, claim=True, dispatch=False)
+        op.screenshot()
+        result = op.click_squad_team()
+        assert not result.is_success, '制造坊无「游历小队」应 round_retry(未命中)'
+        assert result.status == '未匹配到目标文本'
 
     def test_goto_craft(self, test_context: TestContext) -> None:
         """随便观-制造坊 → craft goto_craft → status=随便观-制造坊。"""
