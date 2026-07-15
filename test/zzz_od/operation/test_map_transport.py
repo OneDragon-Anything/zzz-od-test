@@ -4,7 +4,7 @@
 - ``choose_tp``(选传送点):澄辉坪传送点列表 → OCR 找随便观点 → click。
 - ``click_tp``(传送确认弹窗):点 ``地图/确认`` area → success。
 
-fixture(`screens/3D地图/`):选传送点 / 传送确认弹窗(2026-07-15 实拍)。
+fixture(`screens/地图/`):选传送点 / 传送确认弹窗(2026-07-15 实拍,网格/列表传送视图,`map.yml`)。
 
 未覆盖:
 - ``choose_area``:选区域(OCR 找区域名 + drag 地图翻页),需默认态 fixture + drag 逻辑复杂。
@@ -18,7 +18,7 @@ class TestMapTransport:
     """地图传送 op 测试。"""
 
     def _make_op(self, test_context: TestContext, state: str) -> MapTransport:
-        test_context.mock_screen('3D地图', state)
+        test_context.mock_screen('地图', state)
         op = MapTransport(test_context, '澄辉坪', '随便观')
         op.screenshot()
         return op
