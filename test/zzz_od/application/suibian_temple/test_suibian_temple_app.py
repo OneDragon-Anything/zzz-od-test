@@ -1,7 +1,7 @@
 """SuibianTempleApp 随便观测试。
 
 覆盖各子 op 的 start node(mock 对应子画面 fixture,断言识别 / 点击):
-- ``check_initial_screen``(随便观-入口,手动态):识别入口 → status=随便观-入口。
+- ``check_initial_screen``:2 分支(入口-手动态→随便观-入口 / 制造坊→不在随便观)。
 - ``SuibianTempleAdventureSquad.goto_adventure``(随便观-入口):click ``按钮-游历``。
 - ``SuibianTempleCraft.goto_craft``(随便观-制造坊):status=随便观-制造坊。
 - ``SuibianTempleSalesStall.goto_sales_stall``(随便观-售卖铺):status=随便观-售卖铺。
@@ -17,6 +17,7 @@
 
 覆盖子 op 薄包装/混合节点分支(方法论范例,见 testing §3 动作一):
 - ``click_squad_team``(混合:守卫 ``not self.claim`` + 薄包装 ocr)3 分支:claim=False→``跳过收获``(守卫)/claim=True+游历→``游历小队``(薄包装命中)/claim=True+制造坊→``未匹配到目标文本``(薄包装未命中 round_retry)。
+- ``click_finish``(纯薄包装 ocr)2 分支:游历→``游历小队``(命中)/制造坊→``未匹配到目标文本``(未命中 round_retry)。
 
 未覆盖(留标记,见 `随便观.md` 备注):
 - ``Transport`` / interact 狮耶 / move:run_operation Transport + controller interact(朝向 + 时机,手动难复现)。
@@ -68,6 +69,19 @@ class TestSuibianTempleApp:
         app.screenshot()
         result = app.check_initial_screen()
         assert result.status == '随便观-入口', '应识别已在随便观-入口'
+
+    def test_check_initial_screen_not_in_temple(self, test_context: TestContext) -> None:
+        """非随便观-入口帧(制造坊)→ check_initial_screen → status=不在随便观。
+
+        制造坊是随便观子画面但**非入口**,其 id_mark(按钮-街区 / 菜单-返回)≠ 随便观-入口 id_mark
+        (按钮-邻里街坊 / 派驻邦布 / 返回),``check_screen_with_can_go('随便观-入口')`` 不命中 →
+        '不在随便观'。用制造坊而非「随便找一张」——要避开会被误识别为入口的帧,且它已建档(同目录)。
+        """
+        self._mock(test_context, '制造坊')
+        app = SuibianTempleApp(test_context)
+        app.screenshot()
+        result = app.check_initial_screen()
+        assert result.status == '不在随便观', '非入口帧应识别为不在随便观'
 
     def test_goto_adventure(self, test_context: TestContext) -> None:
         """随便观-入口 → click 按钮-游历 → 进游历画面(``until_not_find_all`` 两轮验证)。
@@ -128,6 +142,28 @@ class TestSuibianTempleApp:
         op.screenshot()
         result = op.click_squad_team()
         assert not result.is_success, '制造坊无「游历小队」应 round_retry(未命中)'
+        assert result.status == '未匹配到目标文本'
+
+    def test_click_finish_hit(self, test_context: TestContext) -> None:
+        """游历画面(OCR「游历小队」)→ ``click_finish`` 薄包装命中 → status=游历小队。
+
+        ``click_finish`` = ``round_by_ocr_and_click_by_priority(['游历完成', '游历小队'])``,
+        游历.webp 有「游历小队」(无「游历完成」)→ 按 priority 匹配 target → status=游历小队。
+        """
+        self._mock(test_context, '游历')
+        op = SuibianTempleAdventureSquad(test_context, claim=True, dispatch=False)
+        op.screenshot()
+        result = op.click_finish()
+        assert result.is_success, '游历画面应 OCR 到「游历小队」并点击 → round_success'
+        assert result.status == '游历小队'
+
+    def test_click_finish_miss(self, test_context: TestContext) -> None:
+        """制造坊(无「游历完成 / 游历小队」)→ ``click_finish`` 薄包装未命中 → round_retry。"""
+        self._mock(test_context, '制造坊')
+        op = SuibianTempleAdventureSquad(test_context, claim=True, dispatch=False)
+        op.screenshot()
+        result = op.click_finish()
+        assert not result.is_success, '制造坊无目标文本应 round_retry(未命中)'
         assert result.status == '未匹配到目标文本'
 
     def test_goto_craft(self, test_context: TestContext) -> None:
