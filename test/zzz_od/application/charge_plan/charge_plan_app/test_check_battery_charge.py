@@ -9,33 +9,20 @@ class TestCheckBatteryCharge:
     @pytest.mark.parametrize(
         ('image_name', 'expected'),
         [
-            ('sample_333.webp', (215, 443, 150)),
-            ('sample_233.webp', (15, 388, 155)),
-            # TODO: sample_133.webp
-            # TODO: sample_323.webp
-            # TODO: sample_223.webp
-            # TODO: sample_123.webp
-            # TODO: sample_313.webp
-            # TODO: sample_213.webp
-            # TODO: sample_113.webp
-            ('sample_332.webp', (132, 273, 49)),
-            ('sample_232.webp', (61, 100, 52)),
-            ('sample_132.webp', (6, 273, 50)),
-            ('sample_322.webp', (181, 99, 50)),
-            ('sample_222.webp', (62, 99, 52)),
-            ('sample_122.webp', (3, 38, 54)),
-            ('sample_312.webp', (103, 0, 53)),
-            ('sample_212.webp', (38, 4, 54)),
-            ('sample_112.webp', (3, 0, 54)),
-            # TODO: sample_331.webp
-            # TODO: sample_231.webp
-            # TODO: sample_131.webp
-            ('sample_321.webp', (193, 48, 4)),
-            # TODO: sample_221.webp
-            # TODO: sample_121.webp
+            # 电量固定为3位数，储蓄电量上限为4位数（2400），以太电池上限为3位数（300）
+            # 理论上的 343 确定储蓄电量字段的左边界，311 确定右边界，其余位数组合均落在两者之间；
+            # 缺少 343 ？由 332/322/312 得出储蓄电量每增加一位数的固定左扩量，再以 333 为基准外推其左边界。
+            # 资源栏从右侧排布，某项数字位数越多，该项及其左侧字段会整体向左移动；
+            # 字段间隔充足：以太电池为1位时，当前电量最靠右仍位于储蓄电量左边界左侧；
+            # 以太电池为3位时，以太电池最靠左仍位于储蓄电量右边界右侧。
+
+            # TODO: sample_343.webp
+            ('sample_333_01.webp', (215, 443, 150)), ('sample_333_02.webp', (15, 388, 155)),
+            ('sample_332_01.webp', (132, 273, 49)), ('sample_332_02.webp', (61, 100, 52)), ('sample_332_03.webp', (6, 273, 50)),
+            ('sample_322_01.webp', (181, 99, 50)), ('sample_322_02.webp', (62, 99, 52)), ('sample_322_03.webp', (3, 38, 54)),
+            ('sample_312_01.webp', (103, 0, 53)), ('sample_312_02.webp', (38, 4, 54)), ('sample_312_03.webp', (3, 0, 54)),
             ('sample_311.webp', (129, 0, 2)),
-            # TODO: sample_211.webp
-            # TODO: sample_111.webp
+            # 粗体字
             ('sample_bold.webp', (400, 419, 82)),
         ],
     )
