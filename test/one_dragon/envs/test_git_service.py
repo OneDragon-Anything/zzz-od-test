@@ -98,6 +98,7 @@ class TestGitServiceFetchRemote:
     def git_service(self) -> GitService:
         project_config = SimpleNamespace(
             github_https_repository='https://example.com/repo.git',
+            cnb_https_repository='https://example.com/repo.git',
             gitee_https_repository='https://example.com/repo.git',
         )
         env_config = SimpleNamespace(
@@ -120,15 +121,17 @@ class TestGitServiceFetchRemote:
         monkeypatch.setattr(git_service, '_open_repo', lambda: repo)
         monkeypatch.setattr(git_service, '_ensure_remote', lambda: remote)
 
-        success = git_service._fetch_remote(
+        result = git_service._fetch_remote(
             lambda progress, message: events.append((progress, message)),
             0.2,
             0.4,
         )
 
-        assert success is True
+        assert result.success
+        assert result.source_name == 'GitHub'
         assert remote.fetch_calls[0]['depth'] == 1
         assert remote.fetch_calls[0]['refspecs'] == ['+refs/heads/main:refs/remotes/origin/main']
-        assert events[0][0] == pytest.approx(0.3)
-        assert events[0][1] == '拉取对象 2/4 (50%)'
-        assert events[-1] == (0.4, '拉取远程代码成功')
+        assert events[0] == (0.2, '从 GitHub 拉取代码')
+        assert events[1][0] == pytest.approx(0.3)
+        assert events[1][1] == '拉取对象 2/4 (50%)'
+        assert events[-1] == (0.4, 'GitHub 拉取成功')
