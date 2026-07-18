@@ -7,10 +7,10 @@
 - ``click_auto_choose``(游历-选邦布):点 按钮-自动选择邦布 area → success。
 - ``click_dispatch``(游历-派遣面板):OCR 命中「派遣」→ success。
 - ``already_dispatch`` / ``cant_dispatch`` / ``dispatch_success``:纯 success 终态(不读画面,不需 fixture)。
+- ``choose_period`` '提前收获' 分支:`test_choose_period_already_dispatched` 已覆盖(全屏兜底 OCR 命中「提前收获」→ round_success('提前收获'))。
 
 未覆盖(留标记):
 - ``choose_period_confirm_dialog`` / ``click_dispatch_confirm_dialog``:确认弹窗 fixture 未实拍(游戏派遣 UI 绕,「派遣」实为进选邦布界面,派遣确认弹窗未触发到)。
-- ``choose_period`` '提前收获' 分支:需「已派遣态」fixture(显示「提前收获」的进行中派遣画面)。
 """
 from test.conftest import TestContext
 

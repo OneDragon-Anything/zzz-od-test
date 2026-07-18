@@ -7,9 +7,9 @@
   - dispatch=True + idx 走完 → 已完成所有副本选择;
   - dispatch=True + idx 未走完 → round_success(无 status,idx 自增进选副本)。
 - ``back_to_entry`` success:已在随便观-入口 → round_success(复用 入口-手动态 fixture)。
+- ``click_claim`` / ``click_confirm``:收获确认链,`test_click_claim` / `test_click_confirm` 已覆盖(OCR 命中对应按钮 → success)。
 
 未覆盖(需实拍 / 流程测试,见 ``随便观.md`` 备注):
-- ``click_claim`` / ``click_confirm``:收获确认链,需「可收获 / 确认」中间态 fixture(待实拍)。
 - ``choose_mission`` / ``choose_sub_mission``:派遣选副本,需副本列表 fixture(待实拍)。
 - ``execute_dispatch_1`` / ``execute_dispatch_2`` 委托分支:跑 ``AdventureDispatch`` 完整流程,需 FixtureController 流程测试。
 - ``click_squad_team`` / ``click_finish`` / ``goto_adventure``:见 ``test_suibian_temple_app.py``。
