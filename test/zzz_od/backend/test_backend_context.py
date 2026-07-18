@@ -75,9 +75,12 @@ def test_capture_returns_image() -> None:
     controller.is_game_window_ready = True
     fake_img = object()
     controller.get_screenshot.return_value = fake_img
+    controller.fill_uid_black.return_value = fake_img
     backend = _backend(ready=True, controller=controller)
+    # capture 经 fill_uid_black 打码后返回(对齐 controller.screenshot)
     assert backend.capture() is fake_img
     controller.get_screenshot.assert_called_once_with(independent=False)
+    controller.fill_uid_black.assert_called_once_with(fake_img)
 
 
 def test_capture_raises_when_window_not_ready() -> None:

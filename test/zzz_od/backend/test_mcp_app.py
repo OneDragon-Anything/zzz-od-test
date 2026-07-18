@@ -68,7 +68,7 @@ def test_registers_all_tools() -> None:
 
 
 def test_check_game_window_tool_error_on_not_ready() -> None:
-    """check_game_window 在 backend 未就绪时返回包含「错误」的字符串。"""
+    """check_game_window 在 backend 未就绪时返回带 error 的 dict(工具层兜底)。"""
     mcp, backend = _mcp_with_backend()
     backend.check_window.side_effect = BackendNotReadyError("未就绪")
     tool = mcp._tool_manager._tools["check_game_window"]
@@ -76,7 +76,8 @@ def test_check_game_window_tool_error_on_not_ready() -> None:
     fn = getattr(tool, "fn", None) or getattr(tool, "func", None)
     assert fn is not None
     out = fn()
-    assert "错误" in out
+    assert isinstance(out, dict)
+    assert "未就绪" in out["error"]
 
 
 def test_analyze_tool_returns_result() -> None:
@@ -118,8 +119,8 @@ def test_analyze_screen_tool_returns_screens_field() -> None:
     assert result.screens[0].areas[0].area_type == AreaType.TEXT
 
 
-def test_check_game_window_formats_status() -> None:
-    """check_game_window 在就绪时应格式化输出窗口状态字段。"""
+def test_check_game_window_returns_window_status() -> None:
+    """check_game_window 在就绪时返回 WindowStatus 结构(与 HTTP /game/window 同构)。"""
     mcp, backend = _mcp_with_backend()
     backend.check_window.return_value = WindowStatus(
         win_title="ZenlessZoneZero",
@@ -134,8 +135,27 @@ def test_check_game_window_formats_status() -> None:
     tool = mcp._tool_manager._tools["check_game_window"]
     fn = getattr(tool, "fn", None) or getattr(tool, "func", None)
     out = fn()
-    assert "ZenlessZoneZero" in out
-    assert "x=10" in out
+    assert isinstance(out, WindowStatus)
+    assert out.win_title == "ZenlessZoneZero"
+    assert out.x == 10
+    assert out.is_win_valid is True
+
+
+def test_tool_annotations_marked() -> None:
+    """观察类 tool 标 read_only、破坏性 tool 标 destructive(P3 副作用机器可读标注)。"""
+    mcp, _ = _mcp_with_backend()
+    tools = mcp._tool_manager._tools
+    # 观察类(只读)
+    assert tools["check_game_window"].annotations.readOnlyHint is True
+    assert tools["analyze_screen"].annotations.readOnlyHint is True
+    assert tools["get_run_status"].annotations.readOnlyHint is True
+    assert tools["list_applications"].annotations.readOnlyHint is True
+    # 破坏性(不可逆)
+    assert tools["close_game"].annotations.destructiveHint is True
+    assert tools["delete_screen_area"].annotations.destructiveHint is True
+    # 操作类(非破坏)不标 read_only
+    click_ann = tools["click_game"].annotations
+    assert click_ann is None or click_ann.readOnlyHint is None
 
 
 def test_close_game_tool_registered() -> None:
@@ -263,13 +283,13 @@ def test_click_game_tool_registered() -> None:
 
 
 def test_click_game_tool_delegates() -> None:
-    """click_game tool 直调 backend.click_game() 并原样返回。"""
+    """click_game tool 直调 backend.click_game(),默认 press_time=0.1/pc_alt=False,并原样返回。"""
     mcp, backend = _mcp_with_backend()
-    backend.click_game.return_value = {'success': True, 'x': 960, 'y': 540, 'in_window': True}
+    backend.click_game.return_value = {'success': True, 'x': 960, 'y': 540, 'in_window': True, 'pc_alt': False}
     tool = mcp._tool_manager._tools['click_game']
     fn = getattr(tool, 'fn', None) or getattr(tool, 'func', None)
     result = fn(x=960, y=540)
-    backend.click_game.assert_called_once_with(960, 540, 0.0)
+    backend.click_game.assert_called_once_with(960, 540, 0.1, False)
     assert result['success'] is True
 
 
