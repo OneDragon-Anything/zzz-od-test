@@ -198,6 +198,8 @@ def test_context() -> TestContext:
 
     ctx.env_config.is_debug = True
     ctx.current_instance_idx = 99  # 使用特定的实例id
+    # 测试统一使用 ppocrv6(识别更准;CI 与本地一致,避免 ppocrv5 把 "99" 识别成 "9" 等)
+    ctx.model_config.ocr = 'ppocrv6'
     ctx.init()
     ctx.controller = MockController(
         game_config=ctx.game_config,
