@@ -106,6 +106,7 @@ def test_analyze_maps_ocr_results() -> None:
     assert result.success is True
     assert [t.text for t in result.ocr_texts] == ["体力", "设定"]
     assert result.ocr_texts[0].width == 3
+    assert result.vision_hint is not None  # success 时带能力边界提示
 
 
 def test_analyze_returns_error_when_screenshot_none() -> None:
@@ -116,6 +117,7 @@ def test_analyze_returns_error_when_screenshot_none() -> None:
     result = backend.analyze()
     assert result.success is False
     assert "截图失败" in (result.error or "")
+    assert result.vision_hint is None  # 失败时不带提示
 
 
 def test_analyze_returns_screens_and_writes_back_on_precise(monkeypatch) -> None:
