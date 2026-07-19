@@ -34,6 +34,20 @@ def test_node_graph_shadow_removes_unwanted_nodes() -> None:
     assert '开始自动战斗' not in node_cns    # shadow 移除
     assert '战斗后移动' in node_cns
     assert '战斗结束' in node_cns
+    assert '战斗超时' in node_cns            # review F1:补 battle_timeout 优雅退出节点(对齐原 ShiyuDefenseBattle)
+
+
+def test_battle_timeout_edge_wired_from_auto_battle_timeout_status() -> None:
+    """battle_timeout 从「自动战斗」success=False/status=STATUS_TIMEOUT 接入(超时 → ExitInBattle 前哨档案,不硬失败)。"""
+    from one_dragon.base.operation.operation import Operation
+    op = _make_op()
+    op._init_before_execute()
+    # _node_edges_map: dict[cn, list[OperationEdge]];查「自动战斗」出口边里是否有到「战斗超时」且匹配 STATUS_TIMEOUT
+    edges = op._node_edges_map.get('自动战斗', [])
+    match = [e for e in edges if e.node_to.cn == '战斗超时']
+    assert len(match) == 1
+    assert match[0].success is False
+    assert match[0].status == Operation.STATUS_TIMEOUT
 
 
 def test_check_battle_state_overrides_normal_defense() -> None:
