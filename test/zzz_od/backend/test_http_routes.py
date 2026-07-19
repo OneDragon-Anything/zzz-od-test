@@ -100,6 +100,7 @@ async def test_handle_game_analyze_ok() -> None:
     assert resp.status_code == 200
     data = json.loads(resp.body.decode("utf-8"))
     assert data["success"] is True
+    assert data["vision_hint"] is None  # HTTP 显式补字段(P11 对称);mock 未设 → None
 
 
 @pytest.mark.asyncio

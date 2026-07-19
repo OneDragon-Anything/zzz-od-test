@@ -73,3 +73,18 @@ def test_analyze_result_default_screenshot_path_none() -> None:
     """AnalyzeScreenResult 默认 screenshot_path=None。"""
     r = AnalyzeScreenResult(success=True, ocr_texts=[], error=None)
     assert r.screenshot_path is None
+
+
+def test_analyze_result_default_vision_hint_none() -> None:
+    """AnalyzeScreenResult 默认 vision_hint=None(失败 / 未设时)。"""
+    r = AnalyzeScreenResult(success=True, ocr_texts=[], error=None)
+    assert r.vision_hint is None
+    r2 = AnalyzeScreenResult(success=False, ocr_texts=[], error='截图失败')
+    assert r2.vision_hint is None
+
+
+def test_analyze_result_vision_hint_settable() -> None:
+    """AnalyzeScreenResult.vision_hint 可赋值非空(success 时的能力边界提示)。"""
+    r = AnalyzeScreenResult(success=True, ocr_texts=[], error=None,
+                            vision_hint='部分识别,请用视觉工具再看')
+    assert r.vision_hint == '部分识别,请用视觉工具再看'

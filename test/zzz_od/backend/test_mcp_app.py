@@ -110,13 +110,14 @@ def test_analyze_screen_tool_returns_screens_field() -> None:
     )
     match = ScreenMatch(screen_name='菜单', is_precise=True, areas=[detail])
     backend.analyze.return_value = AnalyzeScreenResult(
-        success=True, ocr_texts=[], error=None, screens=[match])
+        success=True, ocr_texts=[], error=None, screens=[match], vision_hint='提示透传')
     tool = mcp._tool_manager._tools['analyze_screen']
     fn = getattr(tool, 'fn', None) or getattr(tool, 'func', None)
     result = fn()
     assert result.success is True
     assert result.screens[0].screen_name == '菜单'
     assert result.screens[0].areas[0].area_type == AreaType.TEXT
+    assert result.vision_hint == '提示透传'  # tool 直接 return backend 结果,字段透传
 
 
 def test_check_game_window_returns_window_status() -> None:
