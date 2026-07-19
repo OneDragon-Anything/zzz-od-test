@@ -4,6 +4,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from one_dragon.base.operation.application.application_run_context import (
+    ApplicationRunResult,
+    RunFinishReason,
+)
 from one_dragon.base.operation.operation_base import OperationResult
 from zzz_od.backend.backend_context import RunState, RunType
 from zzz_od.backend.schemas import RunStatusResult
@@ -149,7 +153,10 @@ def test_op_path_uses_display_name_as_op_id(slot):
 
 def test_app_path_delegates_run_application(slot, mock_ctx):
     """app 路径:run_application 被调、last_application_result 固化、app=展示名、run_type=APPLICATION。"""
-    mock_ctx.run_context.run_application.return_value = True
+    mock_ctx.run_context.run_application.return_value = ApplicationRunResult(
+        finish_reason=RunFinishReason.COMPLETED,
+        app_id='one_dragon', instance_idx=0, group_id='default',
+    )
     mock_ctx.run_context.last_application_result = OperationResult(success=True, status='一条龙完成')
     mock_ctx.run_context.get_application_name.return_value = '一条龙'
 
@@ -167,7 +174,10 @@ def test_app_path_delegates_run_application(slot, mock_ctx):
 
 def test_app_path_refresh_config_called(slot, mock_ctx):
     """app 路径:refresh_config 在 run_application 前被调。"""
-    mock_ctx.run_context.run_application.return_value = True
+    mock_ctx.run_context.run_application.return_value = ApplicationRunResult(
+        finish_reason=RunFinishReason.COMPLETED,
+        app_id='one_dragon', instance_idx=0, group_id='default',
+    )
     mock_ctx.run_context.last_application_result = OperationResult(success=True, status='ok')
     mock_ctx.run_context.get_application_name.return_value = '一条龙'
     called = []
@@ -191,6 +201,24 @@ def test_refresh_config_not_called_when_rejected(slot):
         assert refresh_calls == []                            # 拒绝路径不刷新
     finally:
         event.set()
+
+
+def test_app_path_init_failure_does_not_reuse_stale_result(slot, mock_ctx):
+    """app 启动失败时不得把上一次应用结果误判为本次结果。"""
+    mock_ctx.run_context.run_application.return_value = ApplicationRunResult(
+        finish_reason=RunFinishReason.NOT_STARTED,
+        app_id='one_dragon', instance_idx=0, group_id='default',
+    )
+    mock_ctx.run_context.last_application_result = OperationResult(
+        success=True, status='上一次成功',
+    )
+    mock_ctx.run_context.get_application_name.return_value = '一条龙'
+
+    _, fut = slot._start('mcp', app_id='one_dragon', group_id='default')
+    fut.result(timeout=5)
+
+    assert slot.terminal_state == RunState.FAILED
+    assert slot.last_status == f'应用运行失败: {RunFinishReason.NOT_STARTED}'
 
 
 def test_app_path_exception_fixates_failed(slot, mock_ctx):
@@ -253,6 +281,7 @@ def test_stop_running_signals_stop(slot, mock_ctx):
         stopped, source = slot._stop()
         assert stopped is True and source == 'http'
         assert mock_ctx.run_context.stop_running.called
+        assert mock_ctx.run_context.stop_running.call_args.args == ()
     finally:
         event.set()
 
