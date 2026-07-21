@@ -35,8 +35,9 @@ def test_normal_battle_op_scanned_by_registry() -> None:
 
 
 def test_normal_battle_op_node_graph_inherited() -> None:
-    """NormalBattleOp 继承基类节点图(6 节点全在)。"""
+    """NormalBattleOp 继承基类节点图(5 节点;route_after_battle 移除)。"""
     op = NormalBattleOp(_make_ctx())
     op._init_before_execute()
     node_cns = {n.cn for n in op._node_map.values()}
-    assert {'加载自动战斗指令', '等待战斗画面加载', '战前移动', '开始自动战斗', '自动战斗', '战斗结束'} <= node_cns
+    assert {'加载自动战斗指令', '等待战斗画面加载', '战前移动', '开始自动战斗', '自动战斗'} <= node_cns
+    assert '战斗结束' not in node_cns    # route_after_battle 移除(结束后操作交外层)

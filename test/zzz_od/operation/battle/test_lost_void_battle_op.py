@@ -1,4 +1,7 @@
-"""LostVoidBattleOp 测试:节点图 + hook + 失败链 + 边 wiring + not-in_battle 分流。"""
+"""LostVoidBattleOp 测试:节点图 + wait_battle + hook + not-in_battle 分流。
+
+移动(进下一区域)/ 失败链 / 结束后操作交外层,不在 op。
+"""
 from unittest.mock import MagicMock, patch
 
 from zzz_od.backend.operation_registry import scan_operations
@@ -6,13 +9,13 @@ from zzz_od.operation.battle.base import BattleOpBase
 from zzz_od.operation.battle.lost_void import LostVoidBattleOp
 
 
-def _make_op(region_type=None) -> LostVoidBattleOp:
+def _make_op(region_type=None, wait_battle: bool = False) -> LostVoidBattleOp:
     ctx = MagicMock()
     ctx.project_config.screen_standard_width = 1920
     ctx.lost_void.detector = MagicMock()
     ctx.lost_void.get_auto_op_name.return_value = '全配队通用'
     rt = region_type or MagicMock()
-    return LostVoidBattleOp(ctx, region_type=rt)
+    return LostVoidBattleOp(ctx, region_type=rt, wait_battle=wait_battle)
 
 
 def test_lost_void_scanned_by_registry() -> None:
@@ -21,60 +24,39 @@ def test_lost_void_scanned_by_registry() -> None:
 
 
 def test_node_graph_shadow_and_redefine() -> None:
-    """shadow route_after_battle + 重定义 start_auto_battle + 失败链节点。"""
+    """shadow pre_battle_move + 覆写 wait_battle_screen + 重定义 start_auto_battle;失败链交外层。"""
     op = _make_op()
     op._init_before_execute()
     node_cns = {n.cn for n in op._node_map.values()}
-    assert {'开始自动战斗', '自动战斗', '战斗失败', '存现场', '失败退出空洞', '失败退出'} <= node_cns
-    assert '战前移动' not in node_cns  # shadow
-    assert '战斗结束' not in node_cns  # shadow route_after_battle
+    assert {'等待战斗画面加载', '开始自动战斗', '自动战斗'} <= node_cns
+    assert '战前移动' not in node_cns        # shadow
+    assert '战斗结束' not in node_cns        # 基类移除 route_after_battle
+    # 失败链交外层
+    assert '战斗失败' not in node_cns
+    assert '存现场' not in node_cns
+    assert '失败退出空洞' not in node_cns
+    assert '失败退出' not in node_cns
 
 
-def test_handle_battle_fail_edge_from_auto_battle_with_battle_fail_status() -> None:
-    """边 wiring:自动战斗 status='迷失之地-战斗失败' → 战斗失败。"""
-    op = _make_op()
-    op._init_before_execute()
-    edges = op._node_edges_map.get('自动战斗', [])
-    match = [e for e in edges if e.node_to.cn == '战斗失败']
-    assert len(match) == 1
-    assert match[0].status == '迷失之地-战斗失败'
+def test_wait_battle_false_skips_wait() -> None:
+    """wait_battle=False → wait_battle_screen 直接 round_success(跳过,外层已判)。"""
+    op = _make_op(wait_battle=False)
+    op.last_screenshot = MagicMock()
+    op.last_screenshot_time = 1.0
+    result = op.wait_battle_screen()
+    assert result.is_success
+    op.ctx.lost_void.check_battle_encounter.assert_not_called()
 
 
-def test_push_error_edge_from_auto_battle_timeout() -> None:
-    """边 wiring:自动战斗 success=False status=STATUS_TIMEOUT → 存现场。"""
-    from one_dragon.base.operation.operation import Operation
-    op = _make_op()
-    op._init_before_execute()
-    edges = op._node_edges_map.get('自动战斗', [])
-    match = [e for e in edges if e.node_to.cn == '存现场']
-    assert len(match) == 1
-    assert match[0].success is False
-    assert match[0].status == Operation.STATUS_TIMEOUT
-
-
-def test_fail_exit_lost_void_edge_from_push_error_failed() -> None:
-    """边 wiring:存现场 success=False → 失败退出空洞。"""
-    op = _make_op()
-    op._init_before_execute()
-    edges = op._node_edges_map.get('存现场', [])
-    match = [e for e in edges if e.node_to.cn == '失败退出空洞']
-    assert len(match) == 1
-    assert match[0].success is False
-
-
-def test_handle_fail_exit_edges_from_fail_exit_and_battle_fail() -> None:
-    """边 wiring:失败退出空洞(success=True 默认)+ 战斗失败 → 失败退出。"""
-    op = _make_op()
-    op._init_before_execute()
-    # from 失败退出空洞(success=True 默认,C1)
-    edges_from_exit = op._node_edges_map.get('失败退出空洞', [])
-    match_exit = [e for e in edges_from_exit if e.node_to.cn == '失败退出']
-    assert len(match_exit) == 1
-    assert match_exit[0].success is True
-    # from 战斗失败
-    edges_from_battle_fail = op._node_edges_map.get('战斗失败', [])
-    match_battle = [e for e in edges_from_battle_fail if e.node_to.cn == '失败退出']
-    assert len(match_battle) == 1
+def test_wait_battle_true_polls_check_battle_encounter() -> None:
+    """wait_battle=True → check_battle_encounter 命中 → round_success。"""
+    op = _make_op(wait_battle=True)
+    op.last_screenshot = MagicMock()
+    op.last_screenshot_time = 1.0
+    op.ctx.lost_void.check_battle_encounter.return_value = True
+    result = op.wait_battle_screen()
+    assert result.is_success
+    op.ctx.lost_void.check_battle_encounter.assert_called_once()
 
 
 def test_check_battle_state_no_flag() -> None:
@@ -133,8 +115,7 @@ def test_get_auto_battle_op_name() -> None:
 
 
 def test_start_auto_battle_resets_timestamps() -> None:
-    """start_auto_battle 节点调 ctx.auto_battle_context.start_auto_battle(C3:独立节点,不每轮调)
-    + M7:入口重置 _last_det_time + _last_check_finish_time = last_screenshot_time。"""
+    """start_auto_battle 节点调 ctx.auto_battle_context.start_auto_battle + 入口重置时间戳。"""
     op = _make_op()
     op.last_screenshot_time = 1.0
     op.start_auto_battle()

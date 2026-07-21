@@ -32,11 +32,8 @@ def test_move_target_is_dataclass() -> None:
 
 
 def test_status_constants() -> None:
-    """STATUS 常量值(复用原防卫战同值同义)。"""
+    """STATUS 常量值(只 STATUS_NEED_MOVE;route 相关移至外层)。"""
     assert BattleOpBase.STATUS_NEED_MOVE == '需要移动'
-    assert BattleOpBase.STATUS_NEXT_LEVEL == '进入下层'
-    assert BattleOpBase.STATUS_COMPLETE == '通关'
-    assert BattleOpBase.STATUS_TO_NEXT_PHASE == '下一阶段'
 
 
 def test_base_is_abstract() -> None:
