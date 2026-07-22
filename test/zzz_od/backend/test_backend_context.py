@@ -322,8 +322,8 @@ def test_weakness_fallback_to_agent_dmg() -> None:
     backend = ZzzBackendContext(ctx)
     backend._get_shiyu_defense_config = lambda: None
 
-    # anby(电)+ ben(火)+ unknown → [电属性, 火属性](去重)
-    team = PredefinedTeamInfo(0, '队', '全配队通用', ['anby', 'ben', 'unknown'])
+    # anby(电)重复 + ben(火)+ unknown → [电属性, 火属性](去重:重复电属性只算一次)
+    team = PredefinedTeamInfo(0, '队', '全配队通用', ['anby', 'anby', 'ben', 'unknown'])
     assert backend._weakness_of_team(team) == ['电属性', '火属性']
 
 

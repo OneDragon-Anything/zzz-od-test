@@ -181,11 +181,12 @@ def test_get_predefined_teams_tool_delegates() -> None:
     from zzz_od.backend.schemas import PredefinedTeamListResult
 
     backend = MagicMock()
-    backend.list_predefined_teams.return_value = PredefinedTeamListResult(current_instance_idx=0, teams=[])
+    expected = PredefinedTeamListResult(current_instance_idx=0, teams=[])
+    backend.list_predefined_teams.return_value = expected
     result = make_get_predefined_teams(backend)()
     backend.list_predefined_teams.assert_called_once()
+    assert result is expected  # 原样透传(不重新构造/复制)
     assert result.current_instance_idx == 0
-    assert result.teams == []
 
 
 def test_close_game_tool_registered() -> None:

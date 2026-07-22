@@ -258,22 +258,32 @@ def test_route_dispatch_window_ok() -> None:
 
 
 def test_route_dispatch_predefined_teams_ok() -> None:
-    """GET /game/predefined-teams 返回 200 + 编队列表 JSON。"""
+    """GET /game/predefined-teams 返回 200 + 编队列表 JSON(含单队字段序列化)。"""
     from mcp.server.fastmcp import FastMCP
     from starlette.testclient import TestClient
 
     from zzz_od.backend.http.routes import register_http_routes
-    from zzz_od.backend.schemas import PredefinedTeamListResult
+    from zzz_od.backend.schemas import PredefinedTeamItem, PredefinedTeamListResult
 
     mcp = FastMCP("test")
     backend = MagicMock()
-    backend.list_predefined_teams.return_value = PredefinedTeamListResult(current_instance_idx=1, teams=[])
+    backend.list_predefined_teams.return_value = PredefinedTeamListResult(
+        current_instance_idx=1,
+        teams=[PredefinedTeamItem(
+            idx=0, name='冰雅狼苍', auto_battle='全配队通用',
+            agent_id_list=['a', 'b'], agent_name_list=['雅', '莱卡恩'], weakness_list=['冰属性'],
+        )],
+    )
     register_http_routes(mcp, backend)
     client = TestClient(mcp.streamable_http_app())
     resp = client.get("/game/predefined-teams")
     assert resp.status_code == 200
-    assert resp.json()["current_instance_idx"] == 1
-    assert resp.json()["teams"] == []
+    body = resp.json()
+    assert body["current_instance_idx"] == 1
+    assert body["teams"] == [{
+        'idx': 0, 'name': '冰雅狼苍', 'auto_battle': '全配队通用',
+        'agent_id_list': ['a', 'b'], 'agent_name_list': ['雅', '莱卡恩'], 'weakness_list': ['冰属性'],
+    }]
 
 
 def test_route_dispatch_window_not_ready() -> None:
