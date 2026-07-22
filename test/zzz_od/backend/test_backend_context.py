@@ -342,6 +342,45 @@ def test_agent_name_list_chinese() -> None:
     assert result.teams[0].agent_name_list == ['安比', '本', 'unknown', 'fake_id']
 
 
+def test_get_shiyu_defense_config_unregistered_returns_none() -> None:
+    """_get_shiyu_defense_config:防卫战 app 未注册 → None,且不调 get_config。"""
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    ctx.run_context.is_app_registered.return_value = False
+    backend = ZzzBackendContext(ctx)
+
+    assert backend._get_shiyu_defense_config() is None
+    ctx.run_context.get_config.assert_not_called()  # 未注册就不去 get_config
+
+
+def test_get_shiyu_defense_config_registered_returns_config() -> None:
+    """_get_shiyu_defense_config:防卫战 app 已注册 → 透传 get_config 结果。"""
+    from zzz_od.application.shiyu_defense import shiyu_defense_const
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    ctx.run_context.is_app_registered.return_value = True
+    fake_cfg = object()
+    ctx.run_context.get_config.return_value = fake_cfg
+    backend = ZzzBackendContext(ctx)
+
+    result = backend._get_shiyu_defense_config()
+    assert result is fake_cfg
+    _, kwargs = ctx.run_context.get_config.call_args
+    assert kwargs['app_id'] == shiyu_defense_const.APP_ID
+
+
+def test_get_shiyu_defense_config_registered_propagates_load_error() -> None:
+    """_get_shiyu_defense_config:已注册但 get_config 抛异常 → 向上抛,不静默吞。"""
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    ctx.run_context.is_app_registered.return_value = True
+    ctx.run_context.get_config.side_effect = RuntimeError('yaml boom')
+    backend = ZzzBackendContext(ctx)
+
+    with pytest.raises(RuntimeError, match='yaml boom'):
+        backend._get_shiyu_defense_config()
+
+
 def test_close_game_delegates() -> None:
     """close_game 应委托 controller.close_game()。"""
     controller = MagicMock()
