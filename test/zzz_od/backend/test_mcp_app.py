@@ -67,6 +67,14 @@ def test_registers_all_tools() -> None:
     } <= names
 
 
+def test_server_exposes_instructions() -> None:
+    """create_mcp_server 后 mcp.instructions 非空(握手时注入客户端 system prompt)。"""
+    mcp, _ = _mcp_with_backend()
+    text = mcp.instructions
+    assert isinstance(text, str) and len(text) > 0
+    assert '操作三件套' in text    # 共通操作哲学已注入
+
+
 def test_check_game_window_tool_error_on_not_ready() -> None:
     """check_game_window 在 backend 未就绪时返回带 error 的 dict(工具层兜底)。"""
     mcp, backend = _mcp_with_backend()
