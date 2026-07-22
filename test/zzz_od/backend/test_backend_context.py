@@ -255,6 +255,132 @@ def test_list_applications_no_refresh(monkeypatch) -> None:
     assert called == []                          # 只读路径不刷新配置
 
 
+def test_list_predefined_teams_filters_placeholder() -> None:
+    """list_predefined_teams 过滤 TeamConfig 自动补的占位,只返回真实队。"""
+    from zzz_od.config.team_config import PredefinedTeamInfo
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    ctx.current_instance_idx = 2
+    ctx.team_config.team_list = [
+        PredefinedTeamInfo(0, '冰雅狼苍', '全配队通用', ['a', 'b', 'c']),
+        PredefinedTeamInfo(1, '火队', '火属性', ['d', 'e']),
+    ] + [PredefinedTeamInfo(i, f'编队{i + 1}', '全配队通用', []) for i in range(2, 20)]
+    ctx.team_config.get.return_value = [{}, {}]    # yml 真实队数 = 2(后 18 是补的占位)
+    backend = ZzzBackendContext(ctx)
+    backend._get_shiyu_defense_config = lambda: None  # 无防卫战配置(假 agent 不在 AgentEnum → weakness 空)
+
+    result = backend.list_predefined_teams()
+    assert result.current_instance_idx == 2
+    assert len(result.teams) == 2                   # 过滤掉 18 个占位
+    assert result.teams[0].idx == 0
+    assert result.teams[0].name == '冰雅狼苍'
+    assert result.teams[0].auto_battle == '全配队通用'
+    assert result.teams[1].agent_id_list == ['d', 'e', 'unknown']  # 补 unknown 到 3
+    assert result.teams[0].weakness_list == []      # 假 agent('a'/'b'/'c')不在 AgentEnum → 空
+    assert result.teams[0].agent_name_list == ['a', 'b', 'c']  # 假 agent → 用原 id
+
+
+def test_weakness_defense_priority() -> None:
+    """_weakness_of_team:防卫战配了 weakness → 用它(中文),不走角色属性。"""
+    from zzz_od.application.shiyu_defense.shiyu_defense_config import ShiyuDefenseTeamConfig
+    from zzz_od.config.team_config import PredefinedTeamInfo
+    from zzz_od.game_data.agent import DmgTypeEnum
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    backend = ZzzBackendContext(ctx)
+    defense_cfg = MagicMock()
+    defense_cfg.get_config_by_team_idx.return_value = ShiyuDefenseTeamConfig(0, [DmgTypeEnum.FIRE, DmgTypeEnum.ICE])
+    backend._get_shiyu_defense_config = lambda: defense_cfg
+
+    # anby 是电属性,但防卫战配了 火/冰 → 用防卫战
+    team = PredefinedTeamInfo(0, '火队', '全配队通用', ['anby'])
+    assert backend._weakness_of_team(team) == ['火属性', '冰属性']
+
+
+def test_weakness_defense_all_unknown_falls_back() -> None:
+    """_weakness_of_team:防卫战配了但全是 UNKNOWN(过滤后空)→ 回退角色属性。"""
+    from zzz_od.application.shiyu_defense.shiyu_defense_config import ShiyuDefenseTeamConfig
+    from zzz_od.config.team_config import PredefinedTeamInfo
+    from zzz_od.game_data.agent import DmgTypeEnum
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    backend = ZzzBackendContext(ctx)
+    defense_cfg = MagicMock()
+    defense_cfg.get_config_by_team_idx.return_value = ShiyuDefenseTeamConfig(0, [DmgTypeEnum.UNKNOWN])
+    backend._get_shiyu_defense_config = lambda: defense_cfg
+
+    # 防卫战配了 [UNKNOWN](过滤后空)→ 回退角色:anby 电属性
+    team = PredefinedTeamInfo(0, '队', '全配队通用', ['anby'])
+    assert backend._weakness_of_team(team) == ['电属性']
+
+
+def test_weakness_fallback_to_agent_dmg() -> None:
+    """_weakness_of_team:防卫战没配 → 取角色伤害属性(中文,去重,跳 unknown)。"""
+    from zzz_od.config.team_config import PredefinedTeamInfo
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    backend = ZzzBackendContext(ctx)
+    backend._get_shiyu_defense_config = lambda: None
+
+    # anby(电)重复 + ben(火)+ unknown → [电属性, 火属性](去重:重复电属性只算一次)
+    team = PredefinedTeamInfo(0, '队', '全配队通用', ['anby', 'anby', 'ben', 'unknown'])
+    assert backend._weakness_of_team(team) == ['电属性', '火属性']
+
+
+def test_agent_name_list_chinese() -> None:
+    """agent_name_list:真 agent 取中文名,unknown/未注册取原 id。"""
+    from zzz_od.config.team_config import PredefinedTeamInfo
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    ctx.current_instance_idx = 0
+    ctx.team_config.team_list = [PredefinedTeamInfo(0, '队', '全配队通用', ['anby', 'ben', 'unknown', 'fake_id'])]
+    ctx.team_config.get.return_value = [{}]    # raw_count=1
+    backend = ZzzBackendContext(ctx)
+    backend._get_shiyu_defense_config = lambda: None
+
+    result = backend.list_predefined_teams()
+    assert result.teams[0].agent_name_list == ['安比', '本', 'unknown', 'fake_id']
+
+
+def test_get_shiyu_defense_config_unregistered_returns_none() -> None:
+    """_get_shiyu_defense_config:防卫战 app 未注册 → None,且不调 get_config。"""
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    ctx.run_context.is_app_registered.return_value = False
+    backend = ZzzBackendContext(ctx)
+
+    assert backend._get_shiyu_defense_config() is None
+    ctx.run_context.get_config.assert_not_called()  # 未注册就不去 get_config
+
+
+def test_get_shiyu_defense_config_registered_returns_config() -> None:
+    """_get_shiyu_defense_config:防卫战 app 已注册 → 透传 get_config 结果。"""
+    from zzz_od.application.shiyu_defense import shiyu_defense_const
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    ctx.run_context.is_app_registered.return_value = True
+    fake_cfg = object()
+    ctx.run_context.get_config.return_value = fake_cfg
+    backend = ZzzBackendContext(ctx)
+
+    result = backend._get_shiyu_defense_config()
+    assert result is fake_cfg
+    _, kwargs = ctx.run_context.get_config.call_args
+    assert kwargs['app_id'] == shiyu_defense_const.APP_ID
+
+
+def test_get_shiyu_defense_config_registered_propagates_load_error() -> None:
+    """_get_shiyu_defense_config:已注册但 get_config 抛异常 → 向上抛,不静默吞。"""
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    ctx.run_context.is_app_registered.return_value = True
+    ctx.run_context.get_config.side_effect = RuntimeError('yaml boom')
+    backend = ZzzBackendContext(ctx)
+
+    with pytest.raises(RuntimeError, match='yaml boom'):
+        backend._get_shiyu_defense_config()
+
+
 def test_close_game_delegates() -> None:
     """close_game 应委托 controller.close_game()。"""
     controller = MagicMock()

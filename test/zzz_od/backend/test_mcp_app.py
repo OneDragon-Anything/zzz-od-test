@@ -67,6 +67,14 @@ def test_registers_all_tools() -> None:
     } <= names
 
 
+def test_server_exposes_instructions() -> None:
+    """create_mcp_server 后 mcp.instructions 非空(握手时注入客户端 system prompt)。"""
+    mcp, _ = _mcp_with_backend()
+    text = mcp.instructions
+    assert isinstance(text, str) and len(text) > 0
+    assert '操作三件套' in text    # 共通操作哲学已注入
+
+
 def test_check_game_window_tool_error_on_not_ready() -> None:
     """check_game_window 在 backend 未就绪时返回带 error 的 dict(工具层兜底)。"""
     mcp, backend = _mcp_with_backend()
@@ -157,6 +165,28 @@ def test_tool_annotations_marked() -> None:
     # 操作类(非破坏)不标 read_only
     click_ann = tools["click_game"].annotations
     assert click_ann is None or click_ann.readOnlyHint is None
+
+
+def test_get_predefined_teams_tool_registered() -> None:
+    """create_mcp_server 应注册 get_predefined_teams(readOnly)。"""
+    mcp, _ = _mcp_with_backend()
+    tools = asyncio.run(mcp.list_tools())
+    assert any(t.name == "get_predefined_teams" for t in tools)
+    assert mcp._tool_manager._tools["get_predefined_teams"].annotations.readOnlyHint is True
+
+
+def test_get_predefined_teams_tool_delegates() -> None:
+    """get_predefined_teams tool 调 backend.list_predefined_teams() 并原样返回。"""
+    from zzz_od.backend.mcp.service_app import make_get_predefined_teams
+    from zzz_od.backend.schemas import PredefinedTeamListResult
+
+    backend = MagicMock()
+    expected = PredefinedTeamListResult(current_instance_idx=0, teams=[])
+    backend.list_predefined_teams.return_value = expected
+    result = make_get_predefined_teams(backend)()
+    backend.list_predefined_teams.assert_called_once()
+    assert result is expected  # 原样透传(不重新构造/复制)
+    assert result.current_instance_idx == 0
 
 
 def test_close_game_tool_registered() -> None:
