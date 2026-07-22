@@ -167,6 +167,27 @@ def test_tool_annotations_marked() -> None:
     assert click_ann is None or click_ann.readOnlyHint is None
 
 
+def test_get_predefined_teams_tool_registered() -> None:
+    """create_mcp_server 应注册 get_predefined_teams(readOnly)。"""
+    mcp, _ = _mcp_with_backend()
+    tools = asyncio.run(mcp.list_tools())
+    assert any(t.name == "get_predefined_teams" for t in tools)
+    assert mcp._tool_manager._tools["get_predefined_teams"].annotations.readOnlyHint is True
+
+
+def test_get_predefined_teams_tool_delegates() -> None:
+    """get_predefined_teams tool 调 backend.list_predefined_teams() 并原样返回。"""
+    from zzz_od.backend.mcp.service_app import make_get_predefined_teams
+    from zzz_od.backend.schemas import PredefinedTeamListResult
+
+    backend = MagicMock()
+    backend.list_predefined_teams.return_value = PredefinedTeamListResult(current_instance_idx=0, teams=[])
+    result = make_get_predefined_teams(backend)()
+    backend.list_predefined_teams.assert_called_once()
+    assert result.current_instance_idx == 0
+    assert result.teams == []
+
+
 def test_close_game_tool_registered() -> None:
     """create_mcp_server 应注册内联 close_game tool(同 check_game_window,非工厂)。"""
     mcp, _ = _mcp_with_backend()
