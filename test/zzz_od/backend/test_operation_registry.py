@@ -160,6 +160,16 @@ def test_validate_args_coercible_dataclass(mock_ctx: MagicMock) -> None:
     assert validate_args(NotoriousHunt, {'plan': {'mission_type_name': 'x'}}) is None
 
 
+def test_validate_args_coercible_requires_dict(mock_ctx: MagicMock) -> None:
+    """coercible 参数(ChargePlanItem)值必须是 dict;标量/列表/None 拒绝(否则绕过 coerce,错误类型进 op 构造)。"""
+    from zzz_od.operation.compendium.notorious_hunt import NotoriousHunt
+    for bad in ([], '字符串', None, 42):
+        err = validate_args(NotoriousHunt, {'plan': bad})
+        assert err is not None, f'{bad!r} 应被拒'
+        assert 'plan' in err
+        assert 'dict' in err
+
+
 def test_validate_args_accepts_no_extra_params(mock_ctx: MagicMock) -> None:
     """只有 ctx 参数的 op(如 OpenAndEnterGame),空 args → None。"""
     from zzz_od.operation.enter_game.open_and_enter_game import OpenAndEnterGame
