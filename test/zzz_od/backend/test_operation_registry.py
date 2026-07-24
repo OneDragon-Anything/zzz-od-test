@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from zzz_od.backend.operation_registry import (
+    coerce_dataclass_params,
     describe_operation,
     resolve_op_class,
     scan_operations,
@@ -46,7 +47,6 @@ def test_scan_includes_concrete_hollow_event_ops(mock_ctx: MagicMock) -> None:
 def test_scan_excludes_application_subclasses_and_bases(mock_ctx: MagicMock) -> None:
     """排除:Application 子类(RedemptionCodeApp 等)+ 显式抽象基类 + *Base 后缀。"""
     result = scan_operations(mock_ctx, refresh=True)
-    op_ids = [o.op_id for o in result.operations]
     class_names = {o.class_name for o in result.operations}
 
     # 显式抽象/中间基类不出现
@@ -149,22 +149,56 @@ def test_validate_args_rejects_missing_required(mock_ctx: MagicMock) -> None:
     assert 'tp_name' in err
 
 
-def test_validate_args_rejects_complex_dataclass(mock_ctx: MagicMock) -> None:
-    """NotoriousHunt 必填 plan: ChargePlanItem(复杂数据类)→ 无论是否传值都拒绝。"""
+def test_validate_args_coercible_dataclass(mock_ctx: MagicMock) -> None:
+    """NotoriousHunt 必填 plan: ChargePlanItem(@dataclass+from_dict)→ 缺参拒;传 dict 接受(可反序列化)。"""
     from zzz_od.operation.compendium.notorious_hunt import NotoriousHunt
-    # 缺参 → 拒
+    # 缺必填 → 拒
     err_missing = validate_args(NotoriousHunt, {})
     assert err_missing is not None
-    # 传了值但类型是复杂数据类 → 仍拒绝
-    err_complex = validate_args(NotoriousHunt, {'plan': {'mission_type_name': 'x'}})
-    assert err_complex is not None
-    assert 'plan' in err_complex
+    assert 'plan' in err_missing
+    # 传 dict → 接受(coercible:实例化前用 from_dict 反序列化)
+    assert validate_args(NotoriousHunt, {'plan': {'mission_type_name': 'x'}}) is None
+
+
+def test_validate_args_coercible_requires_dict(mock_ctx: MagicMock) -> None:
+    """coercible 参数(ChargePlanItem)值必须是 dict;标量/列表/None 拒绝(否则绕过 coerce,错误类型进 op 构造)。"""
+    from zzz_od.operation.compendium.notorious_hunt import NotoriousHunt
+    for bad in ([], '字符串', None, 42):
+        err = validate_args(NotoriousHunt, {'plan': bad})
+        assert err is not None, f'{bad!r} 应被拒'
+        assert 'plan' in err
+        assert 'dict' in err
 
 
 def test_validate_args_accepts_no_extra_params(mock_ctx: MagicMock) -> None:
     """只有 ctx 参数的 op(如 OpenAndEnterGame),空 args → None。"""
     from zzz_od.operation.enter_game.open_and_enter_game import OpenAndEnterGame
     assert validate_args(OpenAndEnterGame, {}) is None
+
+
+# ---------- coerce_dataclass_params ----------
+
+def test_coerce_dataclass_params_converts_dict() -> None:
+    """@dataclass+from_dict 参数的 dict 值 → 反序列化为实例。"""
+    from zzz_od.application.charge_plan.charge_plan_config import ChargePlanItem
+    from zzz_od.operation.compendium.notorious_hunt import NotoriousHunt
+    coerced = coerce_dataclass_params(
+        NotoriousHunt, {'plan': {'category_name': '恶名狩猎', 'plan_times': 2}},
+    )
+    assert isinstance(coerced['plan'], ChargePlanItem)
+    assert coerced['plan'].category_name == '恶名狩猎'
+    assert coerced['plan'].plan_times == 2
+
+
+def test_coerce_dataclass_params_passthrough_non_dict() -> None:
+    """非 coercible 参数原样保留;返回新 dict(不就地改入参)。"""
+    from zzz_od.operation.map_transport import MapTransport
+    args = {'area_name': '六分街', 'tp_name': '黑糖工作室'}
+    coerced = coerce_dataclass_params(MapTransport, args)
+    # 标量参数原样
+    assert coerced == args
+    # 不就地改入参(返回新 dict)
+    assert coerced is not args
 
 
 # ---------- describe_operation ----------
@@ -182,13 +216,14 @@ def test_describe_operation_reflects_params(mock_ctx: MagicMock) -> None:
     assert info['debuggable'] is True
 
 
-def test_describe_operation_marks_complex_param(mock_ctx: MagicMock) -> None:
-    """复杂数据类参数(ChargePlanItem)标 json_serializable=False、debuggable=False。"""
+def test_describe_operation_marks_coercible_param(mock_ctx: MagicMock) -> None:
+    """@dataclass+from_dict 参数(ChargePlanItem)标 json_serializable=False、coercible=True、debuggable=True。"""
     info = describe_operation(
         mock_ctx, 'zzz_od.operation.compendium.notorious_hunt.NotoriousHunt',
     )
     plan = next(p for p in info['params'] if p['name'] == 'plan')
     assert plan['required'] is True
     assert plan['json_serializable'] is False
-    # 存在不可序列化的必填参 → debuggable=False
-    assert info['debuggable'] is False
+    assert plan['coercible'] is True
+    # coercible 参数可从 dict 传 → debuggable=True
+    assert info['debuggable'] is True

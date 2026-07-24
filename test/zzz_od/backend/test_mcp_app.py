@@ -268,6 +268,7 @@ def test_open_game_block_failed() -> None:
 def test_open_game_enter_false_selects_open_game_op() -> None:
     """enter=False 时传给 start_run 的 op_factory 构造出的是 OpenGame(非 OpenAndEnterGame)。冒烟验证 Task 1 重构。"""
     from unittest.mock import MagicMock
+
     from zzz_od.operation.enter_game.open_game import OpenGame
 
     backend = _mock_backend()
@@ -281,6 +282,7 @@ def test_open_game_enter_false_selects_open_game_op() -> None:
 def test_open_game_enter_true_selects_open_and_enter_game_op() -> None:
     """enter=True 时 op_factory 构造出的是 OpenAndEnterGame。"""
     from unittest.mock import MagicMock
+
     from zzz_od.operation.enter_game.open_and_enter_game import OpenAndEnterGame
 
     backend = _mock_backend()
@@ -510,3 +512,29 @@ def test_run_operation_bakes_args_into_factory() -> None:
     assert isinstance(op, MapTransport)
     assert op.area_name == '六分街'
     assert op.tp_name == '黑糖工作室'
+
+
+def test_run_operation_coerces_dataclass_param() -> None:
+    """``@dataclass``+``from_dict`` 参数(plan)从 dict 反序列化:传 dict → started=True(不再拒),op_factory 构造后 plan 是实例。"""
+    from zzz_od.application.charge_plan.charge_plan_config import ChargePlanItem
+    from zzz_od.backend.mcp.service_app import make_run_operation
+    from zzz_od.operation.compendium.notorious_hunt import NotoriousHunt
+
+    backend = MagicMock()
+    backend.run_slot._start.return_value = (True, Future())
+    backend.query_status.return_value = RunStatusResult(state='running', source='mcp')
+    res = asyncio.run(make_run_operation(backend)(
+        op_id=_NOTORIOUS,
+        args={'plan': {'category_name': '恶名狩猎', 'plan_times': 2}},
+        block=False,
+    ))
+    # 传 dict → 不再被拒(coercible),started=True
+    assert res['started'] is True
+    # op_factory 构造出 NotoriousHunt,plan 被 coerce 成 ChargePlanItem 实例
+    call = backend.run_slot._start.call_args
+    op_factory = call.kwargs.get('op_factory') or call.args[1]
+    op = op_factory(MagicMock(name='ZContext'))
+    assert isinstance(op, NotoriousHunt)
+    assert isinstance(op.plan, ChargePlanItem)
+    assert op.plan.category_name == '恶名狩猎'
+    assert op.plan.plan_times == 2
