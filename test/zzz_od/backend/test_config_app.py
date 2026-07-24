@@ -7,7 +7,12 @@ from unittest.mock import MagicMock
 
 from one_dragon.base.config.config_item import ConfigItem
 
-from zzz_od.backend.mcp.config_app import make_add_config_item, make_delete_config_item
+from zzz_od.backend.mcp.config_app import (
+    make_add_config_item,
+    make_delete_config_item,
+    make_get_config,
+    make_set_config,
+)
 
 
 def _make_backend(
@@ -218,3 +223,115 @@ def test_delete_group():
     result = asyncio.run(tool('_group', 'app_list', 'coffee'))
     assert result['ok'] is True
     assert config.remove_app.called
+
+
+# === get/set 测试(per config) ===
+
+def test_get_config_charge_plan():
+    """get 读字段 → ok=True + value。"""
+    backend, config = _make_backend()
+    config.data = {'loop': True}
+    tool = make_get_config(backend)
+    result = asyncio.run(tool('charge_plan', 'loop'))
+    assert result['ok'] is True
+    assert result['value'] is True
+
+
+def test_set_config_charge_plan():
+    """set 写字段 → ok=True + update+save。"""
+    backend, config = _make_backend()
+    config.data = {}
+    config._RO_FIELDS = {'run_times', 'plan_id'}
+    config.update = MagicMock()
+    config.save = MagicMock()
+    tool = make_set_config(backend)
+    result = asyncio.run(tool('charge_plan', 'loop', False))
+    assert result['ok'] is True
+    config.update.assert_called_with('loop', False)
+    config.save.assert_called_once()
+
+
+def test_set_config_charge_plan_ro_rejected():
+    """set 只读字段(run_times) → ok=False。"""
+    backend, config = _make_backend()
+    config._RO_FIELDS = {'run_times', 'plan_id'}
+    tool = make_set_config(backend)
+    result = asyncio.run(tool('charge_plan', 'run_times', 5))
+    assert result['ok'] is False
+    assert '只读' in result['error']
+
+
+def test_get_config_notorious_hunt():
+    """notorious_hunt get 读字段。"""
+    backend, config = _make_notorious_hunt_backend()
+    config.data = {'loop': True}
+    tool = make_get_config(backend)
+    result = asyncio.run(tool('notorious_hunt', 'loop'))
+    assert result['ok'] is True
+    assert result['value'] is True
+
+
+def test_set_config_notorious_hunt():
+    """notorious_hunt set 写字段。"""
+    backend, config = _make_notorious_hunt_backend()
+    config.data = {}
+    config._RO_FIELDS = {'run_times', 'plan_id'}
+    config.update = MagicMock()
+    config.save = MagicMock()
+    tool = make_set_config(backend)
+    result = asyncio.run(tool('notorious_hunt', 'loop', False))
+    assert result['ok'] is True
+
+
+def test_set_config_notorious_hunt_ro_rejected():
+    """notorious_hunt set 只读字段(plan_id) → ok=False。"""
+    backend, config = _make_notorious_hunt_backend()
+    config._RO_FIELDS = {'run_times', 'plan_id'}
+    tool = make_set_config(backend)
+    result = asyncio.run(tool('notorious_hunt', 'plan_id', 'xxx'))
+    assert result['ok'] is False
+    assert '只读' in result['error']
+
+
+def test_get_config_standalone_app():
+    """standalone_app get 读字段。"""
+    backend, config = _make_standalone_app_backend()
+    config.data = {'active_app_id': 'coffee'}
+    tool = make_get_config(backend)
+    result = asyncio.run(tool('standalone_app', 'active_app_id'))
+    assert result['ok'] is True
+    assert result['value'] == 'coffee'
+
+
+def test_set_config_standalone_app():
+    """standalone_app set 写字段。"""
+    backend, config = _make_standalone_app_backend()
+    config.data = {}
+    config.update = MagicMock()
+    config.save = MagicMock()
+    tool = make_set_config(backend)
+    result = asyncio.run(tool('standalone_app', 'active_app_id', 'charge_plan'))
+    assert result['ok'] is True
+    config.update.assert_called_with('active_app_id', 'charge_plan')
+
+
+def test_get_config_group():
+    """_group get 读字段。"""
+    backend, config = _make_group_backend()
+    config.data = {'app_list': [{'app_id': 'coffee', 'enabled': True}]}
+    tool = make_get_config(backend)
+    result = asyncio.run(tool('_group', 'app_list'))
+    assert result['ok'] is True
+    assert result['value'] is not None
+
+
+def test_set_config_group():
+    """_group set 写字段。"""
+    backend, config = _make_group_backend()
+    config.data = {}
+    config.update = MagicMock()
+    config.save = MagicMock()
+    tool = make_set_config(backend)
+    result = asyncio.run(tool('_group', 'loop', True))
+    assert result['ok'] is True
+    config.update.assert_called_with('loop', True)
