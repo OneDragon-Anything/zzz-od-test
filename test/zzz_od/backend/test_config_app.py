@@ -325,13 +325,10 @@ def test_get_config_group():
     assert result['value'] is not None
 
 
-def test_set_config_group():
-    """_group set 写字段。"""
+def test_set_config_group_not_supported():
+    """_group 不支持 set(supported_ops 无 set)→ ok=False。"""
     backend, config = _make_group_backend()
-    config.data = {}
-    config.update = MagicMock()
-    config.save = MagicMock()
     tool = make_set_config(backend)
     result = asyncio.run(tool('_group', 'loop', True))
-    assert result['ok'] is True
-    config.update.assert_called_with('loop', True)
+    assert result['ok'] is False
+    assert '不支持 set' in result['error']
