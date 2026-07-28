@@ -9,8 +9,7 @@
   GEAR_BRANCH(战术棱镜分支)/ ARTIFACT_GAIN(获得战利品)/ GEAR_GAIN(获得武备)/
   GEAR_UPGRADE(武备已升级)/ CHOOSE_1(选1枚鸣徽,1.5 后仅设 num=1)。
 
-缺 fixture 的标题分支会 error(mock_screen 断言文件存在)→ 这些就是要补采的 通用选择 子态,
-run 采到后补 fixture → 用例转 GREEN(TDD 圈定,保留不删)。
+缺 fixture 的标题分支自动 skip(``has_screen`` 判存);run 采到后补 fixture → 用例自动恢复 GREEN。
 """
 import pytest
 from test.conftest import TestContext
@@ -27,7 +26,7 @@ def _setup_op(test_context: TestContext) -> LostVoidChooseCommon:
 
 
 # (fixture state, 期望 to_choose_artifact, to_choose_gear, to_choose_gear_branch, to_choose_num)
-# 现有 fixture: 选1张卡牌(CHOOSE_1_CARD)。其余标题分支的 fixture 待采 → 用例 RED 圈定。
+# 现有 fixture: 选1张卡牌(CHOOSE_1_CARD)。其余标题分支缺 fixture → 自动 skip,采到恢复 GREEN。
 # 期望值对照 check_choose_title 各 rule 的 apply_rule 分支(L485-507):
 # - GEAR_GAIN / GEAR_UPGRADE:to_choose_gear=True, num=0
 # - ARTIFACT_GAIN:to_choose_artifact=True, num=0
@@ -53,6 +52,8 @@ TITLE_CASES = [
                          ids=[c[0] for c in TITLE_CASES])
 def test_check_choose_title(test_context: TestContext, state: str,
                             artifact: bool, gear: bool, branch: bool, num: int) -> None:
+    if not test_context.has_screen('迷失之地-通用选择', state):
+        pytest.skip(f'缺 fixture: 迷失之地-通用选择/{state},待 run 采集')
     op = _setup_op(test_context)
     test_context.mock_screen('迷失之地-通用选择', state)
     op.screenshot()
