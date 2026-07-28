@@ -6,7 +6,6 @@ import asyncio
 from unittest.mock import MagicMock
 
 from one_dragon.base.config.config_item import ConfigItem
-
 from zzz_od.backend.mcp.config_app import (
     make_add_config_item,
     make_delete_config_item,
@@ -332,3 +331,80 @@ def test_set_config_group_not_supported():
     result = asyncio.run(tool('_group', 'loop', True))
     assert result['ok'] is False
     assert '不支持 set' in result['error']
+
+
+def _make_backend_empty_mission_type(category: str = '空mission_type类别'):
+    """mock backend:某 category 的 mission_type_list 为空(对应未来合成电池等无 mission_type 的类别)。
+
+    用于测 validate_item 对空 mission_type 类别的放宽校验(commit 3d240da2)。
+    合成电池本身在 #2300,main 上还没有,这里用 mock 类别测同一段校验逻辑。
+    """
+    compendium = MagicMock()
+    compendium.get_charge_plan_category_list = lambda: [ConfigItem('x', category)]
+    compendium.get_charge_plan_mission_type_list = lambda c: []  # 空 mission_type
+    compendium.get_charge_plan_mission_list = lambda c, m: []
+
+    config = MagicMock()
+    config.plan_list = []
+    config.add_plan = MagicMock()
+
+    run_context = MagicMock()
+    run_context.get_config = MagicMock(return_value=config)
+
+    ctx = MagicMock()
+    ctx.compendium_service = compendium
+    ctx.run_context = run_context
+    ctx.current_instance_idx = 2
+
+    backend = MagicMock()
+    backend.ctx = ctx
+    return backend, config
+
+
+def test_add_config_item_empty_mission_type_category_ok():
+    """空 mission_type 类别 + mission_type_name 为空 → ok=True。
+
+    覆盖 commit 3d240da2 的 validate_item 放宽:category 无 mission_type 时
+    mission_type_name 必须为空(修复前 '' not in [] 直接拒)。
+    """
+    backend, config = _make_backend_empty_mission_type()
+    tool = make_add_config_item(backend)
+    result = asyncio.run(tool('charge_plan', 'plan_list', {
+        'category_name': '空mission_type类别',
+        'mission_type_name': '',
+        'mission_name': None,  # 无 mission_type 的类别无 mission,必须显式 None(默认值非 None)
+        'plan_times': 1,
+    }))
+    assert result['ok'] is True
+    assert config.add_plan.called
+
+
+def test_add_config_item_empty_mission_type_category_rejects_non_empty():
+    """空 mission_type 类别 + mission_type_name 非空 → ok=False(修复后新增的校验分支)。"""
+    backend, config = _make_backend_empty_mission_type()
+    tool = make_add_config_item(backend)
+    result = asyncio.run(tool('charge_plan', 'plan_list', {
+        'category_name': '空mission_type类别',
+        'mission_type_name': '不该有',
+        'mission_name': None,  # 显式 None 隔离条件(默认值非 None,见成功用例)
+        'plan_times': 1,
+    }))
+    assert result['ok'] is False
+    assert 'mission_type' in result['error']
+    assert not config.add_plan.called
+
+
+def test_delete_config_item_no_alias_on_item_id():
+    """delete_config_item 的 item_id 参数不带 alias(commit 3d240da2)。
+
+    修复前 alias='id'(FastMCP 不桥接 alias)→ delete 经 MCP 完全不可用。
+    这是注册层的 bug(单测直接调函数碰不到),这里查参数注解的 Field.alias 兜底回归。
+    """
+    import inspect
+    from typing import get_args
+
+    backend, _ = _make_backend()
+    tool = make_delete_config_item(backend)
+    annotation = inspect.signature(tool).parameters['item_id'].annotation
+    field_info = get_args(annotation)[1]  # Annotated[str, FieldInfo] 的 FieldInfo
+    assert getattr(field_info, 'alias', None) is None, 'item_id 不应带 alias(会导致 MCP delete 不可用)'

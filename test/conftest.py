@@ -181,6 +181,14 @@ class TestContext(ZContext):
         assert path.exists(), f'存档截图不存在: {path}'
         return cv2_utils.read_image(str(path))
 
+    def has_screen(self, screen_name: str, state: str) -> bool:
+        """存档截图 ``screens/<screen_name>/<state>.webp`` 是否存在。
+
+        缺 fixture 的用例用它 skip(而非 error);fixture 采到后自动恢复运行,无需改代码。
+        """
+        screens_dir = Path(__file__).parent.parent / 'screens'
+        return (screens_dir / screen_name / f'{state}.webp').exists()
+
     def mock_screen(self, screen_name: str, state: str) -> None:
         """从存档读截图并设为 controller 下一帧(= load_screen + add_mock_screenshot)。
 
