@@ -17,31 +17,45 @@
 - 已在优先级 → 不重复加。
 - 不在队伍的类型 → 加入 dynamic_abandon_list(除非被 specific priority rule 保护)。
 """
+from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
 from test.conftest import TestContext
 
 from zzz_od.application.hollow_zero.lost_void.lost_void_challenge_config import (
     LostVoidRegionType,
 )
 from zzz_od.application.hollow_zero.lost_void.operation.lost_void_run_level import (
+    LostVoidLevelInteractionState,
     LostVoidRunLevel,
 )
 from zzz_od.auto_battle.auto_battle_agent_context import AgentInfo, TeamInfo
 from zzz_od.game_data.agent import AgentEnum, AgentTypeEnum
 
 
+@pytest.fixture(autouse=True)
+def restore_challenge_config(test_context: TestContext):
+    """测试结束后恢复 session 级上下文中的挑战配置。"""
+    challenge_config = test_context.lost_void.challenge_config
+    yield
+    test_context.lost_void.challenge_config = challenge_config
+
+
 def _setup_op(test_context: TestContext) -> LostVoidRunLevel:
-    """构造 LostVoidRunLevel 实例并重置 lost_void 上下文 dynamic 列表。"""
+    """构造使用内存挑战配置的 LostVoidRunLevel 实例。"""
     test_context.lost_void.load_artifact_data()
-    test_context.lost_void.load_challenge_config()
-    # 清空 challenge_config 中可能残留的 specific 优先级规则,避免影响 abandon 判定
-    test_context.lost_void.challenge_config.artifact_priority = []
-    test_context.lost_void.challenge_config.artifact_priority_2 = []
-    test_context.lost_void.challenge_config.clear_artifact_priority_in_battle()
+    test_context.lost_void.challenge_config = SimpleNamespace(
+        artifact_priority_in_battle=[],
+        artifact_priority_2=[],
+    )
     test_context.lost_void.dynamic_priority_list = []
     test_context.lost_void.dynamic_abandon_list = []
-    return LostVoidRunLevel(test_context, LostVoidRegionType.ENTRY)
+    return LostVoidRunLevel(
+        test_context,
+        LostVoidRegionType.ENTRY,
+        LostVoidLevelInteractionState(),
+    )
 
 
 def _set_team(test_context: TestContext, agents: list[AgentEnum]) -> None:
@@ -107,7 +121,6 @@ def test_specific_priority_rule_protects_abandon(test_context: TestContext) -> N
     op = _setup_op(test_context)
     # artifact_priority_2 含 specific 规则「异常 某某藏品」→ category「异常」受保护
     test_context.lost_void.challenge_config.artifact_priority_2 = ['异常 某某藏品']
-    test_context.lost_void.challenge_config.clear_artifact_priority_in_battle()
     _set_team(test_context, [AgentEnum.ELLEN])  # 只在强攻,异常不在队伍
     _run_append(op)
     assert '异常' not in test_context.lost_void.dynamic_abandon_list, \
@@ -118,7 +131,6 @@ def test_pure_category_rule_does_not_protect(test_context: TestContext) -> None:
     """纯分类规则(如「异常」,无具体名)不视为 specific,不保护 abandon。"""
     op = _setup_op(test_context)
     test_context.lost_void.challenge_config.artifact_priority_2 = ['异常']
-    test_context.lost_void.challenge_config.clear_artifact_priority_in_battle()
     _set_team(test_context, [AgentEnum.ELLEN])
     _run_append(op)
     assert '异常' in test_context.lost_void.dynamic_abandon_list, \

@@ -16,6 +16,7 @@ from zzz_od.application.hollow_zero.lost_void.lost_void_challenge_config import 
     LostVoidRegionType,
 )
 from zzz_od.application.hollow_zero.lost_void.operation.lost_void_run_level import (
+    LostVoidLevelInteractionState,
     LostVoidRunLevel,
 )
 
@@ -24,7 +25,11 @@ def _setup_op(test_context: TestContext) -> LostVoidRunLevel:
     """构造一个 ENTRY 类型的 LostVoidRunLevel 实例,前置加载武备/挑战配置。"""
     test_context.lost_void.load_artifact_data()
     test_context.lost_void.load_challenge_config()
-    return LostVoidRunLevel(test_context, LostVoidRegionType.ENTRY)
+    return LostVoidRunLevel(
+        test_context,
+        LostVoidRegionType.ENTRY,
+        LostVoidLevelInteractionState(),
+    )
 
 
 # 非战斗类区域:status 恒为「非战斗区域」(不依赖标志位)
@@ -110,5 +115,9 @@ def test_boss_default_pre_battle_is_true(test_context: TestContext) -> None:
     """BOSS 实例化时 boss_pre_battle 默认 True(source: region_type == BOSS)。"""
     test_context.lost_void.load_artifact_data()
     test_context.lost_void.load_challenge_config()
-    op = LostVoidRunLevel(test_context, LostVoidRegionType.BOSS)
+    op = LostVoidRunLevel(
+        test_context,
+        LostVoidRegionType.BOSS,
+        LostVoidLevelInteractionState(),
+    )
     assert op.boss_pre_battle is True
