@@ -387,6 +387,7 @@ def test_add_config_item_empty_mission_type_category_rejects_non_empty():
     result = asyncio.run(tool('charge_plan', 'plan_list', {
         'category_name': '空mission_type类别',
         'mission_type_name': '不该有',
+        'mission_name': None,  # 显式 None 隔离条件(默认值非 None,见成功用例)
         'plan_times': 1,
     }))
     assert result['ok'] is False
