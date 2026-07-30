@@ -1,28 +1,16 @@
 from test.conftest import TestContext
 
+from one_dragon.base.screen.template_info import TemplateInfo
 from zzz_od.game_data.agent import (
     AgentEnum,
     AgentStateCheckWay,
     AgentStateDef,
     CommonAgentStateEnum,
 )
-from one_dragon.base.screen.template_info import TemplateInfo
 
-# check_way → 该状态识别实际依赖的资产(见 agent_state_checker 各 check 方法):
-#   - LENGTH 类:只裁 rect 算长度,依赖 config 的 point_list 坐标,不靠 raw/mask;
-#   - COLOR_RANGE / COLOR_CHANNEL 类:bitwise_and(mask),依赖 mask.png;
-#   - TEMPLATE_* 类:match_template,依赖 raw.png + mask.png。
-_LENGTH_WAYS = {
-    AgentStateCheckWay.BACKGROUND_GRAY_RANGE_LENGTH,
-    AgentStateCheckWay.FOREGROUND_COLOR_RANGE_LENGTH,
-    AgentStateCheckWay.FOREGROUND_GRAY_RANGE_LENGTH,
-}
-_MASK_WAYS = {
-    AgentStateCheckWay.COLOR_RANGE_CONNECT,
-    AgentStateCheckWay.COLOR_RANGE_EXIST,
-    AgentStateCheckWay.COLOR_CHANNEL_MAX_RANGE_EXIST,
-    AgentStateCheckWay.COLOR_CHANNEL_EQUAL_RANGE_CONNECT,
-}
+# 所有角色状态检测均根据 config 的 point_list 裁取检测区域。
+# COLOR_RANGE / COLOR_CHANNEL 类在没有 mask.png 时检测整个裁取区域；
+# TEMPLATE_* 类再将 raw.png 用作匹配模板，mask.png 仅用于限制匹配范围。
 _RAW_WAYS = {
     AgentStateCheckWay.TEMPLATE_FOUND,
     AgentStateCheckWay.TEMPLATE_NOT_FOUND,
@@ -38,21 +26,18 @@ def _state_template_err(state_def: AgentStateDef, template: TemplateInfo | None)
     if template is None:
         return None
     way = state_def.check_way
-    if way in _LENGTH_WAYS:
-        return None if template.point_list else '缺 point_list 坐标(LENGTH 类需 config 坐标)'
-    if way in _MASK_WAYS:
-        return None if template.mask is not None else '缺 mask.png(MASK 类)'
-    if way in _RAW_WAYS:
-        if template.raw is None:
-            return '缺 raw.png(TEMPLATE 类)'
-        if template.mask is None:
-            return '缺 mask.png(TEMPLATE 类)'
+    if not template.point_list:
+        return '缺 point_list 坐标(状态检测需 config 坐标)'
+    if way in _RAW_WAYS and template.raw is None:
+        return '缺 raw.png(TEMPLATE 类需原图)'
     return None
 
 
 class TestAgentTemplateExist:
-    """代理人模板完整性:遍历 ``AgentEnum`` / ``CommonAgentStateEnum`` 引用的模板,按 ``check_way``
-    断言所需资产齐全(LENGTH→坐标 / MASK→mask / TEMPLATE→raw+mask);预定不检测的 pos(目录缺)跳过。"""
+    """代理人模板完整性:遍历 ``AgentEnum`` / ``CommonAgentStateEnum`` 引用的模板。
+
+    所有状态模板都需要坐标；模板匹配状态还需要原图。mask.png 是可选的检测范围限制。
+    """
 
     def test_battle_avatar(self, test_context: TestContext):
         """战斗头像:每个 Agent × 每个皮肤 × 前台/后台(``avatar_1_`` / ``avatar_2_``),raw 必须可读。"""
