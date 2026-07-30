@@ -17,3 +17,24 @@ def test_application_info_has_description_field() -> None:
     info = ApplicationInfo(app_id='x', app_name='名')
     assert hasattr(info, 'description')
     assert info.description == ''
+
+
+def test_all_registered_apps_have_class_docstring(test_context: TestContext) -> None:
+    """契约:每个注册 app 的 factory 都设了 app_class,且 app 类有非空 class docstring。
+
+    防止 app 补描述后回退腐烂。源码盲受众靠这个 description 选 app。
+    """
+    factory_map = test_context.run_context._application_factory_map
+    assert factory_map, '未注册任何 app factory(扫描没跑?)'
+
+    missing_class: list[str] = []
+    empty_doc: list[str] = []
+    for app_id, factory in factory_map.items():
+        if factory.app_class is None:
+            missing_class.append(app_id)
+            continue
+        if not (factory.app_class.__doc__ or '').strip():
+            empty_doc.append(app_id)
+
+    assert not missing_class, f'factory 未设 app_class(漏配): {missing_class}'
+    assert not empty_doc, f'app 类缺 class docstring: {empty_doc}'
