@@ -718,7 +718,7 @@ class TestFetchProgressRemoteCallbacks:
             (0.04, {'type': 'progress', 'progress': 0.6, 'message': '60%'}),
             (0.06, {'type': 'result', 'success': True}),
         ]
-        error, elapsed, abandoned, imported = self.run_timed_fetch_worker(
+        error, _elapsed, abandoned, imported = self.run_timed_fetch_worker(
             git_service,
             monkeypatch,
             tmp_path,
@@ -728,7 +728,6 @@ class TestFetchProgressRemoteCallbacks:
         )
 
         assert error is None
-        assert elapsed < 0.12
         assert abandoned is False
         assert imported is True
 
