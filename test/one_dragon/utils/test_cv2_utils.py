@@ -72,3 +72,15 @@ def test_read_save_chinese_grayscale(tmp_path) -> None:
     assert back is not None
     assert back.ndim == 2
     assert np.array_equal(back, img)
+
+
+def test_match_template_source_smaller_than_template_returns_empty() -> None:
+    """source 比 template 小(如 area 的 pc_rect 占位 [0,0,0,0] 裁出空图)→ 不抛、返回空。
+
+    回归 cv2.matchTemplate 的 _img >= _templ 断言:无守卫时 source<template 会让整个
+    analyze 中断;有守卫时视为不匹配、返回空结果(.max 为 None)。
+    """
+    source = np.zeros((10, 10, 3), dtype=np.uint8)
+    template = np.zeros((20, 20, 3), dtype=np.uint8)
+    result = cv2_utils.match_template(source, template, 0.7)
+    assert result.max is None  # 空结果:无匹配项
