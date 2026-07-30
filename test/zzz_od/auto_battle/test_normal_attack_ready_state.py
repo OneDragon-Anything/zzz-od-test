@@ -1,7 +1,7 @@
 """按键可用-普通攻击 状态写入测试。
 
 验证 check_battle_state 在普攻按钮可用(in_battle=True)时写入该状态,
-按钮缺失(in_battle=False)时不更新(只写 True 模式,不 is_clear)。
+按钮缺失(in_battle=False)时清除状态(is_clear=True)。
 
 check_battle_state 内部会往线程池提交 dodge/agent/target/quick/switch_backup/chain
 等子任务,它们依赖完整 ctx 与模型;本测试 patch 掉这些子任务,聚焦"状态是否写入"
@@ -60,8 +60,8 @@ def test_normal_attack_ready_state_recorded_when_in_battle() -> None:
     assert recorder.last_record_time == 100.0
 
 
-def test_normal_attack_ready_state_not_updated_when_button_missing() -> None:
-    """in_battle=False 不更新(只写 True):True@100 后 False@200,last_record_time 仍==100。"""
+def test_normal_attack_ready_state_cleared_when_button_missing() -> None:
+    """in_battle=False 清除状态:True@100 后 False@200,last_record_time 被清成 0。"""
     abc = _make_auto_battle_context()
     screen = np.zeros((1080, 1920, 3), dtype=np.uint8)
     patches = _patch_sub_checks(abc)
@@ -78,4 +78,4 @@ def test_normal_attack_ready_state_not_updated_when_button_missing() -> None:
     recorder = abc.state_record_service.get_state_recorder(
         BattleStateEnum.STATUS_NORMAL_ATTACK_READY.value)
     assert recorder is not None
-    assert recorder.last_record_time == 100.0  # 未被 False@200 覆盖
+    assert recorder.last_record_time == 0  # False@200 is_clear 清成 0
