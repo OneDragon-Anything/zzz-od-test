@@ -1,6 +1,9 @@
 """application description(class docstring 来源)契约 + 取数测试。"""
 from test.conftest import TestContext
 
+from zzz_od.backend.backend_context import ZzzBackendContext  # noqa: F401  仅供类型
+from zzz_od.backend.schemas import ApplicationInfo
+
 
 def test_get_application_description_returns_class_docstring(test_context: TestContext) -> None:
     """charge_plan factory 设了 app_class + 类有 docstring → get_application_description 返回非空、含关键语义。"""
@@ -8,3 +11,10 @@ def test_get_application_description_returns_class_docstring(test_context: TestC
     assert isinstance(desc, str)
     assert desc, 'charge_plan description 为空(factory 未设 app_class 或类无 docstring?)'
     assert '体力' in desc  # D4 约定:有消耗必标,charge_plan 消耗体力
+
+
+def test_application_info_has_description_field() -> None:
+    """ApplicationInfo dataclass 含 description 字段(默认空串)。"""
+    info = ApplicationInfo(app_id='x', app_name='名')
+    assert hasattr(info, 'description')
+    assert info.description == ''
