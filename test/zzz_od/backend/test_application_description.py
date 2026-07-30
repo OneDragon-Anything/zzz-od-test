@@ -1,7 +1,6 @@
 """application description(class docstring 来源)契约 + 取数测试。"""
 from test.conftest import TestContext
 
-from zzz_od.backend.backend_context import ZzzBackendContext  # noqa: F401  仅供类型
 from zzz_od.backend.schemas import ApplicationInfo
 
 

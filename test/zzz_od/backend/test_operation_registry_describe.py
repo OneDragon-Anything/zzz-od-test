@@ -12,3 +12,4 @@ def test_describe_operation_includes_description(test_context: TestContext) -> N
     )
     assert 'description' in result
     assert '退出' in result['description']
+    assert ':param' not in result['description']  # 已去 :param 等 Sphinx 标记噪声
