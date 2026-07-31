@@ -58,7 +58,7 @@ def test_python_launcher_fetch_latest_code_passes_progress_callback(
             self.progress_callback = progress_callback
             progress_callback(0.421, '拉取对象 3/10 (30%)')
             progress_callback(0.500, '检查运行环境兼容性')
-            return True, ''
+            return git_service_module.GitSyncStatus.SUCCESS, ''
 
     git_service = FakeGitService()
     ctx = SimpleNamespace(
@@ -89,7 +89,7 @@ def test_python_launcher_fetch_latest_code_silences_framework_console_log(
 
         def fetch_latest_code(self, progress_callback=None):
             progress_callback(0.500, '检查运行环境兼容性')
-            return True, ''
+            return git_service_module.GitSyncStatus.SUCCESS, ''
 
     messages: list[tuple[str, str]] = []
     ctx = SimpleNamespace(
@@ -171,7 +171,7 @@ def test_runtime_launcher_sync_code_uses_framework_log(monkeypatch) -> None:
             self.progress_callback = progress_callback
             progress_callback(0.3, '处理增量 3/10 (30%)')
             progress_callback(1.0, '处理增量 10/10 (100%), done.')
-            return True, ''
+            return git_service_module.GitSyncStatus.SUCCESS, ''
 
     print_calls: list[tuple[str, str, bool]] = []
 
@@ -198,3 +198,36 @@ def test_runtime_launcher_sync_code_uses_framework_log(monkeypatch) -> None:
     assert print_calls[0] == ('处理增量 3/10 (30%)', '\r', True)
     assert print_calls[1] == (' ' * 120, '\r', True)
     assert '代码更新检查完成' in messages
+
+
+def test_runtime_launcher_first_clone_continues_on_runtime_incompatible(monkeypatch) -> None:
+    warnings: list[str] = []
+    exit_calls: list[int] = []
+
+    class FakeGitService:
+        def check_repo_exists(self) -> bool:
+            return False
+
+        def fetch_latest_code(self, progress_callback=None):
+            return (
+                git_service_module.GitSyncStatus.RUNTIME_INCOMPATIBLE,
+                '目标版本的运行环境与当前不兼容',
+            )
+
+    monkeypatch.setattr(
+        env_context_module,
+        'OneDragonEnvContext',
+        lambda: SimpleNamespace(
+            env_config=SimpleNamespace(auto_update_code=True),
+            git_service=FakeGitService(),
+        ),
+    )
+    monkeypatch.setattr(i18_utils_module, 'gt', lambda message: message)
+    monkeypatch.setattr('one_dragon.utils.log_utils.log.info', lambda message: None)
+    monkeypatch.setattr('one_dragon.utils.log_utils.log.warning', warnings.append)
+    monkeypatch.setattr('one_dragon.launcher.runtime_launcher.sys.exit', exit_calls.append)
+
+    RuntimeLauncher('test', '1.0.0')._sync_code()
+
+    assert exit_calls == []
+    assert warnings == ['目标版本的运行环境与当前不兼容，继续使用当前代码；请更新集成启动器']
