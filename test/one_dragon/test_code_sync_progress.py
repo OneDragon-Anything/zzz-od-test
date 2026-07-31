@@ -1,16 +1,18 @@
 from types import SimpleNamespace
 
+import one_dragon.base.operation.one_dragon_env_context as env_context_module
 import one_dragon.devtools.python_launcher as python_launcher
-import one_dragon.envs.env_config as env_config_module
 import one_dragon.envs.git_service as git_service_module
-import one_dragon.envs.project_config as project_config_module
 import one_dragon.utils.i18_utils as i18_utils_module
 from one_dragon.launcher.runtime_launcher import RuntimeLauncher
 
 
 def test_git_service_transfer_progress_limits_transfer_messages(monkeypatch) -> None:
     messages: list[tuple[float, str]] = []
-    callback = git_service_module._FetchProgressRemoteCallbacks(lambda progress, message: messages.append((progress, message)))
+    callback = git_service_module._FetchProgressRemoteCallbacks(
+        lambda progress, message: messages.append((progress, message)),
+        timeout=None,
+    )
     timestamps = iter([0.0, 0.1, 0.4])
     monkeypatch.setattr(git_service_module.time, 'monotonic', lambda: next(timestamps))
 
@@ -26,7 +28,10 @@ def test_git_service_transfer_progress_limits_transfer_messages(monkeypatch) -> 
 
 def test_git_service_transfer_progress_always_shows_final_100_percent(monkeypatch) -> None:
     messages: list[tuple[float, str]] = []
-    callback = git_service_module._FetchProgressRemoteCallbacks(lambda progress, message: messages.append((progress, message)))
+    callback = git_service_module._FetchProgressRemoteCallbacks(
+        lambda progress, message: messages.append((progress, message)),
+        timeout=None,
+    )
     timestamps = iter([0.0, 0.1])
     monkeypatch.setattr(git_service_module.time, 'monotonic', lambda: next(timestamps))
 
@@ -35,7 +40,7 @@ def test_git_service_transfer_progress_always_shows_final_100_percent(monkeypatc
 
     assert messages == [
         (0.1, '拉取对象 1/10 (10%)'),
-        (1.0, '拉取对象 10/10 (100%)'),
+        (1.0, '拉取对象 10/10 (100%), done.'),
     ]
 
 
@@ -134,7 +139,7 @@ def test_python_launcher_progress_callback_passes_stage_messages_through() -> No
         callback(0.2, '获取远程代码')
         callback(0.5, '检查工作区状态')
         callback(0.3, '拉取对象 3/10 (30%)')
-        callback(1.0, '拉取对象 10/10 (100%)')
+        callback(1.0, '拉取对象 10/10 (100%), done.')
     finally:
         python_launcher.print_message = original_print_message
 
@@ -142,7 +147,7 @@ def test_python_launcher_progress_callback_passes_stage_messages_through() -> No
         ('INFO', '获取远程代码', False),
         ('INFO', '检查工作区状态', False),
         ('INFO', '拉取对象 3/10 (30%)', True),
-        ('INFO', '拉取对象 10/10 (100%)', False),
+        ('INFO', '拉取对象 10/10 (100%), done.', False),
     ]
 
 
@@ -155,9 +160,7 @@ def test_runtime_launcher_sync_code_uses_framework_log(monkeypatch) -> None:
     class FakeGitService:
         instances: list['FakeGitService'] = []
 
-        def __init__(self, project_config, env_config) -> None:
-            self.project_config = project_config
-            self.env_config = env_config
+        def __init__(self) -> None:
             self.progress_callback = None
             FakeGitService.instances.append(self)
 
@@ -166,15 +169,17 @@ def test_runtime_launcher_sync_code_uses_framework_log(monkeypatch) -> None:
 
         def fetch_latest_code(self, progress_callback=None):
             self.progress_callback = progress_callback
-            progress_callback(0.3, '拉取对象 3/10 (30%)')
-            progress_callback(1.0, '拉取对象 10/10 (100%)')
+            progress_callback(0.3, '处理增量 3/10 (30%)')
+            progress_callback(1.0, '处理增量 10/10 (100%), done.')
             return True, ''
 
     print_calls: list[tuple[str, str, bool]] = []
 
-    monkeypatch.setattr(env_config_module, 'EnvConfig', FakeEnvConfig)
-    monkeypatch.setattr(git_service_module, 'GitService', FakeGitService)
-    monkeypatch.setattr(project_config_module, 'ProjectConfig', lambda: object())
+    monkeypatch.setattr(
+        env_context_module,
+        'OneDragonEnvContext',
+        lambda: SimpleNamespace(env_config=FakeEnvConfig(), git_service=FakeGitService()),
+    )
     monkeypatch.setattr(i18_utils_module, 'gt', lambda message: message)
     monkeypatch.setattr('one_dragon.utils.log_utils.log.info', lambda message: messages.append(message))
     monkeypatch.setattr(
@@ -188,8 +193,8 @@ def test_runtime_launcher_sync_code_uses_framework_log(monkeypatch) -> None:
     assert len(FakeGitService.instances) == 1
     assert FakeGitService.instances[0].progress_callback is not None
     assert '正在检查代码更新...' in messages
-    assert '拉取对象 3/10 (30%)' not in messages
-    assert '拉取对象 10/10 (100%)' in messages
-    assert print_calls[0] == ('拉取对象 3/10 (30%)', '\r', True)
+    assert '处理增量 3/10 (30%)' not in messages
+    assert '处理增量 10/10 (100%), done.' in messages
+    assert print_calls[0] == ('处理增量 3/10 (30%)', '\r', True)
     assert print_calls[1] == (' ' * 120, '\r', True)
     assert '代码更新检查完成' in messages
