@@ -574,7 +574,7 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_import_fetch_result',
-            lambda temp_repo_dir, progress_callback, stage_start, stage_end: imported.append(temp_repo_dir),
+            lambda temp_repo_dir, progress_callback, stage_start, stage_end, tag_name: imported.append(temp_repo_dir),
         )
 
         git_service._fetch_remote_once(
@@ -648,6 +648,64 @@ class TestFetchProgressRemoteCallbacks:
         assert remote_ref.target == commit_id
         assert list(target_repo.remotes.names()) == []
 
+    def test_import_fetch_result_uses_annotated_tag_as_remote_branch(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        source_path = tmp_path / 'source'
+        target_path = tmp_path / 'target'
+        source_repo = pygit2.init_repository(str(source_path), bare=True)
+        tree_builder = source_repo.TreeBuilder()
+        blob_id = source_repo.create_blob(b'release')
+        tree_builder.insert('README.md', blob_id, pygit2.GIT_FILEMODE_BLOB)
+        tree_id = tree_builder.write()
+        signature = pygit2.Signature('test', 'test@example.com')
+        commit_id = source_repo.create_commit(
+            'refs/heads/main',
+            signature,
+            signature,
+            'release',
+            tree_id,
+            [],
+        )
+        source_repo.create_tag(
+            'v1.0.0',
+            commit_id,
+            pygit2.enums.ObjectType.COMMIT,
+            signature,
+            'v1.0.0',
+        )
+        pygit2.init_repository(str(target_path))
+        env_config = SimpleNamespace(
+            git_branch='main',
+            git_remote='origin',
+            repository_url=GITHUB_REPOSITORY.url,
+            last_repository_url='',
+            is_gh_proxy=False,
+            gh_proxy_url='',
+            is_personal_proxy=False,
+            personal_proxy='',
+        )
+        git_service = GitService(
+            SimpleNamespace(),
+            env_config,
+            create_repo_config(),
+            repo_dir=str(target_path),
+        )
+
+        git_service._import_fetch_result(
+            str(source_path),
+            None,
+            0.0,
+            1.0,
+            'v1.0.0',
+        )
+
+        target_repo = pygit2.Repository(str(target_path))
+        assert target_repo.references['refs/remotes/origin/main'].target == commit_id
+        assert target_repo.revparse_single('refs/tags/v1.0.0').peel(pygit2.Commit).id == commit_id
+        assert 'refs/heads/main' not in target_repo.references
+
     def run_timed_fetch_worker(
         self,
         git_service: GitService,
@@ -686,6 +744,7 @@ class TestFetchProgressRemoteCallbacks:
             progress_callback: object,
             stage_start: float,
             stage_end: float,
+            tag_name: str | None,
         ) -> None:
             nonlocal imported
             imported = True
@@ -838,7 +897,7 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_import_fetch_result',
-            lambda temp_repo_dir, progress_callback, stage_start, stage_end: imported.append(temp_repo_dir),
+            lambda temp_repo_dir, progress_callback, stage_start, stage_end, tag_name: imported.append(temp_repo_dir),
         )
         monkeypatch.setattr(git_service, '_restore_origin', lambda: True)
 
@@ -885,6 +944,7 @@ class TestFetchProgressRemoteCallbacks:
             progress_callback: object,
             stage_start: float,
             stage_end: float,
+            tag_name: str | None,
         ) -> None:
             attempted_urls.append(repository_url)
             if len(attempted_urls) == 1:
@@ -932,6 +992,7 @@ class TestFetchProgressRemoteCallbacks:
             progress_callback: object,
             stage_start: float,
             stage_end: float,
+            tag_name: str | None,
         ) -> None:
             attempted_urls.append(repository_url)
             if repository_url == GITHUB_REPOSITORY.url:
@@ -962,7 +1023,7 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_fetch_remote',
-            lambda progress_callback, stage_start, stage_end: calls.append('fetch') is None,
+            lambda progress_callback, stage_start, stage_end, tag_name: calls.append('fetch') is None,
         )
         monkeypatch.setattr(
             git_service,
@@ -982,6 +1043,95 @@ class TestFetchProgressRemoteCallbacks:
         assert message == '目标版本的运行环境与当前不兼容'
         assert calls == ['init', 'fetch']
 
+    def test_first_clone_uses_builtin_tag_without_manifest_check(
+        self,
+        git_service: GitService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        calls: list[object] = []
+        monkeypatch.setattr(git_service_module, 'init_repository', lambda path: calls.append('init'))
+        monkeypatch.setattr(
+            git_service,
+            '_fetch_remote',
+            lambda progress_callback, stage_start, stage_end, tag_name: calls.append(tag_name) or True,
+        )
+        monkeypatch.setattr(
+            git_service,
+            '_check_remote_manifest_compatible',
+            lambda: (_ for _ in ()).throw(AssertionError('按内置 tag 拉取不应再检查清单')),
+        )
+        monkeypatch.setattr(git_service, '_checkout_branch', lambda: calls.append('checkout') or True)
+        monkeypatch.setattr(
+            git_service,
+            '_sync_with_remote',
+            lambda force: (calls.append(('sync', force)) is None, 'ok'),
+        )
+
+        status, message = git_service._clone_repository(initial_tag='v1.0.0')
+
+        assert status is GitSyncStatus.SUCCESS
+        assert message == '克隆仓库成功'
+        assert calls == ['init', 'v1.0.0', 'checkout', ('sync', True)]
+
+    def test_first_clone_keeps_builtin_code_when_tag_is_unavailable(
+        self,
+        git_service: GitService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        calls: list[str] = []
+        monkeypatch.setattr(git_service_module, 'init_repository', lambda path: calls.append('init'))
+        monkeypatch.setattr(
+            git_service,
+            '_fetch_remote',
+            lambda progress_callback, stage_start, stage_end, tag_name: calls.append(tag_name) or False,
+        )
+        monkeypatch.setattr(git_service, '_checkout_branch', lambda: calls.append('checkout') is not None)
+
+        status, message = git_service._clone_repository(initial_tag='v1.0.0')
+
+        assert status is GitSyncStatus.BUILTIN_TAG_UNAVAILABLE
+        assert message == '未能获取内置版本对应的代码标签 v1.0.0'
+        assert calls == ['init', 'v1.0.0']
+
+    def test_fetch_latest_code_retries_builtin_tag_while_local_branch_is_missing(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        repo_path = tmp_path / 'repo'
+        pygit2.init_repository(str(repo_path))
+        env_config = SimpleNamespace(git_branch='main')
+        git_service = GitService(
+            SimpleNamespace(),
+            env_config,
+            create_repo_config(),
+            repo_dir=str(repo_path),
+        )
+        received_tags: list[str | None] = []
+        monkeypatch.setattr(
+            git_service,
+            '_clone_repository',
+            lambda progress_callback, initial_tag: (
+                received_tags.append(initial_tag)
+                or (
+                    GitSyncStatus.BUILTIN_TAG_UNAVAILABLE,
+                    f'未能获取内置版本对应的代码标签 {initial_tag}',
+                )
+            ),
+        )
+        monkeypatch.setattr(
+            git_service,
+            '_fetch_and_checkout_latest_branch',
+            lambda progress_callback: (_ for _ in ()).throw(AssertionError('不得退化到分支更新')),
+        )
+
+        first_status, _ = git_service.fetch_latest_code(initial_tag='v1.0.0')
+        second_status, _ = git_service.fetch_latest_code(initial_tag='v1.0.0')
+
+        assert first_status is GitSyncStatus.BUILTIN_TAG_UNAVAILABLE
+        assert second_status is GitSyncStatus.BUILTIN_TAG_UNAVAILABLE
+        assert received_tags == ['v1.0.0', 'v1.0.0']
+
     def test_fetch_remote_returns_false_when_all_sources_fail(
         self,
         git_service: GitService,
@@ -992,6 +1142,7 @@ class TestFetchProgressRemoteCallbacks:
             progress_callback: object,
             stage_start: float,
             stage_end: float,
+            tag_name: str | None,
         ) -> None:
             raise TimeoutError(repository_url)
 
@@ -1065,7 +1216,9 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_fetch_remote_once',
-            lambda repository_url, progress_callback, stage_start, stage_end: attempted_urls.append(repository_url),
+            lambda repository_url, progress_callback, stage_start, stage_end, tag_name: attempted_urls.append(
+                repository_url
+            ),
         )
         monkeypatch.setattr(git_service, '_restore_origin', lambda: True)
 
@@ -1088,11 +1241,33 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_rebuild_repository',
-            lambda progress_callback: rebuild_calls.append(progress_callback) is None,
+            lambda progress_callback, initial_tag: rebuild_calls.append(progress_callback) is None,
         )
 
         assert git_service._fetch_remote() is True
         assert rebuild_calls == [None]
+
+    def test_tag_missing_object_rebuild_keeps_initial_tag(
+        self,
+        git_service: GitService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        rebuild_calls: list[tuple[object, str | None]] = []
+
+        monkeypatch.setattr(
+            git_service,
+            '_fetch_remote_once',
+            lambda *args: (_ for _ in ()).throw(KeyError('object not found - no match for id')),
+        )
+        monkeypatch.setattr(git_service, '_restore_origin', lambda: True)
+        monkeypatch.setattr(
+            git_service,
+            '_rebuild_repository',
+            lambda progress_callback, initial_tag: rebuild_calls.append((progress_callback, initial_tag)) is None,
+        )
+
+        assert git_service._fetch_remote(tag_name='v1.0.0') is True
+        assert rebuild_calls == [(None, 'v1.0.0')]
 
     def test_missing_object_failure_rebuilds_when_origin_restore_fails(
         self,
@@ -1109,7 +1284,7 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_rebuild_repository',
-            lambda progress_callback: rebuild_calls.append(progress_callback) is None,
+            lambda progress_callback, initial_tag: rebuild_calls.append(progress_callback) is None,
         )
 
         assert git_service._fetch_remote() is True
@@ -1135,7 +1310,7 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_rebuild_repository',
-            lambda progress_callback: rebuild_calls.append(progress_callback) is None,
+            lambda progress_callback, initial_tag: rebuild_calls.append(progress_callback) is None,
         )
 
         assert git_service._fetch_remote() is True
@@ -1156,7 +1331,7 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_rebuild_repository',
-            lambda progress_callback: rebuild_calls.append(progress_callback) is None,
+            lambda progress_callback, initial_tag: rebuild_calls.append(progress_callback) is None,
         )
 
         assert git_service._fetch_remote() is False
@@ -1189,7 +1364,7 @@ class TestFetchProgressRemoteCallbacks:
         assert (repo_path / '.git').is_dir()
         assert list(repo_path.glob('.git.corrupted.*')) == []
 
-    def test_rebuild_repository_backs_up_git_directory(
+    def test_rebuild_repository_backs_up_git_directory_and_keeps_initial_tag(
         self,
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
@@ -1203,13 +1378,20 @@ class TestFetchProgressRemoteCallbacks:
             repo_dir=str(repo_path),
         )
 
-        def fake_clone(progress_callback: object) -> tuple[GitSyncStatus, str]:
+        received_tags: list[str | None] = []
+
+        def fake_clone(
+            progress_callback: object,
+            initial_tag: str | None,
+        ) -> tuple[GitSyncStatus, str]:
+            received_tags.append(initial_tag)
             pygit2.init_repository(str(repo_path))
             return GitSyncStatus.SUCCESS, 'ok'
 
         monkeypatch.setattr(git_service, '_clone_repository', fake_clone)
 
-        assert git_service._rebuild_repository(None) is True
+        assert git_service._rebuild_repository(None, 'v1.0.0') is True
+        assert received_tags == ['v1.0.0']
         assert (repo_path / '.git').is_dir()
         assert len(list(repo_path.glob('.git.corrupted.*'))) == 1
 

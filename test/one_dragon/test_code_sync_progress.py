@@ -164,10 +164,10 @@ def test_runtime_launcher_sync_code_uses_framework_log(monkeypatch) -> None:
             self.progress_callback = None
             FakeGitService.instances.append(self)
 
-        def check_repo_exists(self) -> bool:
-            return True
+        def is_initial_checkout_pending(self) -> bool:
+            return False
 
-        def fetch_latest_code(self, progress_callback=None):
+        def fetch_latest_code(self, progress_callback=None, initial_tag=None):
             self.progress_callback = progress_callback
             progress_callback(0.3, '处理增量 3/10 (30%)')
             progress_callback(1.0, '处理增量 10/10 (100%), done.')
@@ -205,10 +205,10 @@ def test_runtime_launcher_first_clone_continues_on_runtime_incompatible(monkeypa
     exit_calls: list[int] = []
 
     class FakeGitService:
-        def check_repo_exists(self) -> bool:
-            return False
+        def is_initial_checkout_pending(self) -> bool:
+            return True
 
-        def fetch_latest_code(self, progress_callback=None):
+        def fetch_latest_code(self, progress_callback=None, initial_tag=None):
             return (
                 git_service_module.GitSyncStatus.RUNTIME_INCOMPATIBLE,
                 '目标版本的运行环境与当前不兼容',
@@ -231,3 +231,42 @@ def test_runtime_launcher_first_clone_continues_on_runtime_incompatible(monkeypa
 
     assert exit_calls == []
     assert warnings == ['目标版本的运行环境与当前不兼容，继续使用当前代码；请更新集成启动器']
+
+
+def test_runtime_launcher_retries_builtin_release_tag_until_first_checkout(monkeypatch) -> None:
+    warnings: list[str] = []
+    received_tags: list[str | None] = []
+
+    class FakeGitService:
+        def is_initial_checkout_pending(self) -> bool:
+            return True
+
+        def fetch_latest_code(self, progress_callback=None, initial_tag=None):
+            received_tags.append(initial_tag)
+            return (
+                git_service_module.GitSyncStatus.BUILTIN_TAG_UNAVAILABLE,
+                f'未能获取内置版本对应的代码标签 {initial_tag}',
+            )
+
+    monkeypatch.setattr(
+        env_context_module,
+        'OneDragonEnvContext',
+        lambda: SimpleNamespace(
+            env_config=SimpleNamespace(auto_update_code=True),
+            git_service=FakeGitService(),
+        ),
+    )
+    monkeypatch.setattr('one_dragon.version.__version__', 'v1.2.3')
+    monkeypatch.setattr(i18_utils_module, 'gt', lambda message: message)
+    monkeypatch.setattr('one_dragon.utils.log_utils.log.info', lambda message: None)
+    monkeypatch.setattr('one_dragon.utils.log_utils.log.warning', warnings.append)
+
+    launcher = RuntimeLauncher('test', '1.0.0')
+    launcher._sync_code()
+    launcher._sync_code()
+
+    assert received_tags == ['v1.2.3', 'v1.2.3']
+    assert warnings == [
+        '未能获取内置版本对应的代码标签 v1.2.3，继续使用当前代码；请更新集成启动器',
+        '未能获取内置版本对应的代码标签 v1.2.3，继续使用当前代码；请更新集成启动器',
+    ]
