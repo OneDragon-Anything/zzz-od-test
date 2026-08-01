@@ -9,6 +9,7 @@ fixture(`screens/咖啡店/对话点单-选项.webp`):POINT_3 片刻闲 未喝�
 """
 from test.conftest import TestContext
 
+from one_dragon.utils import os_utils
 from zzz_od.application.coffee.coffee_app import CoffeeApp
 from zzz_od.application.coffee.coffee_config import CoffeeTransportPoint
 
@@ -23,6 +24,11 @@ class TestCoffeeApp:
         op.screenshot()
         return op
 
+    def _expected_day_coffee(self, test_context: TestContext, op: CoffeeApp) -> str:
+        """配置中当天的 day_coffee 名(默认汀曼特调),用于断言实际选中的咖啡。"""
+        day = os_utils.get_current_day_of_week(test_context.game_account_config.game_refresh_hour_offset)
+        return op.config.get_coffee_by_day(day)
+
     def test_dialog_choose_coffee_point3(self, test_context: TestContext) -> None:
         """POINT_3 选项态 → OCR 点候选咖啡 → 返回「点单后跳过」。"""
         op = self._make_op(test_context)
@@ -30,7 +36,8 @@ class TestCoffeeApp:
         result = op.dialog_choose_coffee()
         assert result.is_success, '选项态应识别候选咖啡并点击'
         assert result.status == '点单后跳过', f'POINT_3 点单后应返回「点单后跳过」,实际 {result.status}'
-        assert op.chosen_coffee is not None, '应记下 chosen_coffee'
+        assert op.chosen_coffee.coffee_name == self._expected_day_coffee(test_context, op), \
+            f'应选择配置的 day_coffee({self._expected_day_coffee(test_context, op)}),实际 {op.chosen_coffee.coffee_name if op.chosen_coffee else None}'
 
     def test_dialog_choose_coffee_point2(self, test_context: TestContext) -> None:
         """POINT_2 选项态 → OCR 点候选咖啡 → 返回「已点单」(回归)。"""
@@ -39,4 +46,5 @@ class TestCoffeeApp:
         result = op.dialog_choose_coffee()
         assert result.is_success, '选项态应识别候选咖啡并点击'
         assert result.status == '已点单', f'POINT_2 点单后应返回「已点单」,实际 {result.status}'
-        assert op.chosen_coffee is not None, '应记下 chosen_coffee'
+        assert op.chosen_coffee.coffee_name == self._expected_day_coffee(test_context, op), \
+            f'应选择配置的 day_coffee({self._expected_day_coffee(test_context, op)}),实际 {op.chosen_coffee.coffee_name if op.chosen_coffee else None}'
