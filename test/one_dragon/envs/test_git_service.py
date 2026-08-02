@@ -901,7 +901,7 @@ class TestFetchProgressRemoteCallbacks:
         )
         monkeypatch.setattr(git_service, '_restore_origin', lambda: True)
 
-        assert git_service._fetch_remote() is True
+        assert git_service._fetch_remote()[0] is GitSyncStatus.SUCCESS
         assert worker_count == 2
         assert abandoned_states[0].is_set() is True
         assert abandoned_states[1].is_set() is False
@@ -960,7 +960,7 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(git_service, '_fetch_remote_once', fake_fetch)
         monkeypatch.setattr(git_service, '_restore_origin', fake_restore)
 
-        assert git_service._fetch_remote() is True
+        assert git_service._fetch_remote()[0] is GitSyncStatus.SUCCESS
         assert attempted_urls == [
             'https://github.example/repo.git',
             'https://cnb.example/repo.git',
@@ -976,7 +976,7 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(git_service, '_fetch_remote_once', lambda *args: None)
         monkeypatch.setattr(git_service, '_restore_origin', lambda: False)
 
-        assert git_service._fetch_remote() is False
+        assert git_service._fetch_remote()[0] is GitSyncStatus.LOCAL_UPDATE_FAILED
 
     def test_auto_source_records_successful_repository_when_manifest_rejects_update(
         self,
@@ -1023,7 +1023,9 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_fetch_remote',
-            lambda progress_callback, stage_start, stage_end, tag_name: calls.append('fetch') is None,
+            lambda progress_callback, stage_start, stage_end, tag_name: (
+                calls.append('fetch') or (GitSyncStatus.SUCCESS, 'ok')
+            ),
         )
         monkeypatch.setattr(
             git_service,
@@ -1053,24 +1055,30 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_fetch_remote',
-            lambda progress_callback, stage_start, stage_end, tag_name: calls.append(tag_name) or True,
+            lambda progress_callback, stage_start, stage_end, tag_name: (
+                calls.append(tag_name) or (GitSyncStatus.SUCCESS, 'ok')
+            ),
         )
         monkeypatch.setattr(
             git_service,
             '_check_remote_manifest_compatible',
             lambda: (_ for _ in ()).throw(AssertionError('按内置 tag 拉取不应再检查清单')),
         )
-        monkeypatch.setattr(git_service, '_checkout_branch', lambda: calls.append('checkout') or True)
+        monkeypatch.setattr(
+            git_service,
+            '_checkout_branch',
+            lambda: (calls.append('checkout') or (GitSyncStatus.SUCCESS, True, '')),
+        )
         monkeypatch.setattr(
             git_service,
             '_sync_with_remote',
-            lambda force: (calls.append(('sync', force)) is None, 'ok'),
+            lambda force: (calls.append(('sync', force)) or (GitSyncStatus.UP_TO_DATE, 'ok')),
         )
 
         status, message = git_service._clone_repository(initial_tag='v1.0.0')
 
         assert status is GitSyncStatus.SUCCESS
-        assert message == '克隆仓库成功'
+        assert message == '更新完成'
         assert calls == ['init', 'v1.0.0', 'checkout', ('sync', True)]
 
     def test_first_clone_keeps_builtin_code_when_tag_is_unavailable(
@@ -1083,14 +1091,16 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_fetch_remote',
-            lambda progress_callback, stage_start, stage_end, tag_name: calls.append(tag_name) or False,
+            lambda progress_callback, stage_start, stage_end, tag_name: (
+                calls.append(tag_name) or (GitSyncStatus.REMOTE_UNAVAILABLE, '暂时无法获取更新')
+            ),
         )
         monkeypatch.setattr(git_service, '_checkout_branch', lambda: calls.append('checkout') is not None)
 
         status, message = git_service._clone_repository(initial_tag='v1.0.0')
 
         assert status is GitSyncStatus.BUILTIN_TAG_UNAVAILABLE
-        assert message == '未能获取内置版本对应的代码标签 v1.0.0'
+        assert message == '暂时无法获取当前版本所需文件'
         assert calls == ['init', 'v1.0.0']
 
     def test_fetch_latest_code_retries_builtin_tag_while_local_branch_is_missing(
@@ -1150,7 +1160,7 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(git_service, '_restore_origin', lambda: True)
         git_service.env_config.last_repository_url = CNB_REPOSITORY.url
 
-        assert git_service._fetch_remote() is False
+        assert git_service._fetch_remote()[0] is GitSyncStatus.REMOTE_UNAVAILABLE
         assert git_service.env_config.last_repository_url == CNB_REPOSITORY.url
 
     def test_auto_source_prioritizes_last_successful_repository(self, git_service: GitService) -> None:
@@ -1222,7 +1232,7 @@ class TestFetchProgressRemoteCallbacks:
         )
         monkeypatch.setattr(git_service, '_restore_origin', lambda: True)
 
-        assert git_service._fetch_remote() is True
+        assert git_service._fetch_remote()[0] is GitSyncStatus.SUCCESS
         assert attempted_urls == ['https://proxy.example/https://github.example/repo.git']
         assert git_service.env_config.last_repository_url == GITHUB_REPOSITORY.url
 
@@ -1241,10 +1251,12 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_rebuild_repository',
-            lambda progress_callback, initial_tag: rebuild_calls.append(progress_callback) is None,
+            lambda progress_callback, initial_tag: (
+                rebuild_calls.append(progress_callback) or (GitSyncStatus.SUCCESS, 'ok')
+            ),
         )
 
-        assert git_service._fetch_remote() is True
+        assert git_service._fetch_remote()[0] is GitSyncStatus.SUCCESS
         assert rebuild_calls == [None]
 
     def test_tag_missing_object_rebuild_keeps_initial_tag(
@@ -1263,10 +1275,12 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_rebuild_repository',
-            lambda progress_callback, initial_tag: rebuild_calls.append((progress_callback, initial_tag)) is None,
+            lambda progress_callback, initial_tag: (
+                rebuild_calls.append((progress_callback, initial_tag)) or (GitSyncStatus.SUCCESS, 'ok')
+            ),
         )
 
-        assert git_service._fetch_remote(tag_name='v1.0.0') is True
+        assert git_service._fetch_remote(tag_name='v1.0.0')[0] is GitSyncStatus.SUCCESS
         assert rebuild_calls == [(None, 'v1.0.0')]
 
     def test_missing_object_failure_rebuilds_when_origin_restore_fails(
@@ -1284,10 +1298,12 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_rebuild_repository',
-            lambda progress_callback, initial_tag: rebuild_calls.append(progress_callback) is None,
+            lambda progress_callback, initial_tag: (
+                rebuild_calls.append(progress_callback) or (GitSyncStatus.SUCCESS, 'ok')
+            ),
         )
 
-        assert git_service._fetch_remote() is True
+        assert git_service._fetch_remote()[0] is GitSyncStatus.SUCCESS
         assert rebuild_calls == [None]
 
     def test_missing_object_and_network_failure_trigger_repository_rebuild(
@@ -1310,10 +1326,12 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_rebuild_repository',
-            lambda progress_callback, initial_tag: rebuild_calls.append(progress_callback) is None,
+            lambda progress_callback, initial_tag: (
+                rebuild_calls.append(progress_callback) or (GitSyncStatus.SUCCESS, 'ok')
+            ),
         )
 
-        assert git_service._fetch_remote() is True
+        assert git_service._fetch_remote()[0] is GitSyncStatus.SUCCESS
         assert rebuild_calls == [None]
 
     def test_network_failures_do_not_trigger_repository_rebuild(
@@ -1331,10 +1349,12 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_rebuild_repository',
-            lambda progress_callback, initial_tag: rebuild_calls.append(progress_callback) is None,
+            lambda progress_callback, initial_tag: (
+                rebuild_calls.append(progress_callback) or (GitSyncStatus.SUCCESS, 'ok')
+            ),
         )
 
-        assert git_service._fetch_remote() is False
+        assert git_service._fetch_remote()[0] is GitSyncStatus.REMOTE_UNAVAILABLE
         assert rebuild_calls == []
 
     def test_rebuild_repository_skips_repository_with_extra_remote(
@@ -1359,7 +1379,7 @@ class TestFetchProgressRemoteCallbacks:
             lambda progress_callback: clone_calls.append(progress_callback),
         )
 
-        assert git_service._rebuild_repository(None) is False
+        assert git_service._rebuild_repository(None)[0] is GitSyncStatus.LOCAL_UPDATE_FAILED
         assert clone_calls == []
         assert (repo_path / '.git').is_dir()
         assert list(repo_path.glob('.git.corrupted.*')) == []
@@ -1390,7 +1410,7 @@ class TestFetchProgressRemoteCallbacks:
 
         monkeypatch.setattr(git_service, '_clone_repository', fake_clone)
 
-        assert git_service._rebuild_repository(None, 'v1.0.0') is True
+        assert git_service._rebuild_repository(None, 'v1.0.0')[0] is GitSyncStatus.SUCCESS
         assert received_tags == ['v1.0.0']
         assert (repo_path / '.git').is_dir()
         assert len(list(repo_path.glob('.git.corrupted.*'))) == 1
