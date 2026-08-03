@@ -36,6 +36,7 @@ class TestCheckBatteryCharge:
             # 粗体字
             ('sample_bold_343_01.webp', (240, 2400, 263)), ('sample_bold_343_02.webp', (341, 2399, 115)),
             ('sample_bold_332.webp', (400, 419, 82)),
+            ('sample_issue_2636.png', (78, 0, 28)),
         ],
     )
     def test_check_battery_charge(
