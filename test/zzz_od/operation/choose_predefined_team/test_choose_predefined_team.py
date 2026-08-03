@@ -128,6 +128,7 @@ def test_choose_team_requires_full_confirm_text(
 ) -> None:
     thresholds: list[float] = []
     op = ChoosePredefinedTeam(test_context, [predefined_team.idx])
+    expected_area = test_context.screen_loader.get_area('实战模拟室', '预备出战')
 
     def fake_round_by_ocr(
             screen: MatLike,
@@ -140,6 +141,14 @@ def test_choose_team_requires_full_confirm_text(
             retry_wait_round: float | None = None,
             color_range: list[list[int]] | None = None,
     ) -> OperationRoundResult:
+        assert screen is op.last_screenshot
+        assert target_cn == '预备出战'
+        assert area is expected_area
+        assert success_wait is None
+        assert success_wait_round is None
+        assert retry_wait is None
+        assert retry_wait_round is None
+        assert color_range == [[240, 240, 240], [255, 255, 255]]
         thresholds.append(lcs_percent)
         if lcs_percent < 1:
             return op.round_success(target_cn)
