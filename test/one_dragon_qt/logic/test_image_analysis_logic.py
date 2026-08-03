@@ -22,7 +22,8 @@ def test_auto_save_pipeline_generates_first_name():
 
     assert name == '流水线1'
     assert logic.active_pipeline_name == '流水线1'
-    logic.cv_service.save_pipeline.assert_called_once_with('流水线1', logic.pipeline)
+    logic.cv_service.get_pipeline_names.assert_called_once_with(source='')
+    logic.cv_service.save_pipeline.assert_called_once_with('流水线1', logic.pipeline, source='')
 
 
 def test_auto_save_pipeline_skips_existing_names():
