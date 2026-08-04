@@ -24,6 +24,11 @@ def _make_backend(
     compendium.get_charge_plan_category_list = lambda: [ConfigItem('x', legal_category)]
     compendium.get_charge_plan_mission_type_list = lambda c: [ConfigItem('x', legal_mission_type)]
     compendium.get_charge_plan_mission_list = lambda c, m: [ConfigItem('x', legal_mission)]
+    compendium.get_charge_plan_material_list = lambda c, mt, m: [
+        ConfigItem('资深调查员记录', '资深调查员记录'),
+        ConfigItem('正式调查员记录', '正式调查员记录'),
+        ConfigItem('见习调查员记录', '见习调查员记录'),
+    ]
 
     config = MagicMock()
     config.plan_list = []
@@ -343,6 +348,7 @@ def _make_backend_empty_mission_type(category: str = '空mission_type类别'):
     compendium.get_charge_plan_category_list = lambda: [ConfigItem('x', category)]
     compendium.get_charge_plan_mission_type_list = lambda c: []  # 空 mission_type
     compendium.get_charge_plan_mission_list = lambda c, m: []
+    compendium.get_charge_plan_material_list = lambda c, mt, m: []
 
     config = MagicMock()
     config.plan_list = []

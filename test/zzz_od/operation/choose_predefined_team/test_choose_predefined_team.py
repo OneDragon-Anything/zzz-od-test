@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 import pytest
 from cv2.typing import MatLike
 from test.conftest import TestContext as FixtureTestContext
@@ -126,6 +127,36 @@ def test_choose_team_selects_target_while_confirm_is_disabled(
 
     assert result.result == OperationRoundResultEnum.WAIT
     assert clicked_points
+
+
+def test_wait_team_list_retries_during_black_loading(
+        operation: ChoosePredefinedTeam,
+) -> None:
+    """入口消失后的黑屏不能直接进入队名识别。"""
+    operation.last_screenshot = np.zeros((1080, 1920, 3), dtype=np.uint8)
+
+    loading_result = operation.wait_team_list()
+
+    assert loading_result.result == OperationRoundResultEnum.RETRY
+
+    operation.last_screenshot = load_screen('预备编队', '未选择')
+    loaded_result = operation.wait_team_list()
+
+    assert loaded_result.is_success
+    assert loaded_result.status == '预备编队列表'
+
+
+def test_wait_team_list_precedes_team_name_recognition(
+        operation: ChoosePredefinedTeam,
+) -> None:
+    """操作图在点击入口后先等待列表，再识别队名。"""
+    operation._init_network()
+
+    click_edges = operation._node_edges_map['点击预备编队']
+    wait_edges = operation._node_edges_map['等待预备编队列表']
+
+    assert any(edge.node_to.cn == '等待预备编队列表' for edge in click_edges)
+    assert any(edge.node_to.cn == '选择编队' for edge in wait_edges)
 
 
 def test_click_confirm_accepts_enabled_button(
