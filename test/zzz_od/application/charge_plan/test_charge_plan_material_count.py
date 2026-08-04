@@ -91,6 +91,14 @@ def test_material_counts_reject_non_integer_values() -> None:
     }
 
 
+@pytest.mark.parametrize('material_counts', [[], 'invalid', 1])
+def test_material_counts_rejects_non_dict_values(material_counts: object) -> None:
+    """累计数量配置不是字典时按空字典处理。"""
+    plan = ChargePlanItem.from_dict({'material_counts': material_counts})
+
+    assert plan.material_counts == {}
+
+
 @pytest.mark.parametrize(
     ('target', 'expected'),
     [
