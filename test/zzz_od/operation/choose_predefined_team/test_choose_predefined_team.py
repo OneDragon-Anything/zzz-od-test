@@ -28,6 +28,10 @@ class _WatchedChoosePredefinedTeam(WatchdogOperationMixin, ChoosePredefinedTeam)
     watchdog_max_rounds: int = 30
 
 
+def _ignore_mouse_move(_pos: Point) -> None:
+    """测试控制器不需要真的移动鼠标。"""
+
+
 def load_screen(screen_name: str, state: str) -> MatLike:
     """读取预备编队流程的画面存档。"""
     image = cv2_utils.read_image(str(SCREEN_ROOT / screen_name / f'{state}.webp'))
@@ -63,6 +67,34 @@ def operation(
 
 
 @pytest.fixture
+def click_recorder(
+        test_context: FixtureTestContext,
+        monkeypatch: pytest.MonkeyPatch,
+) -> list[Point]:
+    """记录被测节点发出的点击位置，并跳过真实鼠标移动。"""
+    clicked_points: list[Point] = []
+
+    def record_click(
+            pos: Point | None = None,
+            press_time: float = 0,
+            pc_alt: bool = False,
+            gamepad_key: str | None = None,
+    ) -> bool:
+        if pos is not None:
+            clicked_points.append(pos)
+        return True
+
+    monkeypatch.setattr(test_context.controller, 'click', record_click)
+    monkeypatch.setattr(
+        test_context.controller,
+        'mouse_move',
+        _ignore_mouse_move,
+        raising=False,
+    )
+    return clicked_points
+
+
+@pytest.fixture
 def fixture_controller(
         test_context: FixtureTestContext,
         monkeypatch: pytest.MonkeyPatch,
@@ -74,10 +106,7 @@ def fixture_controller(
         standard_height=test_context.project_config.screen_standard_height,
     )
 
-    def ignore_mouse_move(_pos: Point) -> None:
-        """测试控制器不需要真的移动鼠标。"""
-
-    monkeypatch.setattr(controller, 'mouse_move', ignore_mouse_move, raising=False)
+    monkeypatch.setattr(controller, 'mouse_move', _ignore_mouse_move, raising=False)
     monkeypatch.setattr(test_context, 'controller', controller)
     return controller
 
@@ -102,31 +131,17 @@ def test_predefined_deploy_uses_exact_white_text(
 
 def test_choose_team_selects_target_while_confirm_is_disabled(
         test_context: FixtureTestContext,
-        monkeypatch: pytest.MonkeyPatch,
+        click_recorder: list[Point],
         operation: ChoosePredefinedTeam,
 ) -> None:
     """确认按钮为灰色时应选择目标队伍，不得提前进入确认节点。"""
-    clicked_points: list[Point] = []
-
-    def record_click(
-            pos: Point | None = None,
-            press_time: float = 0,
-            pc_alt: bool = False,
-            gamepad_key: str | None = None,
-    ) -> bool:
-        """记录选队节点发出的点击位置。"""
-        if pos is not None:
-            clicked_points.append(pos)
-        return True
-
-    monkeypatch.setattr(test_context.controller, 'click', record_click)
     test_context.add_mock_screenshot(load_screen('预备编队', '未选择'))
     operation.screenshot()
 
     result = operation.choose_team()
 
     assert result.result == OperationRoundResultEnum.WAIT
-    assert clicked_points
+    assert click_recorder
 
 
 def test_wait_team_list_retries_during_black_loading(
@@ -179,40 +194,16 @@ def test_wait_team_list_precedes_team_name_recognition(
 
 
 def test_click_confirm_accepts_enabled_button(
-        test_context: FixtureTestContext,
-        monkeypatch: pytest.MonkeyPatch,
+        click_recorder: list[Point],
         operation: ChoosePredefinedTeam,
 ) -> None:
     """白色启用按钮应让实际确认节点完成点击。"""
-    clicked_points: list[Point] = []
-
-    def record_click(
-            pos: Point | None = None,
-            press_time: float = 0,
-            pc_alt: bool = False,
-            gamepad_key: str | None = None,
-    ) -> bool:
-        """记录确认节点发出的点击位置。"""
-        if pos is not None:
-            clicked_points.append(pos)
-        return True
-
-    def ignore_mouse_move(_pos: Point) -> None:
-        """节点点击成功后不需要真的移动鼠标。"""
-
-    monkeypatch.setattr(test_context.controller, 'click', record_click)
-    monkeypatch.setattr(
-        test_context.controller,
-        'mouse_move',
-        ignore_mouse_move,
-        raising=False,
-    )
     operation.last_screenshot = load_screen('预备编队', '已选择')
 
     result = operation.click_confirm()
 
     assert result.is_success
-    assert clicked_points
+    assert click_recorder
 
 
 @pytest.mark.parametrize(

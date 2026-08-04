@@ -45,7 +45,7 @@ def _match_list(*matches: MatchResult) -> MatchResultList:
 
 
 def _reward_screen(
-    rarity_items: list[tuple[str, int, int]],
+    rarity_items: list[tuple[str, int, int, int]],
 ) -> tuple[MatLike, dict[str, MatchResultList]]:
     """生成带奖励品质色带的结算页和对应 OCR 结果。"""
     screen = np.zeros((1080, 1920, 3), dtype=np.uint8)
@@ -58,11 +58,11 @@ def _reward_screen(
         'unknown': (255, 255, 255),
     }
     ocr_map: dict[str, MatchResultList] = {}
-    for rarity, quantity, x in rarity_items:
-        match = MatchResult(1, x, 200, 20, 24)
+    for rarity, quantity, x, y in rarity_items:
+        match = MatchResult(1, x, y, 20, 24)
         center_x = x + 10
         screen[
-            reward_top + 179:reward_top + 197,
+            reward_top + y - 21:reward_top + y - 3,
             reward_left + center_x - 25:reward_left + center_x + 25,
         ] = color_map[rarity]
         quantity_text = str(quantity)
@@ -79,12 +79,12 @@ def test_read_material_reward_counts_aggregates_duplicate_rarities(
 ) -> None:
     """五张卡的重复奖励按品质合并，双倍奖励也不会覆盖前一格。"""
     screen, ocr_map = _reward_screen([
-        ('B', 4, 50),
-        ('B', 2, 170),
-        ('A', 1, 290),
-        ('B', 16, 410),
-        ('B', 12, 50),
-        ('C', 5, 530),
+        ('B', 4, 50, 200),
+        ('B', 2, 170, 200),
+        ('A', 1, 290, 200),
+        ('B', 16, 410, 200),
+        ('B', 12, 50, 320),
+        ('C', 5, 170, 320),
     ])
     monkeypatch.setattr(test_context.ocr, 'run_ocr', lambda _part: ocr_map)
     op = CombatSimulation(test_context, _material_plan())
@@ -106,7 +106,7 @@ def test_read_material_reward_counts_rejects_unknown_rarity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """图标品质色无法判断时不写入可能错误的进度。"""
-    screen, ocr_map = _reward_screen([('unknown', 3, 50)])
+    screen, ocr_map = _reward_screen([('unknown', 3, 50, 200)])
     monkeypatch.setattr(test_context.ocr, 'run_ocr', lambda _part: ocr_map)
     op = CombatSimulation(test_context, _material_plan())
 
@@ -169,7 +169,10 @@ def test_single_material_reward_sums_all_slots(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """丁尼等单一材料合并奖励格子，但忽略上方绳网经验数字。"""
-    screen, ocr_map = _reward_screen([('unknown', 5000, 50), ('unknown', 5000, 170)])
+    screen, ocr_map = _reward_screen([
+        ('unknown', 5000, 50, 200),
+        ('unknown', 5000, 170, 200),
+    ])
     ocr_map['150'] = _match_list(MatchResult(1, 400, 10, 40, 24))
     monkeypatch.setattr(test_context.ocr, 'run_ocr', lambda _part: ocr_map)
     op = CombatSimulation(test_context, _material_plan())

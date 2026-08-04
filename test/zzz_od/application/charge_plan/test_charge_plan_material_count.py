@@ -51,6 +51,47 @@ def test_legacy_plan_defaults_to_run_times_mode() -> None:
 
 
 @pytest.mark.parametrize(
+    ('value', 'expected'),
+    [
+        (True, 0),
+        (1.9, 0),
+        (2.0, 2),
+        ('3', 3),
+        (4, 4),
+        ('invalid', 0),
+    ],
+)
+def test_target_material_count_rejects_non_integer_values(
+    value: object,
+    expected: int,
+) -> None:
+    """目标数量不截断非整数，也不把布尔值当作整数。"""
+    plan = ChargePlanItem.from_dict({'target_material_count': value})
+
+    assert plan.target_material_count == expected
+
+
+def test_material_counts_reject_non_integer_values() -> None:
+    """累计数量只保留正整数、整数小数和整数字符串。"""
+    plan = ChargePlanItem.from_dict({
+        'material_counts': {
+            '布尔值': True,
+            '非整数小数': 1.9,
+            '整数小数': 2.0,
+            '整数字符串': '3',
+            '整数': 4,
+            '零': 0,
+        },
+    })
+
+    assert plan.material_counts == {
+        '整数小数': 2,
+        '整数字符串': 3,
+        '整数': 4,
+    }
+
+
+@pytest.mark.parametrize(
     ('target', 'expected'),
     [
         ('特化以太芯片', ('特化以太芯片', '进阶以太芯片', '基础以太芯片')),
