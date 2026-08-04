@@ -36,16 +36,14 @@ def test_remielle_long_press_keeps_protection_and_releases_key(
     assert operations[2] == {"op_name": "等待秒数", "seconds": 0.02}
 
     hold_operations = operations[3:]
-    press_indices = [
-        index
-        for index, operation in enumerate(hold_operations)
-        if operation.get("op_name") == f"{op_prefix}-按下"
-    ]
-    assert len(press_indices) == 11
-    assert hold_operations[-1]["op_name"] == f"{op_prefix}-松开"
+    expected_hold_operations: list[dict[str, object]] = []
+    for _ in range(11):
+        expected_hold_operations.extend(
+            [
+                {"op_name": f"{op_prefix}-按下"},
+                {"op_name": "等待秒数", "seconds": 0.5},
+            ]
+        )
+    expected_hold_operations.append({"op_name": f"{op_prefix}-松开"})
 
-    for press_index in press_indices:
-        assert hold_operations[press_index + 1] == {
-            "op_name": "等待秒数",
-            "seconds": 0.5,
-        }
+    assert hold_operations == expected_hold_operations
