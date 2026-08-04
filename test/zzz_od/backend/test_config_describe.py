@@ -10,6 +10,7 @@ from one_dragon.base.config.config_item import ConfigItem
 from zzz_od.backend.config_router import (
     _build_set_fields,
     _build_list_fields,
+    _charge_plan_item_from_dict,
     _enum_options,
     _ro_item_fields_for,
     RouterEntry,
@@ -96,7 +97,10 @@ def test_describe_config_charge_plan_schema():
     config._RO_FIELDS = {'run_times', 'plan_id', 'last_daily_reset_dt', 'skip_plan'}
 
     compendium = MagicMock()
-    compendium.get_charge_plan_category_list = lambda: [ConfigItem('x', '实战模拟室')]
+    compendium.get_charge_plan_category_list = lambda: [
+        ConfigItem('实战模拟室', '实战模拟室'),
+        ConfigItem('特训目标', '特训目标'),
+    ]
     compendium.get_charge_plan_mission_type_list = lambda c: [ConfigItem('x', '基础材料')]
 
     ctx = MagicMock()
@@ -136,3 +140,28 @@ def test_describe_config_charge_plan_schema():
     assert lf['item_kind'] == 'dataclass'
     assert 'add_example' in lf
     assert 'plan_id' not in lf['add_example']  # 过滤 ro
+
+    category_field = next(
+        field for field in lf['item_fields']
+        if field['name'] == 'category_name'
+    )
+    assert category_field['options'] == [
+        {'label': '实战模拟室', 'value': '实战模拟室'},
+        {'label': '特训目标', 'value': '特训目标'},
+    ]
+    assert 'options_source' not in category_field
+
+    mission_type_field = next(
+        field for field in lf['item_fields']
+        if field['name'] == 'mission_type_name'
+    )
+    assert mission_type_field['required'] is False
+    assert '特训目标/合成电池可省略' in mission_type_field['note']
+
+
+def test_charge_plan_training_goal_defaults() -> None:
+    """配置接口省略副本字段时，为特训目标补成校验接受的空值。"""
+    item = _charge_plan_item_from_dict({'category_name': '特训目标'})
+
+    assert item.mission_type_name == ''
+    assert item.mission_name is None

@@ -9,6 +9,7 @@
 在 ZZZ 的等价防线 —— 该 bug 在 ZZZ 虽不存在,但有测试守着,将来重构不易改没。
 """
 
+import inspect
 from unittest.mock import MagicMock
 
 from test.conftest import TestContext
@@ -48,6 +49,18 @@ def _plan(
         plan_times=plan_times,
         plan_id=plan_id,
         skipped=skipped,
+    )
+
+
+def _training_goal(*, plan_id: str = 'training-goal') -> ChargePlanItem:
+    """造一条无次数上限的特训目标计划。"""
+    return ChargePlanItem(
+        category_name='特训目标',
+        mission_type_name='',
+        mission_name=None,
+        run_times=0,
+        plan_times=1,
+        plan_id=plan_id,
     )
 
 
@@ -186,6 +199,15 @@ def test_get_next_plan_all_complete_returns_none() -> None:
     assert config.get_next_plan() is None
 
 
+def test_get_next_plan_training_goal_is_always_pending() -> None:
+    """特训目标没有计划次数，即使遗留配置带有完成计数也应继续运行。"""
+    plan = _training_goal()
+    plan.run_times = plan.plan_times
+    config = _make_config(plans=[plan])
+
+    assert config.get_next_plan() is plan
+
+
 # ---------- all_plan_finished ----------
 
 
@@ -223,6 +245,22 @@ def test_all_plan_finished_ignores_skipped() -> None:
     assert config.all_plan_finished() is True
 
 
+def test_all_plan_finished_training_goal_is_false() -> None:
+    """未跳过的特训目标始终可运行，不能触发整轮完成。"""
+    config = _make_config(plans=[_training_goal()])
+
+    assert config.all_plan_finished() is False
+
+
+def test_all_plan_finished_ignores_training_goal_skipped_this_run() -> None:
+    """特训目标因低电量或无目标跳过后，不阻止本轮正常结束。"""
+    training_goal = _training_goal()
+    training_goal.skipped = True
+    config = _make_config(plans=[training_goal])
+
+    assert config.all_plan_finished() is True
+
+
 # ---------- add_plan_run_times ----------
 
 
@@ -247,6 +285,28 @@ def test_add_plan_run_times_no_match_is_noop() -> None:
     config = _make_config(plans=[_plan(run_times=0, plan_times=1, plan_id='a')])
     config.add_plan_run_times(_plan(run_times=0, plan_times=1, plan_id='zzz'))
     assert config.plan_list[0].run_times == 0
+    config.save.assert_not_called()
+
+
+def test_add_plan_run_times_training_goal_only_finishes_dynamic_child() -> None:
+    """动态副本完成一轮后只改运行态子计划，不把持久特训目标标成完成。"""
+    source = _training_goal(plan_id='smart')
+    child = ChargePlanItem(
+        category_name='区域巡防',
+        mission_type_name='代理人方案培养',
+        mission_name=None,
+        run_times=0,
+        plan_times=1,
+        plan_id='smart',
+    )
+    config = _make_config(plans=[source])
+
+    config.add_plan_run_times(child)
+
+    assert source.run_times == 0
+    assert child.run_times == 1
+    try_next = child.plan_times > child.run_times
+    assert try_next is False
     config.save.assert_not_called()
 
 
@@ -360,6 +420,45 @@ def test_exchange_ether_battery_consumes_60_charge_power() -> None:
     )
 
     assert plan.estimated_charge_power == 60
+
+
+def test_training_goal_uses_minimum_charge_power_before_reading_page() -> None:
+    """进页前先按最低 20 电量拦截完全无法开本的情况。"""
+    assert _training_goal().estimated_charge_power == 20
+
+
+def test_training_goal_is_charge_plan_category_without_mission_type() -> None:
+    """特训目标是顶层计划分类，实际副本由运行时页面决定。"""
+    service = CompendiumService()
+    service.reload()
+
+    category_values = [
+        item.value for item in service.get_charge_plan_category_list()
+    ]
+
+    assert '特训目标' in category_values
+    category = service.get_category_data('训练', '特训目标')
+    assert category is not None
+    assert category.mission_type_list == []
+    assert service.get_charge_plan_mission_type_list('特训目标') == []
+
+
+def test_training_goal_config_is_valid(test_context: TestContext) -> None:
+    """GUI 与配置接口都应接受无需具体副本字段的特训目标。"""
+    test_context.compendium_service.reload()
+
+    assert ChargePlanConfig.validate_item(test_context, _training_goal()) is None
+
+
+def test_charge_plan_member_discovery_does_not_require_runtime_battle_plan(
+    test_context: TestContext,
+) -> None:
+    """状态机初始化会反射读取成员，此时尚未生成特训目标的临时副本。"""
+    app = ChargePlanApp(test_context)
+
+    members = inspect.getmembers(app, predicate=inspect.ismethod)
+
+    assert any(name == '_get_battle_plan' for name, _ in members)
 
 
 def test_exchange_ether_battery_is_dispatched_in_transport(
