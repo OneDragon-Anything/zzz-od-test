@@ -146,6 +146,25 @@ def test_wait_team_list_retries_during_black_loading(
     assert loaded_result.status == '预备编队列表'
 
 
+def test_wait_team_list_accepts_one_normalized_card_marker(
+        monkeypatch: pytest.MonkeyPatch,
+        operation: ChoosePredefinedTeam,
+) -> None:
+    """单人队伍只有一个带空格的小写位置标记时也表示列表已加载。"""
+    operation.last_screenshot = np.zeros((1080, 1920, 3), dtype=np.uint8)
+
+    def run_ocr(_screen: MatLike) -> dict[str, object]:
+        """模拟只识别到单人队伍的一个位置标记。"""
+        return {' 1 p ': object()}
+
+    monkeypatch.setattr(operation.ctx.ocr, 'run_ocr', run_ocr)
+
+    result = operation.wait_team_list()
+
+    assert result.is_success
+    assert result.status == '预备编队列表'
+
+
 def test_wait_team_list_precedes_team_name_recognition(
         operation: ChoosePredefinedTeam,
 ) -> None:

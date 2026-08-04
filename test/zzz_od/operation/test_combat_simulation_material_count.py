@@ -168,8 +168,9 @@ def test_single_material_reward_sums_all_slots(
     test_context: TestContext,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """丁尼等单一材料无需判断品质，直接合并全部奖励格子。"""
+    """丁尼等单一材料合并奖励格子，但忽略上方绳网经验数字。"""
     screen, ocr_map = _reward_screen([('unknown', 5000, 50), ('unknown', 5000, 170)])
+    ocr_map['150'] = _match_list(MatchResult(1, 400, 10, 40, 24))
     monkeypatch.setattr(test_context.ocr, 'run_ocr', lambda _part: ocr_map)
     op = CombatSimulation(test_context, _material_plan())
 

@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 from test.conftest import TestContext
 
+import zzz_od.application.charge_plan.charge_plan_config as charge_plan_config_module
 from zzz_od.application.charge_plan.charge_plan_app import ChargePlanApp
 from zzz_od.application.charge_plan.charge_plan_config import (
     ChargePlanConfig,
@@ -135,6 +136,37 @@ def test_material_plan_without_valid_target_is_safely_finished() -> None:
     assert _material_plan(target='特化以太芯片', goal=0).is_finished is True
 
 
+@pytest.mark.parametrize(
+    ('plan', 'reason'),
+    [
+        (
+            ChargePlanItem(
+                mission_type_name='自定义模板',
+                mission_name='自定义卡组1',
+                run_mode=ChargePlanRunModeEnum.MATERIAL_COUNT.value.value,
+                target_material_name='特化以太芯片',
+                target_material_count=10,
+            ),
+            '当前副本不支持按材料数量运行',
+        ),
+        (_material_plan(target='', goal=10), '目标材料为空'),
+        (_material_plan(target='特化以太芯片', goal=0), '目标材料数必须大于 0'),
+    ],
+)
+def test_invalid_material_plan_logs_warning(
+    monkeypatch: pytest.MonkeyPatch,
+    plan: ChargePlanItem,
+    reason: str,
+) -> None:
+    """配置文件中的非法材料计划会安全停止并留下可定位日志。"""
+    warning = MagicMock()
+    monkeypatch.setattr(charge_plan_config_module.log, 'warning', warning)
+
+    assert plan.is_finished is True
+    warning.assert_called_once()
+    assert f'reason={reason}' in warning.call_args.args[0]
+
+
 def test_validate_material_target_against_selected_mission(
     test_context: TestContext,
 ) -> None:
@@ -204,6 +236,21 @@ def test_add_plan_material_counts_merges_and_saves() -> None:
         '进阶以太芯片': 12,
     }
     config.save.assert_called_once()
+
+
+def test_add_plan_material_counts_finds_plan_without_positive_count() -> None:
+    """找到计划但没有正数可合并时，不误报为计划不存在。"""
+    plan = _material_plan(counts={'特化以太芯片': 4})
+    config = _make_config([plan])
+
+    found = config.add_plan_material_counts(
+        plan,
+        {'特化以太芯片': 0, '进阶以太芯片': -1},
+    )
+
+    assert found is True
+    assert plan.material_counts == {'特化以太芯片': 4}
+    config.save.assert_not_called()
 
 
 def test_material_fields_round_trip_in_dict() -> None:
