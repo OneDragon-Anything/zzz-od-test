@@ -305,6 +305,8 @@ def test_add_plan_run_times_training_goal_only_finishes_dynamic_child() -> None:
 
     assert source.run_times == 0
     assert child.run_times == 1
+    try_next = child.plan_times > child.run_times
+    assert try_next is False
     config.save.assert_not_called()
 
 
