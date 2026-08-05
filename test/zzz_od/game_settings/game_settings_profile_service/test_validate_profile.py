@@ -65,3 +65,18 @@ def test_validate_profile_rejects_non_reg_file(tmp_path: Path) -> None:
 
     with pytest.raises(GameSettingsProfileError, match=r"\.reg"):
         _service().validate_profile(str(profile_path))
+
+
+def test_validate_profile_wraps_file_system_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    profile_path = tmp_path / "profile.reg"
+
+    def raise_permission_error(path: Path) -> bool:
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(Path, "is_file", raise_permission_error)
+
+    with pytest.raises(GameSettingsProfileError, match="无法读取"):
+        _service().validate_profile(str(profile_path))
