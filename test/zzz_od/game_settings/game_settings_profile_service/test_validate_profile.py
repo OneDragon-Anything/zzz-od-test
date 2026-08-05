@@ -63,5 +63,5 @@ def test_validate_profile_rejects_non_reg_file(tmp_path: Path) -> None:
     profile_path = tmp_path / "profile.txt"
     profile_path.write_text("not a registry profile", encoding="utf-8")
 
-    with pytest.raises(GameSettingsProfileError, match=".reg"):
+    with pytest.raises(GameSettingsProfileError, match=r"\.reg"):
         _service().validate_profile(str(profile_path))
