@@ -21,12 +21,13 @@ class FakeGameAccountConfig:
 
     clients: dict[int, str] = {}
 
-    def __init__(self, idx: int):
-        self.idx: int = idx
-
-    @property
-    def game_client(self) -> str:
-        return FakeGameAccountConfig.clients.get(self.idx, 'cn')
+    @classmethod
+    def has_multi_instance_same_client(cls, instance_indices: list[int]) -> bool:
+        client_count: dict[str, int] = {}
+        for idx in instance_indices:
+            client = FakeGameAccountConfig.clients.get(idx, 'cn')
+            client_count[client] = client_count.get(client, 0) + 1
+        return any(count > 1 for count in client_count.values())
 
 
 def _build_cfg(
