@@ -22,12 +22,13 @@ class FakeGameAccountConfig:
     clients: dict[int, str] = {}
 
     @classmethod
-    def has_multi_instance_same_client(cls, instance_indices: list[int]) -> bool:
+    def has_multi_instance_same_client(cls, current_idx: int, instance_indices: list[int]) -> bool:
+        current_client = FakeGameAccountConfig.clients.get(current_idx, 'cn')
         client_count: dict[str, int] = {}
         for idx in instance_indices:
             client = FakeGameAccountConfig.clients.get(idx, 'cn')
             client_count[client] = client_count.get(client, 0) + 1
-        return any(count > 1 for count in client_count.values())
+        return client_count.get(current_client, 0) > 1
 
 
 def _build_cfg(
@@ -115,6 +116,20 @@ class TestCurrentInstanceShouldForceLogin:
             monkeypatch,
             clients={1: 'cn', 2: 'cnb', 3: 'intl'},
             active_idx=2,
+            active_in_od_indices=[1, 2, 3],
+            instance_run=InstanceRun.ALL,
+        )
+        assert cfg.current_instance_should_force_login is False
+
+    def test_all_mode_other_client_multi_current_sole(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """全部实例模式，其他客户端类型有多个实例，当前客户端仅当前实例 → 不强制登录。"""
+        cfg = _build_cfg(
+            monkeypatch,
+            clients={1: 'cn', 2: 'cn', 3: 'intl'},
+            active_idx=3,
             active_in_od_indices=[1, 2, 3],
             instance_run=InstanceRun.ALL,
         )
