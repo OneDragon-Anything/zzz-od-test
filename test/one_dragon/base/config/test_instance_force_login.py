@@ -105,6 +105,34 @@ class TestCurrentInstanceShouldForceLogin:
         )
         assert cfg.current_instance_should_force_login is False
 
+    def test_all_mode_cross_client_trio(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """全部实例模式，国服 / B服 / 国际服各一个实例 → 跨客户端类型不互相触发强制登录。"""
+        cfg = _build_cfg(
+            monkeypatch,
+            clients={1: 'cn', 2: 'cnb', 3: 'intl'},
+            active_idx=2,
+            active_in_od_indices=[1, 2, 3],
+            instance_run=InstanceRun.ALL,
+        )
+        assert cfg.current_instance_should_force_login is False
+
+    def test_all_mode_same_client_not_in_od(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """全部实例模式，同客户端类型有两个实例但其中一个不在一条龙中运行 → 不需要强制登录。"""
+        cfg = _build_cfg(
+            monkeypatch,
+            clients={1: 'intl', 2: 'intl'},
+            active_idx=1,
+            active_in_od_indices=[1],
+            instance_run=InstanceRun.ALL,
+        )
+        assert cfg.current_instance_should_force_login is False
+
     def test_all_mode_single_instance(
         self,
         monkeypatch: pytest.MonkeyPatch,
