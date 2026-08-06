@@ -1,7 +1,7 @@
 """``current_instance_should_force_login`` 判定逻辑单测。
 
-国服 / B服 / 国际服 是三个不同的游戏客户端，各自保留一套登录状态；
-只有当一条龙中同客户端类型的实例多于一个时，才需要强制重新登录
+国服 / B服 / 国际服 是三个不同的游戏客户端,各自保留一套登录状态;
+只有当一条龙中同客户端类型的实例多于一个时,才需要强制重新登录
 以保证登录的是该实例配置的账号。
 """
 
@@ -17,7 +17,7 @@ from one_dragon.base.config.one_dragon_config import (
 
 
 class FakeGameAccountConfig:
-    """按实例 idx 返回预设的客户端类型，隔离真实配置文件。"""
+    """按实例 idx 返回预设的客户端类型,隔离真实配置文件。"""
 
     clients: dict[int, str] = {}
 
@@ -41,7 +41,7 @@ def _build_cfg(
     monkeypatch.setattr(od_config, 'GameAccountConfig', FakeGameAccountConfig)
     FakeGameAccountConfig.clients = clients
     monkeypatch.setattr(OneDragonConfig, 'instance_run', property(lambda self: instance_run.value.value))
-    # 用 __new__ 构建空白对象，跳过 YamlConfig.__init__，避免读取真实工作目录的 one_dragon 配置
+    # 用 __new__ 构建空白对象,跳过 YamlConfig.__init__,避免读取真实工作目录的 one_dragon 配置
     cfg = OneDragonConfig.__new__(OneDragonConfig)
     cfg._temp_instance_indices = None
     cfg.instance_list = [
@@ -57,7 +57,7 @@ def _build_cfg(
 
 
 class TestGameClient:
-    """``GameAccountConfig.game_client`` 归类：国服 / B服 / 国际服 三种客户端。"""
+    """``GameAccountConfig.game_client`` 归类:国服 / B服 / 国际服 三种客户端。"""
 
     @pytest.mark.parametrize('region, expected_client', [
         ('cn', 'cn'),
@@ -85,7 +85,7 @@ class TestCurrentInstanceShouldForceLogin:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """全部实例模式，同客户端（国际服）有多个实例 → 需要强制登录。"""
+        """全部实例模式,同客户端(国际服)有多个实例 → 需要强制登录。"""
         cfg = _build_cfg(
             monkeypatch,
             clients={1: 'cn', 2: 'intl', 3: 'intl'},
@@ -99,7 +99,7 @@ class TestCurrentInstanceShouldForceLogin:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """全部实例模式，每个客户端类型都只有一个实例 → 不需要强制登录。"""
+        """全部实例模式,每个客户端类型都只有一个实例 → 不需要强制登录。"""
         cfg = _build_cfg(
             monkeypatch,
             clients={1: 'cn', 2: 'intl'},
@@ -113,7 +113,7 @@ class TestCurrentInstanceShouldForceLogin:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """全部实例模式，国服 / B服 / 国际服各一个实例 → 跨客户端类型不互相触发强制登录。"""
+        """全部实例模式,国服 / B服 / 国际服各一个实例 → 跨客户端类型不互相触发强制登录。"""
         cfg = _build_cfg(
             monkeypatch,
             clients={1: 'cn', 2: 'cnb', 3: 'intl'},
@@ -127,7 +127,7 @@ class TestCurrentInstanceShouldForceLogin:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """全部实例模式，其他客户端类型有多个实例，当前客户端仅当前实例 → 不强制登录。"""
+        """全部实例模式,其他客户端类型有多个实例,当前客户端仅当前实例 → 不强制登录。"""
         cfg = _build_cfg(
             monkeypatch,
             clients={1: 'cn', 2: 'cn', 3: 'intl'},
@@ -141,7 +141,7 @@ class TestCurrentInstanceShouldForceLogin:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """全部实例模式，同客户端类型有两个实例但其中一个不在一条龙中运行 → 不需要强制登录。"""
+        """全部实例模式,同客户端类型有两个实例但其中一个不在一条龙中运行 → 不需要强制登录。"""
         cfg = _build_cfg(
             monkeypatch,
             clients={1: 'intl', 2: 'intl'},
@@ -155,7 +155,7 @@ class TestCurrentInstanceShouldForceLogin:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """全部实例模式，设置临时实例列表含两个同客户端实例（即使都未勾选在一条龙中运行）→ 需要强制登录。"""
+        """全部实例模式,设置临时实例列表含两个同客户端实例(即使都未勾选在一条龙中运行) → 需要强制登录。"""
         cfg = _build_cfg(
             monkeypatch,
             clients={1: 'intl', 2: 'intl'},
@@ -170,7 +170,7 @@ class TestCurrentInstanceShouldForceLogin:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """全部实例模式，临时实例列表只含当前实例 → 不需要强制登录。"""
+        """全部实例模式,临时实例列表只含当前实例 → 不需要强制登录。"""
         cfg = _build_cfg(
             monkeypatch,
             clients={1: 'intl', 2: 'intl'},
@@ -185,7 +185,7 @@ class TestCurrentInstanceShouldForceLogin:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """全部实例模式，只有一个实例 → 不需要强制登录。"""
+        """全部实例模式,只有一个实例 → 不需要强制登录。"""
         cfg = _build_cfg(
             monkeypatch,
             clients={1: 'intl'},
@@ -199,7 +199,7 @@ class TestCurrentInstanceShouldForceLogin:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """仅运行当前模式，即使同客户端有多个实例 → 不需要强制登录。"""
+        """仅运行当前模式,即使同客户端有多个实例 → 不需要强制登录。"""
         cfg = _build_cfg(
             monkeypatch,
             clients={1: 'intl', 2: 'intl'},
