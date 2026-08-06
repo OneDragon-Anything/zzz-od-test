@@ -41,7 +41,9 @@ def _build_cfg(
     monkeypatch.setattr(od_config, 'GameAccountConfig', FakeGameAccountConfig)
     FakeGameAccountConfig.clients = clients
     monkeypatch.setattr(OneDragonConfig, 'instance_run', property(lambda self: instance_run.value.value))
-    cfg = OneDragonConfig()
+    # 用 __new__ 构建空白对象，跳过 YamlConfig.__init__，避免读取真实工作目录的 one_dragon 配置
+    cfg = OneDragonConfig.__new__(OneDragonConfig)
+    cfg._temp_instance_indices = None
     cfg.instance_list = [
         OneDragonInstance(
             idx,
@@ -147,6 +149,36 @@ class TestCurrentInstanceShouldForceLogin:
             active_in_od_indices=[1],
             instance_run=InstanceRun.ALL,
         )
+        assert cfg.current_instance_should_force_login is False
+
+    def test_all_mode_temp_instances_multi_same_client(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """全部实例模式，设置临时实例列表含两个同客户端实例（即使都未勾选在一条龙中运行）→ 需要强制登录。"""
+        cfg = _build_cfg(
+            monkeypatch,
+            clients={1: 'intl', 2: 'intl'},
+            active_idx=1,
+            active_in_od_indices=[],
+            instance_run=InstanceRun.ALL,
+        )
+        cfg.set_temp_instance_indices([1, 2])
+        assert cfg.current_instance_should_force_login is True
+
+    def test_all_mode_temp_instances_only_current(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """全部实例模式，临时实例列表只含当前实例 → 不需要强制登录。"""
+        cfg = _build_cfg(
+            monkeypatch,
+            clients={1: 'intl', 2: 'intl'},
+            active_idx=1,
+            active_in_od_indices=[1, 2],
+            instance_run=InstanceRun.ALL,
+        )
+        cfg.set_temp_instance_indices([1])
         assert cfg.current_instance_should_force_login is False
 
     def test_all_mode_single_instance(
