@@ -1252,6 +1252,19 @@ class TestFetchProgressRemoteCallbacks:
             'https://proxy.example/https://github.example/repo.git',
         )
 
+    def test_gh_proxy_trailing_slash_builtin_line_is_deduplicated(self, git_service: GitService) -> None:
+        git_service.env_config.is_gh_proxy = True
+        git_service.env_config.gh_proxy_url = 'https://ghfast.top/'
+
+        assert git_service._get_repository_candidates() == [
+            (GITHUB_REPOSITORY, 'https://ghfast.top/https://github.example/repo.git'),
+            (GITHUB_REPOSITORY, 'https://gh-proxy.com/https://github.example/repo.git'),
+            (GITHUB_REPOSITORY, 'https://ghproxy.net/https://github.example/repo.git'),
+            (GITHUB_REPOSITORY, 'https://ghp.ci/https://github.example/repo.git'),
+            (CNB_REPOSITORY, 'https://cnb.example/repo.git'),
+            (GITEE_REPOSITORY, 'https://gitee.example/repo.git'),
+        ]
+
     def test_successful_proxied_fetch_records_raw_repository_url(
         self,
         git_service: GitService,

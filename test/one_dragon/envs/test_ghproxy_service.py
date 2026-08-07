@@ -42,3 +42,25 @@ def test_candidates_ignore_blank_last_line() -> None:
         'https://ghproxy.net',
         'https://ghp.ci',
     ]
+
+
+def test_candidates_normalize_trailing_slash_before_deduplicate() -> None:
+    service = create_service('https://ghfast.top/')
+
+    assert service.get_proxy_candidates() == [
+        'https://ghfast.top',
+        'https://gh-proxy.com',
+        'https://ghproxy.net',
+        'https://ghp.ci',
+    ]
+
+
+def test_candidates_normalize_blank_with_slash() -> None:
+    service = create_service(' / ')
+
+    assert service.get_proxy_candidates() == [
+        'https://ghfast.top',
+        'https://gh-proxy.com',
+        'https://ghproxy.net',
+        'https://ghp.ci',
+    ]
