@@ -1,10 +1,16 @@
 """测试键鼠脚本的插件化读取（key_sim_runner.py / key_sim_yaml_config.py）。"""
 
+import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
-from one_dragon.base.operation.application.plugin_info import PluginInfo
+from one_dragon.base.operation.application.application_factory import ApplicationFactory
+from one_dragon.base.operation.application.application_factory_manager import (
+    ApplicationFactoryManager,
+)
+from one_dragon.base.operation.application.plugin_info import PluginInfo, PluginSource
 from zzz_od.operation.key_sim_runner import KeySimRunner
 from zzz_od.operation.key_sim_yaml_config import KeySimYamlConfig
 
@@ -102,6 +108,18 @@ class TestKeySimYamlConfig:
         config = KeySimYamlConfig('不存在的脚本', plugin_dir=None)
         assert config.file_path == str(tmp_path / 'config' / 'key_sim' / '不存在的脚本.yml')
 
+    def test_duplicate_plugin_yml_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from one_dragon.utils import os_utils
+
+        # 同一脚本目录内多个同名脚本 → 显式报错，避免按未声明顺序执行
+        monkeypatch.setattr(os_utils, 'get_work_dir', lambda: str(tmp_path))
+        plugin_dir = tmp_path / 'plugins' / 'my_plugin'
+        _write_yml(plugin_dir / 'scripts' / 'a' / '脚本.yml', [{'op_name': 'a'}])
+        _write_yml(plugin_dir / 'scripts' / 'b' / '脚本.yml', [{'op_name': 'b'}])
+
+        with pytest.raises(ValueError, match='重名'):
+            KeySimYamlConfig('脚本', plugin_dir=plugin_dir / 'scripts')
+
 
 class TestKeySimRunnerLoadConfig:
     """KeySimRunner 的配置加载（按当前运行应用查插件注册目录）。"""
@@ -177,3 +195,64 @@ class TestKeySimRunnerLoadConfig:
         config = runner._load_key_sim_config()
         operations = config.data.get('operations', [])
         assert operations == [{'op_name': '等待秒数', 'seconds': 0.1}]
+
+
+class TestRegisterKeySimDir:
+    """插件注册时 KEY_SIM_DIR 的合法性校验。"""
+
+    @staticmethod
+    def _make_const_module(key_sim_dir_value: object) -> ModuleType:
+        const_mod = ModuleType('fake_pkg.fake_const')
+        const_mod.APP_ID = 'fake_plugin'
+        const_mod.APP_NAME = '假插件'
+        const_mod.DEFAULT_GROUP = True
+        const_mod.NEED_NOTIFY = True
+        const_mod.KEY_SIM_DIR = key_sim_dir_value
+        return const_mod
+
+    def _register(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        test_context,
+        key_sim_dir_value: object,
+    ) -> PluginInfo:
+        """构造工厂与 const 模块，走插件注册流程返回 PluginInfo。"""
+        const_mod = self._make_const_module(key_sim_dir_value)
+        monkeypatch.setitem(sys.modules, 'fake_pkg.fake_const', const_mod)
+        (tmp_path / 'fake_const.py').write_text('', encoding='utf-8')
+        factory = ApplicationFactory(const_mod)
+        manager = ApplicationFactoryManager(test_context, [])
+        return manager._register_plugin_metadata(
+            factory, tmp_path / 'fake_factory.py', 'fake_pkg.fake_factory',
+            PluginSource.THIRD_PARTY,
+        )
+
+    def test_valid_relative_dir_registered(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, test_context
+    ) -> None:
+        plugin_info = self._register(tmp_path, monkeypatch, test_context, 'scripts')
+        assert plugin_info.key_sim_dir == 'scripts'
+
+    def test_empty_dir_registered(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, test_context) -> None:
+        # 未声明 KEY_SIM_DIR 时按空字符串处理，不拦截注册
+        plugin_info = self._register(tmp_path, monkeypatch, test_context, '')
+        assert plugin_info.key_sim_dir == ''
+
+    def test_non_string_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, test_context
+    ) -> None:
+        with pytest.raises(ImportError, match='必须是字符串'):
+            self._register(tmp_path, monkeypatch, test_context, 123)
+
+    def test_absolute_path_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, test_context
+    ) -> None:
+        with pytest.raises(ImportError, match='必须是相对路径'):
+            self._register(tmp_path, monkeypatch, test_context, 'C:/etc/scripts')
+
+    def test_parent_path_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, test_context
+    ) -> None:
+        with pytest.raises(ImportError, match='必须是相对路径'):
+            self._register(tmp_path, monkeypatch, test_context, '../scripts')
