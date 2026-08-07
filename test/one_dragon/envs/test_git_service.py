@@ -1319,6 +1319,33 @@ class TestFetchProgressRemoteCallbacks:
         assert git_service.env_config.gh_proxy_url == 'https://gh-proxy.com'
         assert git_service.env_config.last_repository_url == GITHUB_REPOSITORY.url
 
+    def test_get_latest_tag_records_success_gh_proxy_line(
+        self,
+        git_service: GitService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        git_service.env_config.repository_url = RepoConfig.AUTO_REPOSITORY_VALUE
+        git_service.env_config.is_gh_proxy = True
+
+        class FakeRemote:
+            def list_heads(self, **kwargs: object) -> list[SimpleNamespace]:
+                return [SimpleNamespace(name='refs/tags/v1.0.0')]
+
+        def fake_ensure_remote(repository_url: str) -> FakeRemote:
+            if 'ghfast.top' in repository_url:
+                raise TimeoutError(repository_url)
+            return FakeRemote()
+
+        monkeypatch.setattr(git_service, 'check_repo_exists', lambda: True)
+        monkeypatch.setattr(git_service, '_ensure_remote', fake_ensure_remote)
+        monkeypatch.setattr(git_service, '_restore_origin', lambda: True)
+
+        latest_stable, latest_beta = git_service.get_latest_tag()
+
+        assert latest_stable == 'v1.0.0'
+        assert latest_beta == ''
+        assert git_service.env_config.gh_proxy_url == 'https://gh-proxy.com'
+
     def test_gh_proxy_all_lines_failed_returns_remote_unavailable(
         self,
         git_service: GitService,
