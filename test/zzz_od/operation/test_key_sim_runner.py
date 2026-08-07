@@ -256,3 +256,10 @@ class TestRegisterKeySimDir:
     ) -> None:
         with pytest.raises(ImportError, match='必须是相对路径'):
             self._register(tmp_path, monkeypatch, test_context, '../scripts')
+
+    def test_rooted_path_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, test_context
+    ) -> None:
+        # Windows 盘根路径（如 \outside）is_absolute 为 False，但拼接会逃出插件目录
+        with pytest.raises(ImportError, match='必须是相对路径'):
+            self._register(tmp_path, monkeypatch, test_context, r'\outside')
