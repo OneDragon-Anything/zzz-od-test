@@ -2,6 +2,7 @@
 
 import shutil
 import sys
+import time
 import zipfile
 from pathlib import Path
 
@@ -91,14 +92,21 @@ class TestBackupSrcDir:
         assert error == ''
         assert backup_dir is None
 
-    def test_backup_unique_name(self, tmp_path: Path) -> None:
+    def test_backup_unique_name(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        # 固定时间戳，确保撞上与 _backup_src_dir 相同名称的已有备份，走到加后缀分支
+        monkeypatch.setattr(time, 'strftime', lambda _fmt: '20250101_000000')
         src = tmp_path / 'src'
         src.mkdir()
-        # 制造一个同名前缀目录，验证重名时自动加后缀
-        (tmp_path / 'src.corrupted.20250101_000000').mkdir()
-        backup_dir, _ = _backup_src_dir(src)
+        occupied = tmp_path / 'src.corrupted.20250101_000000'
+        occupied.mkdir()
+        (occupied / 'keep.txt').write_text('x', encoding='utf-8')
+
+        backup_dir, error = _backup_src_dir(src)
+        assert error == ''
         assert backup_dir is not None
-        assert backup_dir != tmp_path / 'src.corrupted.20250101_000000'
+        assert backup_dir.name.startswith('src.corrupted.20250101_000000.')
+        assert backup_dir != occupied
+        assert (occupied / 'keep.txt').is_file(), '重名时不应覆盖已有备份'
 
 
 class TestExtractSrcMembers:
@@ -237,6 +245,17 @@ class TestManifestCompatibility:
         assert not compatible
         assert '更新' in message
 
+    def test_bad_zip_returns_incompatible(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        # 下载文件不是合法 zip（如 HTML 错误页）时，应返回明确的失败提示而非抛异常
+        monkeypatch.setattr(sys, '_MEIPASS', str(tmp_path), raising=False)
+        self._write_meipass_manifest(tmp_path, b'local manifest')
+        broken_zip = tmp_path / 'broken.zip'
+        broken_zip.write_bytes(b'<html>error page</html>')
+
+        compatible, message = _check_downloaded_manifest_compatible(broken_zip)
+        assert not compatible
+        assert '损坏' in message
+
     def test_no_local_manifest_skips(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sys, '_MEIPASS', str(tmp_path), raising=False)
         zip_path = self._make_download_zip(tmp_path, b'whatever')
@@ -262,6 +281,18 @@ class TestManifestCompatibility:
 
 class TestDownloadLatest:
     """下载最新版本（mock 网络与文件操作）。"""
+
+    def test_download_config_incomplete(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        # project.yml 存在但缺必需键（如 github_homepage）时，应视为配置无效
+        meipass = tmp_path / 'meipass'
+        project_yml = meipass / 'resources' / 'config' / 'project.yml'
+        project_yml.parent.mkdir(parents=True)
+        project_yml.write_text('project_name: "FakeDragon"\n', encoding='utf-8')
+        monkeypatch.setattr(sys, '_MEIPASS', str(meipass), raising=False)
+
+        success, message = download_latest_version(tmp_path / 'src')
+        assert not success
+        assert '无法读取项目配置' in message
 
     def test_download_config_missing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sys, '_MEIPASS', str(tmp_path), raising=False)
