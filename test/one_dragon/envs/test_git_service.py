@@ -1210,9 +1210,47 @@ class TestFetchProgressRemoteCallbacks:
 
         assert git_service._get_repository_candidates() == [
             (GITHUB_REPOSITORY, 'https://proxy.example/https://github.example/repo.git'),
+            (GITHUB_REPOSITORY, 'https://ghfast.top/https://github.example/repo.git'),
+            (GITHUB_REPOSITORY, 'https://gh-proxy.com/https://github.example/repo.git'),
+            (GITHUB_REPOSITORY, 'https://ghproxy.net/https://github.example/repo.git'),
+            (GITHUB_REPOSITORY, 'https://ghp.ci/https://github.example/repo.git'),
             (CNB_REPOSITORY, 'https://cnb.example/repo.git'),
             (GITEE_REPOSITORY, 'https://gitee.example/repo.git'),
         ]
+
+    def test_gh_proxy_uses_builtin_lines_when_no_last_line(self, git_service: GitService) -> None:
+        git_service.env_config.is_gh_proxy = True
+
+        assert git_service._get_repository_candidates() == [
+            (GITHUB_REPOSITORY, 'https://ghfast.top/https://github.example/repo.git'),
+            (GITHUB_REPOSITORY, 'https://gh-proxy.com/https://github.example/repo.git'),
+            (GITHUB_REPOSITORY, 'https://ghproxy.net/https://github.example/repo.git'),
+            (GITHUB_REPOSITORY, 'https://ghp.ci/https://github.example/repo.git'),
+            (CNB_REPOSITORY, 'https://cnb.example/repo.git'),
+            (GITEE_REPOSITORY, 'https://gitee.example/repo.git'),
+        ]
+
+    def test_gh_proxy_last_line_comes_first_without_duplicate(self, git_service: GitService) -> None:
+        git_service.env_config.is_gh_proxy = True
+        git_service.env_config.gh_proxy_url = 'https://ghproxy.net'
+
+        assert git_service._get_repository_candidates() == [
+            (GITHUB_REPOSITORY, 'https://ghproxy.net/https://github.example/repo.git'),
+            (GITHUB_REPOSITORY, 'https://ghfast.top/https://github.example/repo.git'),
+            (GITHUB_REPOSITORY, 'https://gh-proxy.com/https://github.example/repo.git'),
+            (GITHUB_REPOSITORY, 'https://ghp.ci/https://github.example/repo.git'),
+            (CNB_REPOSITORY, 'https://cnb.example/repo.git'),
+            (GITEE_REPOSITORY, 'https://gitee.example/repo.git'),
+        ]
+
+    def test_gh_proxy_trailing_slash_is_normalized(self, git_service: GitService) -> None:
+        git_service.env_config.is_gh_proxy = True
+        git_service.env_config.gh_proxy_url = 'https://proxy.example/'
+
+        assert git_service._get_repository_candidates()[0] == (
+            GITHUB_REPOSITORY,
+            'https://proxy.example/https://github.example/repo.git',
+        )
 
     def test_successful_proxied_fetch_records_raw_repository_url(
         self,
@@ -1235,6 +1273,72 @@ class TestFetchProgressRemoteCallbacks:
         assert git_service._fetch_remote()[0] is GitSyncStatus.SUCCESS
         assert attempted_urls == ['https://proxy.example/https://github.example/repo.git']
         assert git_service.env_config.last_repository_url == GITHUB_REPOSITORY.url
+        assert git_service.env_config.gh_proxy_url == 'https://proxy.example'
+
+    def test_gh_proxy_switches_line_and_records_success_line(
+        self,
+        git_service: GitService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        attempted_urls: list[str] = []
+        git_service.env_config.repository_url = RepoConfig.AUTO_REPOSITORY_VALUE
+        git_service.env_config.is_gh_proxy = True
+
+        def fake_fetch(
+            repository_url: str,
+            progress_callback: object,
+            stage_start: float,
+            stage_end: float,
+            tag_name: str | None,
+        ) -> None:
+            attempted_urls.append(repository_url)
+            if 'ghfast.top' in repository_url:
+                raise TimeoutError(repository_url)
+
+        monkeypatch.setattr(git_service, '_fetch_remote_once', fake_fetch)
+        monkeypatch.setattr(git_service, '_restore_origin', lambda: True)
+
+        assert git_service._fetch_remote()[0] is GitSyncStatus.SUCCESS
+        assert attempted_urls == [
+            'https://ghfast.top/https://github.example/repo.git',
+            'https://gh-proxy.com/https://github.example/repo.git',
+        ]
+        assert git_service.env_config.gh_proxy_url == 'https://gh-proxy.com'
+        assert git_service.env_config.last_repository_url == GITHUB_REPOSITORY.url
+
+    def test_gh_proxy_all_lines_failed_returns_remote_unavailable(
+        self,
+        git_service: GitService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        attempted_urls: list[str] = []
+        git_service.env_config.repository_url = RepoConfig.AUTO_REPOSITORY_VALUE
+        git_service.env_config.is_gh_proxy = True
+
+        def fake_fetch(
+            repository_url: str,
+            progress_callback: object,
+            stage_start: float,
+            stage_end: float,
+            tag_name: str | None,
+        ) -> None:
+            attempted_urls.append(repository_url)
+            raise TimeoutError(repository_url)
+
+        monkeypatch.setattr(git_service, '_fetch_remote_once', fake_fetch)
+        monkeypatch.setattr(git_service, '_restore_origin', lambda: True)
+
+        assert git_service._fetch_remote()[0] is GitSyncStatus.REMOTE_UNAVAILABLE
+        assert attempted_urls == [
+            'https://ghfast.top/https://github.example/repo.git',
+            'https://gh-proxy.com/https://github.example/repo.git',
+            'https://ghproxy.net/https://github.example/repo.git',
+            'https://ghp.ci/https://github.example/repo.git',
+            'https://cnb.example/repo.git',
+            'https://gitee.example/repo.git',
+        ]
+        assert git_service.env_config.gh_proxy_url == ''
+        assert git_service.env_config.last_repository_url == ''
 
     def test_all_missing_object_failures_trigger_repository_rebuild(
         self,
