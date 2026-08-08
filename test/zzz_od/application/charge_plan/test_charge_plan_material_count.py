@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 from test.conftest import TestContext
 
+import zzz_od.application.charge_plan.charge_plan_app as charge_plan_app_module
 import zzz_od.application.charge_plan.charge_plan_config as charge_plan_config_module
 from zzz_od.application.charge_plan.charge_plan_app import ChargePlanApp
 from zzz_od.application.charge_plan.charge_plan_config import (
@@ -240,6 +241,28 @@ def test_validate_material_target_against_selected_mission(
     error = ChargePlanConfig.validate_item(test_context, invalid)
     assert error is not None
     assert 'target_material_name' in error
+
+
+def test_invalid_material_target_is_skipped_before_transport(
+    test_context: TestContext,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """YAML 中的非法目标材料会在传送前跳过且不消耗电量。"""
+    plan = _material_plan(target='特化物理芯片')
+    app = ChargePlanApp(test_context)
+    app.config = _make_config([plan])
+    app.current_plan = plan
+    warning = MagicMock()
+    monkeypatch.setattr(charge_plan_app_module.log, 'warning', warning)
+
+    result = app.check_before_transport()
+
+    assert result.is_success
+    assert result.status == ChargePlanApp.STATUS_FIND_NEXT_PLAN
+    assert plan.skipped is True
+    assert app.last_tried_plan is plan
+    warning.assert_called_once()
+    assert 'target_material_name' in warning.call_args.args[0]
 
 
 def test_validate_unknown_run_mode(test_context: TestContext) -> None:
