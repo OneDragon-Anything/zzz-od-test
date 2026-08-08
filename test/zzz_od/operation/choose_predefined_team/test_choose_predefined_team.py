@@ -118,6 +118,15 @@ def get_predefined_deploy_area(test_context: FixtureTestContext) -> ScreenArea:
     return area
 
 
+def _point_in_rect(
+        point: Point,
+        rect: tuple[int, int, int, int],
+) -> bool:
+    """判断点击坐标是否位于指定区域。"""
+    x1, y1, x2, y2 = rect
+    return x1 <= point.x <= x2 and y1 <= point.y <= y2
+
+
 def test_predefined_deploy_uses_exact_white_text(
         test_context: FixtureTestContext,
 ) -> None:
@@ -134,14 +143,21 @@ def test_choose_team_selects_target_while_confirm_is_disabled(
         click_recorder: list[Point],
         operation: ChoosePredefinedTeam,
 ) -> None:
-    """确认按钮为灰色时应选择目标队伍，不得提前进入确认节点。"""
+    """确认按钮为灰色时应选择目标队伍且不得提前进入确认节点。"""
     test_context.add_mock_screenshot(load_screen('预备编队', '未选择'))
     operation.screenshot()
 
     result = operation.choose_team()
 
     assert result.result == OperationRoundResultEnum.WAIT
-    assert click_recorder
+    assert len(click_recorder) == 1
+    clicked_point = click_recorder[0]
+    assert _point_in_rect(clicked_point, TEAM_ONE_CARD_RECT)
+    deploy_rect = get_predefined_deploy_area(test_context).pc_rect
+    assert not _point_in_rect(
+        clicked_point,
+        (deploy_rect.x1, deploy_rect.y1, deploy_rect.x2, deploy_rect.y2),
+    )
 
 
 def test_wait_team_list_retries_during_black_loading(
@@ -194,6 +210,7 @@ def test_wait_team_list_precedes_team_name_recognition(
 
 
 def test_click_confirm_accepts_enabled_button(
+        test_context: FixtureTestContext,
         click_recorder: list[Point],
         operation: ChoosePredefinedTeam,
 ) -> None:
@@ -203,7 +220,13 @@ def test_click_confirm_accepts_enabled_button(
     result = operation.click_confirm()
 
     assert result.is_success
-    assert click_recorder
+    assert len(click_recorder) == 1
+    clicked_point = click_recorder[0]
+    deploy_rect = get_predefined_deploy_area(test_context).pc_rect
+    assert _point_in_rect(
+        clicked_point,
+        (deploy_rect.x1, deploy_rect.y1, deploy_rect.x2, deploy_rect.y2),
+    )
 
 
 @pytest.mark.parametrize(
