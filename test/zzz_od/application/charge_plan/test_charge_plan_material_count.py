@@ -50,6 +50,19 @@ def test_legacy_plan_defaults_to_run_times_mode() -> None:
     assert plan.is_finished is False
 
 
+def test_unknown_run_mode_is_safely_finished(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """未知运行方式会安全停止，避免静默按次数执行。"""
+    plan = ChargePlanItem(run_mode='unknown')
+    warning = MagicMock()
+    monkeypatch.setattr(charge_plan_config_module.log, 'warning', warning)
+
+    assert plan.is_finished is True
+    warning.assert_called_once()
+    assert 'run_mode=unknown' in warning.call_args.args[0]
+
+
 @pytest.mark.parametrize(
     ('value', 'expected'),
     [
@@ -227,6 +240,18 @@ def test_validate_material_target_against_selected_mission(
     error = ChargePlanConfig.validate_item(test_context, invalid)
     assert error is not None
     assert 'target_material_name' in error
+
+
+def test_validate_unknown_run_mode(test_context: TestContext) -> None:
+    """配置接口拒绝未定义的运行方式。"""
+    plan = ChargePlanItem(run_mode='unknown')
+
+    error = ChargePlanConfig.validate_item(test_context, plan)
+
+    assert error is not None
+    assert 'run_mode unknown' in error
+    assert 'material_count' in error
+    assert 'run_times' in error
 
 
 def test_config_selects_by_material_progress() -> None:
