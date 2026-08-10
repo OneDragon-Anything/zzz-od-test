@@ -27,9 +27,8 @@ def create_git_service(tmp_path: Path) -> GitService:
         force_update=False,
     )
     return GitService(
-        SimpleNamespace(),
         env_config,
-        SimpleNamespace(),
+        SimpleNamespace(primary_branch='main'),
         repo_dir=str(tmp_path),
     )
 
