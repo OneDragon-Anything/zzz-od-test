@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from one_dragon.base.operation.application_base import Application
 from one_dragon.base.operation.operation_base import OperationResult
 from zzz_od.application.zzz_application import ZApplication
@@ -50,14 +52,17 @@ def test_return_to_world_failure_changes_final_result() -> None:
         )
         app.after_operation_done(result)
 
+    back_cls.assert_called_once_with(app.ctx)
+    back_cls.return_value.execute.assert_called_once_with()
     parent_after_done.assert_called_once_with(app, result)
     assert not result.success
     assert result.status == '返回大世界失败: 未能识别当前画面'
 
 
-def test_business_failure_does_not_return_to_world() -> None:
+@pytest.mark.parametrize('status', ['业务失败', '执行超时', '人工结束'])
+def test_unsuccessful_result_does_not_return_to_world(status: str) -> None:
     app = _make_app()
-    result = OperationResult(success=False, status='业务失败')
+    result = OperationResult(success=False, status=status)
 
     with (
         patch('zzz_od.application.zzz_application.BackToNormalWorld') as back_cls,
@@ -68,7 +73,7 @@ def test_business_failure_does_not_return_to_world() -> None:
     back_cls.assert_not_called()
     parent_after_done.assert_called_once_with(app, result)
     assert not result.success
-    assert result.status == '业务失败'
+    assert result.status == status
 
 
 def test_disabled_default_cleanup_does_not_return_to_world() -> None:
