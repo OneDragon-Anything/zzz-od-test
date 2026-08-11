@@ -6,13 +6,11 @@ import asyncio
 from unittest.mock import MagicMock
 
 from one_dragon.base.config.config_item import ConfigItem
-
 from zzz_od.backend.config_router import (
-    _build_set_fields,
-    _build_list_fields,
-    _enum_options,
-    _ro_item_fields_for,
     RouterEntry,
+    _build_list_fields,
+    _build_set_fields,
+    _enum_options,
 )
 from zzz_od.backend.mcp.config_app import make_describe_config, make_list_app_configs
 
@@ -88,8 +86,10 @@ def test_build_list_fields_add_example_filters_ro():
 
 def test_describe_config_charge_plan_schema():
     """describe_config(charge_plan) 返回 set_fields + ro + list_fields + enum options。"""
+    from zzz_od.application.charge_plan.charge_plan_config import (
+        ChargePlanRunModeEnum,
+    )
     from zzz_od.backend.config_router import get_entry
-    from zzz_od.application.charge_plan.charge_plan_config import RestoreChargeEnum
 
     config = MagicMock()
     config.data = {'loop': True, 'restore_charge': '不使用'}
@@ -125,6 +125,18 @@ def test_describe_config_charge_plan_schema():
     assert 'options' in rc
     assert len(rc['options']) == 4  # NONE/BACKUP_ONLY/ETHER_ONLY/BOTH
     assert rc['options'][0] == {'label': '不使用', 'value': '不使用'}
+
+    item_fields = result['list_fields'][0]['item_fields']
+    run_mode = [f for f in item_fields if f['name'] == 'run_mode'][0]
+    assert run_mode['options'] == [
+        {
+            'label': item.value.ui_text,
+            'value': item.value.value,
+        }
+        for item in ChargePlanRunModeEnum
+    ]
+    assert 'material_counts' in result['list_fields'][0]['ro_item_fields']
+    assert 'material_counts' not in result['list_fields'][0]['add_example']
 
     # ro_fields 含 skip_plan
     assert 'skip_plan' in result['ro_fields']

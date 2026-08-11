@@ -90,14 +90,14 @@ def test_reset_plans_with_incomplete_does_nothing() -> None:
 
 
 def test_reset_plans_all_complete_equal_subtracts_to_zero() -> None:
-    """全部完成且相等 → 逐轮扣到 0(每轮 save),最终终止、不死循环。"""
+    """全部完成且相等 → 逐轮扣到 0，最后统一 save。"""
     config = _make_config(plans=[
         _plan(run_times=2, plan_times=1, plan_id='a'),
         _plan(run_times=2, plan_times=1, plan_id='b'),
     ])
     config.reset_plans()
     assert [p.run_times for p in config.plan_list] == [0, 0]
-    assert config.save.call_count == 2
+    config.save.assert_called_once()
 
 
 def test_reset_plans_mixed_subtracts_until_min_below_plan_times() -> None:
@@ -350,6 +350,28 @@ def test_exchange_ether_battery_is_charge_plan_category() -> None:
     assert category is not None
     assert category.mission_type_list == []
     assert service.get_charge_plan_mission_type_list('合成电池') == []
+
+
+def test_combat_simulation_materials_are_ordered_by_rarity() -> None:
+    """副本数据给出完整材料名，并按 A、B、C 级从高到低排列。"""
+    service = CompendiumService()
+    service.reload()
+
+    material_names = [
+        item.value
+        for item in service.get_charge_plan_material_list(
+            '实战模拟室',
+            '代理人技能',
+            '共鸣测试',
+        )
+    ]
+
+    assert material_names == ['特化以太芯片', '进阶以太芯片', '基础以太芯片']
+    assert service.get_charge_plan_material_list(
+        '实战模拟室',
+        '自定义模板',
+        '自定义卡组1',
+    ) == []
 
 
 def test_exchange_ether_battery_consumes_60_charge_power() -> None:

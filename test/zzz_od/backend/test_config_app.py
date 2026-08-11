@@ -24,6 +24,11 @@ def _make_backend(
     compendium.get_charge_plan_category_list = lambda: [ConfigItem('x', legal_category)]
     compendium.get_charge_plan_mission_type_list = lambda c: [ConfigItem('x', legal_mission_type)]
     compendium.get_charge_plan_mission_list = lambda c, m: [ConfigItem('x', legal_mission)]
+    compendium.get_charge_plan_material_list = lambda c, mt, m: [
+        ConfigItem('资深调查员记录', '资深调查员记录'),
+        ConfigItem('正式调查员记录', '正式调查员记录'),
+        ConfigItem('见习调查员记录', '见习调查员记录'),
+    ]
 
     config = MagicMock()
     config.plan_list = []
@@ -56,6 +61,27 @@ def test_add_config_item_legal_calls_add_plan():
     assert config.add_plan.called
     item = config.add_plan.call_args[0][0]
     assert item.category_name == '实战模拟室'
+
+
+def test_add_config_item_ignores_read_only_runtime_fields() -> None:
+    """客户端不能在新增计划时注入标识、跳过状态或材料进度。"""
+    backend, config = _make_backend()
+    tool = make_add_config_item(backend)
+
+    result = asyncio.run(tool('charge_plan', 'plan_list', {
+        'category_name': '实战模拟室',
+        'mission_type_name': '基础材料',
+        'mission_name': '调查专项',
+        'plan_id': 'client-plan-id',
+        'skipped': True,
+        'material_counts': {'资深调查员记录': 999},
+    }))
+
+    assert result['ok'] is True
+    item = config.add_plan.call_args.args[0]
+    assert item.plan_id != 'client-plan-id'
+    assert item.skipped is False
+    assert item.material_counts == {}
 
 
 def test_add_config_item_illegal_mission_type_rejected():
@@ -343,6 +369,7 @@ def _make_backend_empty_mission_type(category: str = '空mission_type类别'):
     compendium.get_charge_plan_category_list = lambda: [ConfigItem('x', category)]
     compendium.get_charge_plan_mission_type_list = lambda c: []  # 空 mission_type
     compendium.get_charge_plan_mission_list = lambda c, m: []
+    compendium.get_charge_plan_material_list = lambda c, mt, m: []
 
     config = MagicMock()
     config.plan_list = []
