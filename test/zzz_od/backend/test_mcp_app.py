@@ -150,6 +150,29 @@ def test_check_game_window_returns_window_status() -> None:
     assert out.is_win_valid is True
 
 
+def test_upsert_screen_area_forwards_typed_fields() -> None:
+    """upsert_screen_area 应转发区域类型和文本颜色过滤范围。"""
+    mcp, backend = _mcp_with_backend()
+    backend.upsert_screen_area.return_value = {'success': True}
+    tool = mcp._tool_manager._tools['upsert_screen_area']
+    fn = getattr(tool, 'fn', None) or getattr(tool, 'func', None)
+
+    result = fn(
+        screen_name='测试画面',
+        area_name='标题',
+        pc_rect=[1, 2, 30, 40],
+        area_type='text',
+        text='标题',
+        color_range=[[1, 1, 1], [2, 2, 2]],
+    )
+
+    assert result == {'success': True}
+    kwargs = backend.upsert_screen_area.call_args.kwargs
+    assert kwargs['area_type'] == 'text'
+    assert kwargs['text'] == '标题'
+    assert kwargs['color_range'] == [[1, 1, 1], [2, 2, 2]]
+
+
 def test_tool_annotations_marked() -> None:
     """观察类 tool 标 read_only、破坏性 tool 标 destructive(P3 副作用机器可读标注)。"""
     mcp, _ = _mcp_with_backend()

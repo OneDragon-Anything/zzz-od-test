@@ -15,7 +15,7 @@ from one_dragon.base.screen.screen_match import (
 
 
 def test_area_type_is_str_enum() -> None:
-    """AreaType 是 str Enum,值 'text'/'template',可直接当字符串用。"""
+    """AreaType 是 str Enum，可直接作为结果字符串使用。"""
     assert AreaType.TEXT == 'text'
     assert AreaType.TEMPLATE == 'template'
     assert isinstance(AreaType.TEXT, str)
@@ -105,6 +105,14 @@ def test_find_area_template_no_match_returns_none() -> None:
     assert find_area_with_detail(ctx, MagicMock(), _template_area()) is None
 
 
+def test_find_area_dynamic_text_returns_none_without_ocr() -> None:
+    ctx = MagicMock()
+    area = ScreenArea(area_name='动态文本', area_type='text', pc_rect=Rect(0, 0, 100, 50))
+
+    assert find_area_with_detail(ctx, MagicMock(), area) is None
+    ctx.ocr_service.get_ocr_result_list.assert_not_called()
+
+
 def test_find_area_plain_returns_none() -> None:
     """纯定位区域(无 text/template)返 None,不参与识别。"""
     ctx = MagicMock()
@@ -172,6 +180,21 @@ def test_precise_early_stop_when_current_set(monkeypatch) -> None:
     result = find_screen_matches(ctx, MagicMock())
     assert len(result) == 1
     assert result[0].screen_name == '菜单'
+    assert result[0].is_precise is True
+
+
+def test_incomplete_id_mark_is_ignored_for_precise_match(monkeypatch) -> None:
+    menu = _screen_info('菜单', [_id_mark_text_area('菜单标题', '菜单')])
+    dynamic_area = ScreenArea(area_name='动态文本', area_type='text', pc_rect=Rect(0, 0, 100, 50))
+    dynamic_area.id_mark = True
+    menu.area_list.append(dynamic_area)
+    ctx = MagicMock()
+    ctx.screen_loader = _make_loader([menu], current='菜单')
+    _patch_find(monkeypatch, {'菜单标题': True})
+
+    result = find_screen_matches(ctx, MagicMock())
+
+    assert len(result) == 1
     assert result[0].is_precise is True
 
 
