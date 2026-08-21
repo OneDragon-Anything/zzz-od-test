@@ -32,12 +32,14 @@ def _new_combat_operation(
         last_check_end_result=last_result,
         check_battle_state=Mock(return_value=in_battle),
         stop_auto_battle=Mock(),
+        init_auto_op=Mock(),
     )
     operation.ctx = SimpleNamespace(
         auto_battle_context=auto_battle_context,
         battle_assistant_config=SimpleNamespace(screenshot_interval=0),
     )
     operation.plan = ChargePlanItem(battle_timeout_seconds=timeout_seconds)
+    operation.switch_team_callback = None
     operation._switch_team_requested = False
     operation._current_node_start_time = time.time() - elapsed_seconds
     operation.last_screenshot = None
@@ -234,3 +236,116 @@ def test_combat_simulation_exit_preserves_hard_timeout_or_requests_switch(
     )
     assert result.is_fail
     assert result.status == expected_status
+
+
+@pytest.mark.parametrize('operation_type', COMBAT_OPERATION_TYPES)
+@pytest.mark.parametrize('switched', [True, False])
+def test_switch_team_callback_controls_local_retry(
+    operation_type: type,
+    switched: bool,
+) -> None:
+    operation = _new_combat_operation(operation_type, 60, 10, False)
+    operation.switch_team_callback = Mock(return_value=switched)
+    operation._previous_node = None
+    operation._previous_round_result = OperationRoundResult(
+        OperationRoundResultEnum.FAIL,
+        status=charge_plan_const.STATUS_SWITCH_TEAM,
+        data='战斗失败',
+    )
+
+    result = operation.switch_team()
+
+    operation.switch_team_callback.assert_called_once_with('战斗失败')
+    if switched:
+        assert result.is_success
+    else:
+        assert result.is_fail
+        assert result.status == charge_plan_const.STATUS_TEAM_EXHAUSTED
+
+
+@pytest.mark.parametrize('operation_type', COMBAT_OPERATION_TYPES)
+def test_switch_team_without_callback_keeps_compatibility_status(operation_type: type) -> None:
+    operation = _new_combat_operation(operation_type, 60, 10, False)
+    operation._previous_node = None
+    operation._previous_round_result = OperationRoundResult(
+        OperationRoundResultEnum.FAIL,
+        status=charge_plan_const.STATUS_SWITCH_TEAM,
+        data='战斗失败',
+    )
+
+    result = operation.switch_team()
+
+    assert result.is_fail
+    assert result.status == charge_plan_const.STATUS_SWITCH_TEAM
+
+
+@pytest.mark.parametrize('operation_type', COMBAT_OPERATION_TYPES)
+def test_new_battle_clears_previous_timeout_request(operation_type: type) -> None:
+    operation = _new_combat_operation(operation_type, 60, 10, False)
+    operation._switch_team_requested = True
+
+    result = operation.init_auto_battle()
+
+    assert result.is_success
+    assert operation._switch_team_requested is False
+    operation.ctx.auto_battle_context.init_auto_op.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    ('operation_type', 'expected_sources'),
+    [
+        (CombatSimulation, {'战斗超时', '战斗失败'}),
+        (AreaPatrol, {'点击挑战结果退出', '战斗失败'}),
+        (ExpertChallenge, {'点击挑战结果退出', '战斗失败'}),
+        (NotoriousHunt, {'战斗失败退出', '点击挑战结果退出'}),
+    ],
+)
+def test_switch_team_routes_through_next_step_to_existing_team_selection(
+    operation_type: type,
+    expected_sources: set[str],
+) -> None:
+    switch_edges = operation_type.switch_team.operation_edge_annotation
+    switch_sources = {
+        edge.node_from_name
+        for edge in switch_edges
+        if not edge.success and edge.status == charge_plan_const.STATUS_SWITCH_TEAM
+    }
+    next_edges = operation_type.click_next.operation_edge_annotation
+    choose_edges = operation_type.choose_predefined_team.operation_edge_annotation
+    deploy_method = operation_type.click_start if operation_type is NotoriousHunt else operation_type.deploy
+    deploy_edges = deploy_method.operation_edge_annotation
+
+    assert switch_sources == expected_sources
+    assert any(edge.node_from_name == '切换配队' and edge.success for edge in next_edges)
+    assert any(
+        edge.node_from_name == '下一步' and edge.success and edge.status == '出战'
+        for edge in choose_edges
+    )
+    assert not any(edge.node_from_name == '切换配队' for edge in choose_edges)
+    choose_result_edges = [edge for edge in deploy_edges if edge.node_from_name == '选择预备编队']
+    assert choose_result_edges
+    assert all(edge.success for edge in choose_result_edges)
+
+
+@pytest.mark.parametrize('operation_type', COMBAT_OPERATION_TYPES)
+def test_local_retry_operation_graph_is_valid(operation_type: type) -> None:
+    operation = object.__new__(operation_type)
+
+    start_node, node_list, edge_list = operation._analyse_node_annotations()
+
+    assert start_node is not None
+    assert any(node.cn == '切换配队' for node in node_list)
+    assert any(
+        edge.node_from.cn == '切换配队' and edge.node_to.cn == '下一步'
+        for edge in edge_list
+    )
+    assert any(
+        edge.node_from.cn == '下一步'
+        and edge.node_to.cn == '选择预备编队'
+        and edge.status == '出战'
+        for edge in edge_list
+    )
+    assert not any(
+        edge.node_from.cn == '切换配队' and edge.node_to.cn == '选择预备编队'
+        for edge in edge_list
+    )
