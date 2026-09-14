@@ -1,9 +1,66 @@
+import numpy as np
 from test.conftest import TestContext
 
 from one_dragon.base.screen import screen_utils
 
 
 class TestGetMatchScreenName:
+
+    def test_compendium_tab_with_brighter_yellow(
+        self,
+        test_context: TestContext,
+    ) -> None:
+        """选中卡片的黄色偏亮时，仍应识别实际选中的目标 TAB。"""
+        screen = test_context.load_screen('快捷手册', '目标TAB').copy()
+        area = test_context.screen_loader.get_area('快捷手册', 'TAB列表')
+        tab_image = screen[
+            area.rect.y1:area.rect.y2,
+            area.rect.x1:area.rect.x2,
+        ]
+        rgb = tab_image.astype(np.int16)
+        yellow = (
+            (rgb[:, :, 0] > 170)
+            & (rgb[:, :, 1] > 140)
+            & (rgb[:, :, 2] < 100)
+            & (rgb[:, :, 0] - rgb[:, :, 2] > 90)
+        )
+        green = rgb[:, :, 1]
+        # 旧配置的绿色通道上界是 210；加 10 即可稳定复现颜色过滤后 OCR 为空。
+        tab_image[:, :, 1] = np.where(
+            yellow,
+            np.clip(green + 10, 0, 255),
+            green,
+        ).astype(np.uint8)
+
+        previous_current = test_context.screen_loader.current_screen_name
+        previous_last = test_context.screen_loader.last_screen_name
+        try:
+            test_context.screen_loader.current_screen_name = '快捷手册-训练'
+            test_context.screen_loader.last_screen_name = '大世界-普通'
+            result = screen_utils.get_match_screen_name(test_context, screen)
+        finally:
+            test_context.screen_loader.current_screen_name = previous_current
+            test_context.screen_loader.last_screen_name = previous_last
+
+        assert result == '快捷手册-目标'
+
+    def test_compendium_combat_is_not_tactics(
+        self,
+        test_context: TestContext,
+    ) -> None:
+        """“作战”和“战术”只共享一个字，不能互相判定为命中。"""
+        screen = test_context.load_screen('快捷手册', '作战TAB')
+
+        assert screen_utils.is_target_screen(
+            test_context,
+            screen,
+            screen_name='快捷手册-作战',
+        )
+        assert not screen_utils.is_target_screen(
+            test_context,
+            screen,
+            screen_name='快捷手册-战术',
+        )
 
     def test(self, test_context: TestContext):
         screen_map = {
@@ -47,7 +104,7 @@ class TestGetMatchScreenName:
             result = screen_utils.get_match_screen_name(test_context, screen)
             assert screen_name == result, image_name
 
-        screen_name_list = [i for i in screen_map.values()]
+        screen_name_list = list(screen_map.values())
         for image_name, screen_name in screen_map.items():
             screen = test_context.get_test_image(image_name)
             result = screen_utils.get_match_screen_name(test_context, screen, screen_name_list=screen_name_list)
