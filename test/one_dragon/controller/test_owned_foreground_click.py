@@ -7,6 +7,9 @@ import pytest
 
 from one_dragon.base.controller import owned_foreground_click as ownership
 from one_dragon.base.controller import pc_controller_base as controller_module
+from one_dragon.base.controller.pc_button.keyboard_mouse_controller import (
+    KeyboardMouseController,
+)
 from one_dragon.base.geometry.point import Point
 
 
@@ -69,6 +72,92 @@ def click_fixture(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         up=up,
         keyboard=keyboard,
     )
+
+
+@pytest.fixture
+def battle_mouse_fixture(
+    click_fixture: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> SimpleNamespace:
+    """让真实战斗按键入口调用原鼠标控制器，替换底层输入。"""
+    buttons = object.__new__(KeyboardMouseController)
+    buttons.mouse = SimpleNamespace(
+        position=(960, 540), click=Mock(), press=Mock(), release=Mock()
+    )
+    buttons.keyboard = SimpleNamespace(tap=Mock(), press=Mock(), release=Mock())
+    buttons._pressed_keys = set()
+    controller = click_fixture.controller
+    controller.keyboard_controller = controller.btn_controller = buttons
+    controller.background_mode = False
+    monkeypatch.setattr(
+        'one_dragon.base.controller.pc_button.keyboard_mouse_controller.time.sleep',
+        lambda seconds: None,
+    )
+    click_fixture.buttons = buttons
+    return click_fixture
+
+
+@pytest.mark.parametrize('method', ['tap', 'press'])
+def test_battle_mouse_checks_pixel_ownership_before_input(
+    battle_mouse_fixture: SimpleNamespace, method: str
+) -> None:
+    """被遮挡时战斗鼠标输入也必须先确认实际像素归属。"""
+    fixture = battle_mouse_fixture
+    fixture.state.pixel = 99
+
+    def assert_owned(*args: object) -> None:
+        """底层输入发生时目标像素必须属于游戏。"""
+        assert fixture.state.pixel == fixture.state.hwnd
+
+    getattr(
+        fixture.buttons.mouse, 'click' if method == 'tap' else 'press'
+    ).side_effect = assert_owned
+    if method == 'tap':
+        fixture.controller.btn_tap('mouse_left')
+    else:
+        fixture.controller.btn_press('mouse_left', 0.1)
+        fixture.buttons.mouse.release.assert_called_once()
+    assert fixture.calls == [
+        ownership.win32con.HWND_TOPMOST,
+        ownership.win32con.HWND_NOTOPMOST,
+    ]
+
+
+@pytest.mark.parametrize('method', ['tap', 'press'])
+def test_battle_mouse_rejects_missing_bound_window(
+    battle_mouse_fixture: SimpleNamespace, method: str
+) -> None:
+    """没有绑定窗口时不把鼠标输入发送给其他程序。"""
+    fixture = battle_mouse_fixture
+    fixture.state.hwnd = 0
+    if method == 'tap':
+        fixture.controller.btn_tap('mouse_left')
+    else:
+        fixture.controller.btn_press('mouse_left')
+    fixture.buttons.mouse.click.assert_not_called()
+    fixture.buttons.mouse.press.assert_not_called()
+    assert not fixture.buttons._pressed_keys
+
+
+def test_held_battle_mouse_still_releases_after_ownership_changes(
+    battle_mouse_fixture: SimpleNamespace,
+) -> None:
+    """已按下的鼠标释放不受后续归属校验阻断。"""
+    fixture = battle_mouse_fixture
+    fixture.controller.btn_press('mouse_left')
+    fixture.state.foreground = fixture.state.pixel = 99
+    fixture.controller.btn_release('mouse_left')
+    fixture.buttons.mouse.release.assert_called_once()
+    assert not fixture.buttons._pressed_keys
+
+
+def test_battle_keyboard_preserves_original_path(
+    battle_mouse_fixture: SimpleNamespace,
+) -> None:
+    """本次鼠标修复不改变普通键盘按键。"""
+    fixture = battle_mouse_fixture
+    fixture.controller.btn_tap('a')
+    fixture.buttons.keyboard.tap.assert_called_once()
+    assert fixture.calls == []
 
 
 def test_uncovered_click_preserves_z_order(click_fixture: SimpleNamespace) -> None:
