@@ -172,3 +172,33 @@ def test_outside_point_does_not_raise_window(click_fixture: SimpleNamespace) -> 
     assert not click_fixture.controller._foreground_click(Point(2000, 1100))
     click_fixture.move.assert_not_called()
     assert click_fixture.calls == []
+
+
+def test_still_covered_does_not_press(
+    click_fixture: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """临时置顶仍未取得像素归属时拒绝输入并恢复窗口属性。"""
+    click_fixture.state.foreground = click_fixture.state.pixel = 99
+    monkeypatch.setattr(
+        ownership.win32gui,
+        'SetWindowPos',
+        lambda hwnd, insert_after, *args: click_fixture.calls.append(insert_after),
+    )
+    assert not click_fixture.controller._foreground_click(Point(960, 540))
+    click_fixture.down.assert_not_called()
+    assert click_fixture.calls == [
+        ownership.win32con.HWND_TOPMOST,
+        ownership.win32con.HWND_NOTOPMOST,
+    ]
+
+
+@pytest.mark.parametrize('attribute', ['foreground', 'pixel'])
+def test_missing_receiver_after_move_does_not_press(
+    click_fixture: SimpleNamespace, attribute: str
+) -> None:
+    """移动后接收窗口消失时返回失败，不向桌面发送按钮输入。"""
+    click_fixture.move.side_effect = lambda *args: setattr(
+        click_fixture.state, attribute, 0
+    )
+    assert not click_fixture.controller._foreground_click(Point(960, 540))
+    click_fixture.down.assert_not_called()
