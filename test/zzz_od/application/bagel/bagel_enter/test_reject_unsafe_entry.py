@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from one_dragon.base.matcher.ocr.ocr_match_result import OcrMatchResult
 from one_dragon.base.operation.operation_round_result import OperationRoundResultEnum
 from zzz_od.application.bagel.bagel_enter import BagelEnter
 
@@ -61,6 +62,41 @@ def test_carried_equipment_prevents_entry(
     monkeypatch.setattr(test_context.controller, 'click', click)
     op.screenshot()
     assert op.verify_zero_loadout().is_fail
+    assert not op.zero_checked
+    click.assert_not_called()
+
+
+@pytest.mark.parametrize('area_index', [0, 1, 2])
+@pytest.mark.parametrize('full_values,crop_values', [
+    (['0', '@500'], None),
+    ([], ['0', '@500']),
+    (['0', '500'], ['0']),
+])
+def test_conflicting_value_prevents_entry(
+    test_context: TestContext, monkeypatch: pytest.MonkeyPatch,
+    area_index: int, full_values: list[str], crop_values: list[str] | None,
+) -> None:
+    """任一价值区存在非零证据时，整屏或裁剪读到零均不得点击入场。"""
+    batches: list[list[str]] = []
+    for index, label in enumerate(('代理人武备', '装备', '道具')):
+        batches.append([label, *full_values] if index == area_index else [label, '0'])
+        if index == area_index and crop_values is not None:
+            batches.append([label, *crop_values])
+    batches.extend([['0/20'], ['0/5']])
+    ocr = MagicMock(side_effect=[
+        [OcrMatchResult(1, 0, 0, 10, 10, data=text) for text in texts]
+        for texts in batches
+    ])
+    monkeypatch.setattr(test_context.ocr_service, 'get_ocr_result_list', ocr)
+    op = BagelEnter(test_context)
+    op.last_screenshot = test_context.load_screen('贝果-备战', '高危零携带-原生1080')
+    monkeypatch.setattr(op, 'round_by_find_area', MagicMock(return_value=op.round_success()))
+    click = MagicMock(return_value=op.round_success())
+    monkeypatch.setattr(op, 'round_by_find_and_click_area', click)
+
+    result = op.verify_zero_loadout()
+
+    assert result.is_fail
     assert not op.zero_checked
     click.assert_not_called()
 
