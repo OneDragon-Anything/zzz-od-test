@@ -9,6 +9,7 @@ from test.harness.bagel_safe_slots import lock_safe_suffix
 from one_dragon.base.operation.operation_base import OperationResult
 from zzz_od.application.bagel.bagel_app import BagelApp
 from zzz_od.application.bagel.bagel_enter import BagelEnter
+from zzz_od.application.bagel.bagel_slots import WAREHOUSE_SAFE_CENTERS
 
 if TYPE_CHECKING:
     from test.conftest import TestContext
@@ -23,9 +24,12 @@ def test_next_round_requires_known_empty_safe(
     monkeypatch: pytest.MonkeyPatch, unknown: bool,
 ) -> None:
     """后续局可以从有锁格的空箱进入；未知格不能触发入场操作。"""
-    screen = lock_safe_suffix(test_context.load_screen('贝果-仓库', '入仓后安全箱空-r07-118s'), 4)
+    screen = lock_safe_suffix(
+        test_context.load_screen('贝果-仓库', '入仓后安全箱空-r07-118s'), 4, WAREHOUSE_SAFE_CENTERS,
+    )
     if unknown:
-        screen[851:947, 211:307] = 0
+        center = WAREHOUSE_SAFE_CENTERS[0]
+        screen[center.y - 48:center.y + 48, center.x - 48:center.x + 48] = 0
     test_context.add_mock_screenshot(screen)
     op = BagelApp(test_context, config, record)
     op.initial_clear_pending = False

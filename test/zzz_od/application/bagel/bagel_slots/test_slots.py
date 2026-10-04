@@ -9,6 +9,7 @@ from one_dragon.base.geometry.point import Point
 from zzz_od.application.bagel.bagel_slots import (
     RESULT_SLOT_CENTERS,
     SAFE_SLOT_CENTERS,
+    WAREHOUSE_SAFE_CENTERS,
     empty_indices,
     occupied_indices,
     slot_occupied,
@@ -80,9 +81,9 @@ def test_warehouse_safe_empty_after_deposit() -> None:
     """入仓后安全箱格必须判空。"""
     filled = _load('带物资仓库-r07-117s.webp')
     cleared = _load('入仓后安全箱空-实机.webp')
-    assert occupied_indices(filled, SAFE_SLOT_CENTERS) == [0, 1, 2, 3, 4]
-    assert occupied_indices(cleared, SAFE_SLOT_CENTERS) == []
-    assert not slot_occupied(cleared, SAFE_SLOT_CENTERS[0])
+    assert occupied_indices(filled, WAREHOUSE_SAFE_CENTERS) == [0, 1, 2, 3, 4]
+    assert occupied_indices(cleared, WAREHOUSE_SAFE_CENTERS) == []
+    assert not slot_occupied(cleared, WAREHOUSE_SAFE_CENTERS[0])
 
 
 def test_slot_out_of_bounds_not_occupied() -> None:

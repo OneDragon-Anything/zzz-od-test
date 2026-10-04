@@ -6,6 +6,7 @@ import pytest
 from test.harness.bagel_safe_slots import lock_safe_suffix
 
 from zzz_od.application.bagel.bagel_settle import BagelSettleWarehouse
+from zzz_od.application.bagel.bagel_slots import WAREHOUSE_SAFE_CENTERS
 
 if TYPE_CHECKING:
     from test.conftest import TestContext
@@ -16,9 +17,12 @@ def test_settlement_accepts_locks_but_rejects_unknown_safe(
     test_context: TestContext, unknown: bool,
 ) -> None:
     """结算末尾仍须区分锁格和未知格，不能仅凭没有物品结束。"""
-    screen = lock_safe_suffix(test_context.load_screen('贝果-仓库', '入仓后安全箱空-r07-118s'), 4)
+    screen = lock_safe_suffix(
+        test_context.load_screen('贝果-仓库', '入仓后安全箱空-r07-118s'), 4, WAREHOUSE_SAFE_CENTERS,
+    )
     if unknown:
-        screen[851:947, 211:307] = 0
+        center = WAREHOUSE_SAFE_CENTERS[0]
+        screen[center.y - 48:center.y + 48, center.x - 48:center.x + 48] = 0
     op = BagelSettleWarehouse(test_context, auto_clean=False)
     op.last_screenshot = screen
     result = op.verify_warehouse_capacity()
