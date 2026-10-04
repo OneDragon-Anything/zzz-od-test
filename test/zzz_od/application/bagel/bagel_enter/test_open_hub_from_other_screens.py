@@ -51,13 +51,18 @@ def test_wengine_warehouse_uses_map_transport(
     transport.assert_called_once()
 
 
-def test_wengine_warehouse_is_recognized_in_bagel_scope(test_context: TestContext) -> None:
+@pytest.mark.parametrize('missing_material_area', [False, True])
+def test_wengine_warehouse_is_recognized_in_bagel_scope(
+    test_context: TestContext, monkeypatch: pytest.MonkeyPatch, missing_material_area: bool,
+) -> None:
     """贝果应用画面范围不包含音擎仓库，入口按标题补认。"""
     image = (
         Path(__file__).resolve().parents[4]
         / 'one_dragon/base/screen/screen_loader/test_get_match_screen_name/storage_wengine.webp'
     )
     screen = cv2_utils.read_image(str(image))
+    if missing_material_area:
+        monkeypatch.delitem(test_context.screen_loader._screen_area_map, '仓库-材料道具.标题-材料道具')
     test_context.screen_loader.enter_scope('bagel')
     try:
         assert screen_utils.get_match_screen_name(test_context, screen) is None
@@ -89,13 +94,17 @@ def test_wengine_warehouse_without_global_match_uses_title(
     assert test_context.screen_loader.current_screen_name == '仓库-音擎仓库'
 
 
+@pytest.mark.parametrize('missing_warehouse_areas', [False, True])
 def test_unknown_screen_never_transports_or_clicks(
-    test_context: TestContext, monkeypatch: pytest.MonkeyPatch,
+    test_context: TestContext, monkeypatch: pytest.MonkeyPatch, missing_warehouse_areas: bool,
 ) -> None:
     """无法识别的画面不尝试通用返回或地图传送。"""
     test_context.mock_screen('贝果-局内', '高危A出生-原生1080')
     op = BagelEnter(test_context)
     op.screenshot()
+    if missing_warehouse_areas:
+        for name in ('材料道具', '音擎仓库', '驱动仓库'):
+            monkeypatch.delitem(test_context.screen_loader._screen_area_map, f'仓库-{name}.标题-{name}')
     monkeypatch.setattr(op, 'round_by_find_area', lambda *_args: op.round_retry())
     monkeypatch.setattr(op, 'check_and_update_current_screen', lambda *_args: None)
     transport = MagicMock()

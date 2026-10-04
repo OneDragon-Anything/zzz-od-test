@@ -251,11 +251,72 @@ def test_initial_probe_requires_new_frame(op: BagelNavigate) -> None:
     op.heading_aligned = False
     assert op.move_to_target().status == '短按W后等待箭头对齐'
     op.ctx.controller.move_w.assert_called_once_with(press=True, press_time=0.08, release=True)
-    assert op.move_to_target().status == '等待动作后的新截图'
+    waiting = op.move_to_target()
+    assert waiting.status == '等待动作后的新截图'
+    assert waiting.result == OperationRoundResultEnum.WAIT
     assert op.ctx.controller.move_w.call_count == 1
     op.last_screenshot_time += 1
     assert op.move_to_target().status == '前往巷口左转'
     assert op.steps == 2
+
+
+@pytest.mark.parametrize('pause_menu', [False, True])
+def test_missing_hud_waits_unless_pause_menu(
+    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch, pause_menu: bool,
+) -> None:
+    """局内 HUD 暂缺时松键等待；确认暂停菜单时仍立即失败。"""
+    monkeypatch.setattr(op, 'is_bagel_result', lambda: False)
+    monkeypatch.setattr(op, 'round_by_find_area', lambda _screen, name, _area: (
+        op.round_success() if name == '战斗-菜单' and pause_menu else op.round_retry()
+    ))
+    result = op.move_to_target()
+    assert result.result == (OperationRoundResultEnum.FAIL if pause_menu else OperationRoundResultEnum.WAIT)
+    assert result.status == ('移动中打开了暂停菜单' if pause_menu else '移动后暂未识别局内 HUD')
+    op.ctx.controller.stop_moving_forward.assert_called()
+    op.ctx.controller.move_w.assert_not_called()
+
+
+@pytest.mark.parametrize('gap', ['stale_frame', 'missing_hud'])
+def test_navigation_recovers_after_four_waiting_frames(
+    op: BagelNavigate, test_context: TestContext, monkeypatch: pytest.MonkeyPatch, gap: str,
+) -> None:
+    """真实执行循环连续等待四帧后仍可到达，不耗尽默认三次重试。"""
+    controller = NavigationController(test_context)
+    controller.set_phases([{'frame': ('贝果-局内', '雅努斯出生-r01-39s')}])
+    monkeypatch.setattr(test_context, 'controller', controller)
+    monkeypatch.setattr('zzz_od.application.bagel.bagel_run_flow.BagelNavigate', WatchedNavigate)
+    navigation = published_navigation(test_context)
+    monkeypatch.setattr(navigation.vision, 'locate', lambda _crop: (110, 100))
+    screenshot = navigation.screenshot
+    find_area = navigation.round_by_find_area
+    frames = 0
+
+    def next_frame() -> None:
+        """起点检查后模拟四次截图未更新，再恢复新截图。"""
+        nonlocal frames
+        screenshot()
+        frames += 1
+        navigation.last_input_frame = (
+            navigation.last_screenshot_time if gap == 'stale_frame' and 2 <= frames <= 5 else None
+        )
+
+    def find_with_hud_gap(screen: object, name: str, area: str) -> OperationRoundResult:
+        """仅模拟普通攻击按钮漏识别，其余识别使用实拍。"""
+        if gap == 'missing_hud' and 2 <= frames <= 5 and (name, area) == ('战斗画面', '按键-普通攻击'):
+            return navigation.round_retry()
+        return find_area(screen, name, area)
+
+    monkeypatch.setattr(navigation, 'screenshot', next_frame)
+    monkeypatch.setattr(navigation, 'round_by_find_area', find_with_hud_gap)
+    enter_running_state(test_context)
+    try:
+        result = navigation.execute()
+        assert result.success and result.status == BagelNavigate.STATUS_WAYPOINT, result.status
+        assert frames == 6
+        assert controller.recorded_inputs == []
+        assert controller.recorded_clicks == []
+    finally:
+        reset_running_state(test_context, navigation)
 
 
 def test_turn_probe_then_forward(op: BagelNavigate, monkeypatch: pytest.MonkeyPatch) -> None:
