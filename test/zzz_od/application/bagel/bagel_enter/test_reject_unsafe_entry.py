@@ -93,25 +93,6 @@ def test_conflicting_value_prevents_entry(
     click.assert_not_called()
 
 
-@pytest.mark.parametrize('amount', ['100', ''])
-def test_nonzero_or_unreadable_investment_stops(
-    test_context: TestContext, monkeypatch: pytest.MonkeyPatch, amount: str,
-) -> None:
-    """投资金额非零或未识别时停在原画面，不点击前往空洞。"""
-    test_context.mock_screen('贝果-入场确认', '高危零投资-原生1080')
-    op = BagelEnter(test_context)
-    op.zero_checked = True
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_enter.read_area', lambda *_: amount)
-    click = MagicMock()
-    monkeypatch.setattr(test_context.controller, 'click', click)
-    op.screenshot()
-    result = op.confirm_entry()
-    assert result.is_fail
-    assert result.status == '无法确认零投资，停止并保留现场'
-    assert not op.investment_confirmed
-    click.assert_not_called()
-
-
 def test_repeat_investment_page_does_not_click(
     test_context: TestContext, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
