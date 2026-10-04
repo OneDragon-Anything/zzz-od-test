@@ -360,19 +360,14 @@ def test_store_stops_when_swapped_slot_has_different_item(
     test_context: TestContext, controller: BagelDragController, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """同一结果格再次被选中对换时结束收集，不再拖第二次。"""
-    import numpy as np
-
     op = BagelStoreSafe(test_context)
-    op.last_screenshot = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    op.last_screenshot = test_context.load_screen('贝果-局内', '武备箱待入箱-实机')
     mark = BagelSlotMark(4, RESULT_SLOT_CENTERS[4], 'S', '材料')
     choice = StoreChoice(ACTION_SWAP, 4, 4, mark)
     monkeypatch.setattr(op, '_search_ready', lambda: True)
     monkeypatch.setattr(op, '_search_complete', lambda: True)
     monkeypatch.setattr(
         'zzz_od.application.bagel.bagel_store.inspect_occupied', lambda *_args: [mark],
-    )
-    monkeypatch.setattr(
-        'zzz_od.application.bagel.bagel_store.empty_indices', lambda *_args: [],
     )
     monkeypatch.setattr(
         'zzz_od.application.bagel.bagel_store.choose_store_action', lambda *_args: choice,

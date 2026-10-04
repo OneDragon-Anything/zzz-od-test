@@ -212,6 +212,21 @@
     {
       "image": "screens/贝果-局内/雅努斯转角-r07-31.25s.webp",
       "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/四格安全箱部分占用-20261004.webp",
+      "pixel_source": "1920x1080 原始 PNG，遮挡 UID 后无损 WebP；逐像素核对一致",
+      "source_url": "https://github.com/user-attachments/assets/43da0417-79df-49af-b631-9ac9bdc8d6f2",
+      "source_comment": "https://github.com/OneDragon-Anything/ZenlessZoneZero-OneDragon/pull/2820#issuecomment-5979819326",
+      "source_sha256": "449182d93703fdd48a095acafc96fc0ede7ea28f8ac083de0f40aac78340a299",
+      "template": "assets/template/bagel/safe_slot_locked",
+      "crop_xyxy_exclusive": [
+        639,
+        858,
+        687,
+        914
+      ],
+      "processing": "TemplateInfo 矩形裁剪，原像素、全白掩码，无缩放或调色"
     }
   ]
 }

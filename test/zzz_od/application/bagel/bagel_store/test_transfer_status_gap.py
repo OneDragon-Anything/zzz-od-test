@@ -23,13 +23,9 @@ def test_transfer_waits_for_status_then_checks_original_frames(
 ) -> None:
     """物品已转移、状态文字短暂漏识别时，不重拖，恢复后核对原始基线。"""
     op = BagelStoreSafe(test_context)
-    before = np.zeros((1080, 1920, 3), dtype=np.uint8)
-    after = before.copy()
+    before = test_context.load_screen('贝果-局内', '武备箱待入箱-实机')
+    after = test_context.load_screen('贝果-局内', '武备箱入箱中-实机')
     source, destination = RESULT_SLOT_CENTERS[0], SAFE_SLOT_CENTERS[0]
-    pattern = np.repeat((np.indices((64, 64)).sum(axis=0) % 2 * 255)[:, :, None], 3, axis=2)
-    for screen, center in ((before, source), (after, destination)):
-        x, y = int(center.x), int(center.y)
-        screen[y - 32:y + 32, x - 32:x + 32] = pattern
     op._pending_before = before
     op._pending_source = source
     op._pending_destination = destination

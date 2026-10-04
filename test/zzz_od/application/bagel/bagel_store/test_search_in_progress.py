@@ -49,7 +49,6 @@ def test_visible_item_is_moved_before_search_finishes(
     mark = BagelSlotMark(0, RESULT_SLOT_CENTERS[0], 'S', '贵重物品')
     choice = StoreChoice('fill', 0, 0, mark)
     monkeypatch.setattr('zzz_od.application.bagel.bagel_store.inspect_occupied', lambda *_args: [mark])
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_store.empty_indices', lambda *_args: [0])
     monkeypatch.setattr('zzz_od.application.bagel.bagel_store.choose_store_action', lambda *_args: choice)
     drag = MagicMock()
     monkeypatch.setattr(op, '_drag_item', drag)
@@ -70,7 +69,6 @@ def test_no_further_choice_waits_until_search_complete(
     monkeypatch.setattr(op, '_stable_results', lambda results: results)
     mark = BagelSlotMark(0, RESULT_SLOT_CENTERS[0], 'A', '其他')
     monkeypatch.setattr('zzz_od.application.bagel.bagel_store.inspect_occupied', lambda *_args: [mark])
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_store.empty_indices', lambda *_args: [])
     monkeypatch.setattr('zzz_od.application.bagel.bagel_store.choose_store_action', lambda *_args: None)
     assert op.store_next().result == OperationRoundResultEnum.WAIT
     monkeypatch.setattr(op, '_search_complete', lambda: True)
@@ -211,7 +209,6 @@ def test_does_not_swap_while_search_is_running(
     mark = BagelSlotMark(4, RESULT_SLOT_CENTERS[4], 'S', '其他')
     choice = StoreChoice(ACTION_SWAP, 4, 3, mark)
     monkeypatch.setattr('zzz_od.application.bagel.bagel_store.inspect_occupied', lambda *_args: [mark])
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_store.empty_indices', lambda *_args: [])
     monkeypatch.setattr('zzz_od.application.bagel.bagel_store.choose_store_action', lambda *_args: choice)
     drag = MagicMock()
     monkeypatch.setattr(op, '_drag_item', drag)
