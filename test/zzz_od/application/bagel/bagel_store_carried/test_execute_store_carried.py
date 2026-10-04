@@ -162,3 +162,36 @@ def test_pause_after_storage_click_only_checks_result(
         assert result.success, result.status
         assert result.data['moved'] == 2
         assert len(controller.recorded_clicks) == 1
+
+
+@pytest.mark.parametrize('after_click', [False, True])
+@pytest.mark.parametrize('kind,reason', [
+    ('occupied', '背包格子与占用数不符'),
+    ('unknown', '背包格子状态不清'),
+    ('missing_rows', '无法定位背包完整格子行'),
+])
+def test_zero_count_with_unconfirmed_slots_stops(
+    test_context: TestContext, controller: TransferController, kind: str, reason: str,
+    after_click: bool,
+) -> None:
+    """数量模拟为零时仍核验真实格子；持续冲突或未知五帧后停止，不误报转存成功。"""
+    before, _, empty = warehouse_frames(test_context)
+    screen = before.copy() if kind == 'occupied' else empty.copy()
+    paint_count(test_context, screen, '贝果-仓库', '背包数量', '0/50')
+    if kind == 'unknown':
+        screen[198:258, 237:297] = 0
+    elif kind == 'missing_rows':
+        screen[160:780, 210:850] = 20
+    phases = [{'frame': screen}]
+    if after_click:
+        phases.insert(0, {'frame': before, 'exit': ('on_click_in', '贝果-仓库', '放入仓库')})
+    controller.set_phases(phases)
+    op = WatchedStore(test_context)
+    with running_operation(op):
+        result = op.execute()
+        assert not result.success and reason in result.status
+        assert op.read_misses == 5
+        assert op.moved == 0
+        assert op._stable_image is None
+        assert len(controller.recorded_clicks) == (1 if after_click else 0)
+        assert not controller.recorded_scrolls

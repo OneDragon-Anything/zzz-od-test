@@ -12,6 +12,7 @@ from test.harness.bagel_loadout import (
 )
 from test.harness.bagel_loadout import controller as controller
 
+from one_dragon.base.operation.operation_round_result import OperationRoundResultEnum
 from zzz_od.application.bagel.bagel_store_carried import (
     BagelStoreCarried,
 )
@@ -101,3 +102,62 @@ def test_sale_state_stops_before_transfer_or_success(
     assert op.moved == 2
     assert op._stable_image is None
     click.assert_not_called()
+
+
+@pytest.mark.parametrize('pending', [False, True])
+def test_empty_backpack_requires_two_verified_frames(
+    test_context: TestContext, controller: TransferController, pending: bool,
+) -> None:
+    """真实空包与空安全箱连续两帧核验后才完成；已点击时同时核对转存数量。"""
+    screen = test_context.load_screen('贝果-仓库', 'clear_loadout_prepare_warehouse_empty')
+    controller.set_phases([{'frame': screen}])
+    op = WatchedStore(test_context)
+    if pending:
+        op.pending = True
+        op.pending_started = time.monotonic()
+        op.before_counts = (2, 0, 186, 50, 280)
+    with running_operation(op):
+        op.last_screenshot = screen
+        first = op.store_next()
+        assert first.result == OperationRoundResultEnum.WAIT
+        assert first.status == ('等待转存后格子稳定' if pending else '等待仓库格子稳定')
+        op.last_screenshot = screen.copy()
+        result = op.store_next()
+        assert result.is_success and result.status == '携带物已全部转存'
+        assert result.data == {'moved': 2 if pending else 0, 'warehouse': (188, 280)}
+        assert not controller.recorded_clicks
+
+
+@pytest.mark.parametrize('kind,reason', [
+    ('occupied', '背包格子与占用数不符'),
+    ('unknown', '背包格子状态不清'),
+    ('missing_rows', '无法定位背包完整格子行'),
+])
+def test_invalid_zero_count_frame_breaks_empty_backpack_stability(
+    test_context: TestContext, controller: TransferController, kind: str, reason: str,
+) -> None:
+    """零读数下出现冲突、未知或定位失败后，必须重新取得连续两张完整空包帧。"""
+    empty = test_context.load_screen('贝果-仓库', 'clear_loadout_prepare_warehouse_empty')
+    changed = empty.copy()
+    if kind == 'occupied':
+        changed = test_context.load_screen('贝果-仓库', 'clear_carried_six_before').copy()
+        paint_count(test_context, changed, '贝果-仓库', '背包数量', '0/50')
+    elif kind == 'unknown':
+        changed[198:258, 237:297] = 0
+    else:
+        changed[160:780, 210:850] = 20
+    controller.set_phases([{'frame': empty}])
+    op = WatchedStore(test_context)
+    with running_operation(op):
+        op.last_screenshot = empty
+        assert op.store_next().status == '等待仓库格子稳定'
+        op.last_screenshot = changed
+        result = op.store_next()
+        assert result.result == OperationRoundResultEnum.WAIT
+        assert result.status == reason
+        assert op._stable_image is None
+        op.last_screenshot = empty
+        assert op.store_next().status == '等待仓库格子稳定'
+        op.last_screenshot = empty.copy()
+        assert op.store_next().is_success
+        assert not controller.recorded_clicks
