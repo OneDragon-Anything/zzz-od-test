@@ -18,7 +18,7 @@ from zzz_od.application.bagel.bagel_flow import (
     read_flow,
 )
 from zzz_od.application.bagel.bagel_navigate import BagelNavigate
-from zzz_od.application.bagel.bagel_route import load_default_route
+from zzz_od.application.bagel.bagel_route import BagelRoute
 from zzz_od.application.bagel.bagel_run_flow import BagelRunFlow
 from zzz_od.application.bagel.bagel_store import BagelStoreSafe
 from zzz_od.application.bagel.bagel_unlock_safe import BagelUnlockSafe
@@ -28,7 +28,7 @@ pytestmark = pytest.mark.usefixtures('no_round_wait')
 
 def legacy_data() -> dict:
     """构造含用户坐标和参数的版本一流程，不依赖发布资源版本。"""
-    route = load_default_route('janus_high_a')
+    route = BagelRoute.from_dict('janus_high_a', yaml.safe_load((Path(__file__).parent / 'data/v1_waypoints.yml').read_text(encoding='utf-8')))
     steps = [BagelStep('spawn', 'spawn', '出生')]
     for target, action in (('box', 'open_box'), ('safe', 'unlock_safe')):
         steps.extend(

@@ -4,12 +4,14 @@
 
 ## 格式约定
 - **webp q90**(有损,~100-150KB/张;已验 13 打开游戏子态识别无损,conf 损耗 <0.006)。
-- **角标模板来源例外**:贝果 `仓库角标完整-20260930`、`装备角标完整-20260930`、`电子保险箱满箱对换失败-20260930` 从原生 PNG 转为无损 WebP，保留裁模板所需的原始像素；裁剪矩形见主仓 `docs/game/screens/贝果计划.md`「格子」。
+- **角标模板来源例外**:贝果 `仓库角标完整-20260930`、`装备角标完整-20260930`、`电子保险箱满箱对换失败-20260930` 从原生 PNG 转为无损 WebP，保留原始像素作为完整角标画面对照。现有模板的精确裁剪矩形和处理参数尚未完整留档，不能将这些画面的识别格心视为裁剪来源；缺口见主仓 `docs/game/screens/贝果计划.md`「角标来源与裁剪缺口」。
 - **贝果精度敏感样本**:定位、细文字 OCR、物品格变化等原 PNG 样本使用无损 WebP，转换后逐像素核对一致；不对这些样本施加有损压缩。同名 WebP 已被测试使用时，不重复保留无引用的 PNG 副本。
 - **品质压缩对照**:`武备箱红底金图案-20260921-无损.webp` 保留原始像素，与同名不带「无损」后缀的有损版本共同验证品质识别，二者均为测试输入。
 - **1080p 原生**(同 screen_info `pc_rect` 坐标,**不缩放**——喂 offline analyze/流程测试时坐标才对得上)。
 - 文件名 = 子态可读名(如 `ready.webp`、`账号密码登录.webp`)。
 - **UID 打码**:右下 UID 区域涂色(对齐 `controller.fill_uid_black`),防账号信息随 fixture 外泄;识别不依赖 UID,打码无损识别。
+
+贝果部分历史归档以有损 WebP 像素为来源，UID 遮挡后改用无损编码，不能恢复原 PNG 精度；逐图来源见 [贝果归档像素来源](bagel_archive.json)。这些素材可沿用识别回归，不作为无损模板裁剪源。
 
 ## 已归档
 - `贝果-备战/`：`clear_loadout_carried`、`clear_loadout_empty`、`clear_loadout_tools_only`、`clear_loadout_second_weapon_stored`、`clear_loadout_weapon_detail`、`clear_loadout_equipment_detail`、`clear_loadout_item_detail`、`clear_loadout_dense_inventory`、`clear_loadout_dense_detail`、`preset_two`，用于启动清空的携带读数、槽位、详情与预设画面参考。

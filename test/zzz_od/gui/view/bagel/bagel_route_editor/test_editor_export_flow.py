@@ -11,7 +11,6 @@ from zzz_od.application.bagel.bagel_flow import (
     draft_path,
     read_flow,
 )
-from zzz_od.application.bagel.bagel_route import BagelRouteConfig
 from zzz_od.gui.view.bagel.bagel_route_editor import (
     BagelRouteEditor,
 )
@@ -20,7 +19,7 @@ from zzz_od.gui.view.bagel.bagel_route_editor import (
 def test_export_changes_only_chosen_resource(
     editor: BagelRouteEditor, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """导出只写明确的正式流程文件，不动账号覆盖或自动保存草稿。"""
+    """导出只写明确的正式流程文件，不自动保存草稿。"""
     dialog = MagicMock()
     dialog.exec.return_value = True
     monkeypatch.setattr(
@@ -34,4 +33,3 @@ def test_export_changes_only_chosen_resource(
     editor.export_flow()
     assert read_flow(tmp_path / 'published' / 'flow.yml') == editor.flow
     assert not draft_path(editor.map_id).exists()
-    assert not Path(BagelRouteConfig(99).file_path).exists()

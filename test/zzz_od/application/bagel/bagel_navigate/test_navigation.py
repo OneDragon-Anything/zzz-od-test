@@ -338,7 +338,7 @@ def test_roadside_pickup_never_moves_without_location(
     """已定位后丢失位置，即使有路边 F 提示也必须松键，三次等待后停止。"""
     monkeypatch.setattr(op.vision, 'locate', lambda _: None)
     op.last_position = (50.0, 100.0)
-    op.vision.last_location = MapLocation(None, op.vision.map.version, reason, '', 0, None, 0)
+    op.vision.last_location = MapLocation(None, op.vision.map.snapshot_id, reason, '', 0, None, 0)
 
     def find_area(_screen: object, _screen_name: str, area_name: str) -> OperationRoundResult:
         if area_name in {'按键-普通攻击', '交互F键'}:

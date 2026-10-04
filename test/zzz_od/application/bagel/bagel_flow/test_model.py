@@ -16,7 +16,6 @@ from zzz_od.application.bagel.bagel_flow import (
     write_flow,
 )
 from zzz_od.application.bagel.bagel_navigate import BagelNavigate
-from zzz_od.application.bagel.bagel_route import BagelRouteConfig
 
 
 @pytest.mark.parametrize('map_id,count', [('janus_high_a', 15), ('janus_high_b', 6)])
@@ -81,12 +80,8 @@ def test_reorder_containers_and_remove_safe() -> None:
     assert BagelFlow.from_dict(short.to_dict()) == short
 
 
-def test_user_override_ignored_and_explicit_snapshot_used() -> None:
-    """旧账号文件即使损坏，也不参与默认导航或发布资源读取。"""
-    config = BagelRouteConfig(99)
-    path = Path(config.file_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text('version: 999', encoding='utf-8')
+def test_published_route_and_explicit_snapshot_used() -> None:
+    """默认导航读取正式流程，显式传入的快照保留自定义参数。"""
     flow = load_published_flow('janus_high_a')
     step = flow.steps[1]
     step = replace(

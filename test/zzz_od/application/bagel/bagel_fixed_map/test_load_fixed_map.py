@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import shutil
 from pathlib import Path
 
@@ -52,21 +51,19 @@ def test_missing_resource_rejected(resources: Path, filename: str) -> None:
         load_fixed_map('janus_high_a')
 
 
-def test_partial_update_rejected(resources: Path) -> None:
-    """缓存已有旧图时，新图片配旧摘要仍必须失败。"""
+def test_same_pixels_with_different_encoding_are_accepted(resources: Path) -> None:
+    """图片编码变化不影响有效资源，旧执行仍持有自己的快照。"""
     old = load_fixed_map('janus_high_a')
-    with (resources / 'map.png').open('ab') as stream:
-        stream.write(b'changed')
-    with pytest.raises(ValueError, match='摘要'):
-        load_fixed_map('janus_high_a')
-    assert old.image.shape == (405, 305, 4)
+    cv2.imencode('.png', old.image, [cv2.IMWRITE_PNG_COMPRESSION, 0])[1].tofile(resources / 'map.png')
+    current = load_fixed_map('janus_high_a')
+    assert np.array_equal(current.image, old.image)
+    assert current is not old
 
 
-def test_invalid_mask_rejected_even_with_updated_digest(resources: Path) -> None:
-    """全空遮罩不能仅凭摘要正确被接受。"""
+def test_invalid_mask_rejected(resources: Path) -> None:
+    """全空遮罩不能被接受。"""
     data = yaml.safe_load((resources / 'map.yml').read_text(encoding='utf-8'))
     cv2.imencode('.png', np.zeros((405, 305), np.uint8))[1].tofile(resources / 'map_mask.png')
-    data['sha256']['map_mask.png'] = hashlib.sha256((resources / 'map_mask.png').read_bytes()).hexdigest()
     (resources / 'map.yml').write_text(yaml.safe_dump(data), encoding='utf-8')
     with pytest.raises(ValueError, match='遮罩'):
         load_fixed_map('janus_high_a')
@@ -84,7 +81,7 @@ def test_cached_snapshot_is_immutable_and_new_execution_reloads(resources: Path)
         first.arrow_settings['tip_percentile'] = 30
     write_metadata(resources, 'registration_blur_size', 5)
     second = load_fixed_map('janus_high_a')
-    assert second is not first and second.version != first.version
+    assert second is not first and second.snapshot_id != first.snapshot_id
     assert first.blur_size == 3 and second.blur_size == 5
     assert load_fixed_map('janus_high_a') is second
 
@@ -101,7 +98,6 @@ def test_internal_hole_does_not_define_position_validity(resources: Path) -> Non
     for name, pixels in (('map.png', image), ('map_mask.png', mask)):
         payload = cv2.imencode('.png', pixels)[1].tobytes()
         (resources / name).write_bytes(payload)
-        data['sha256'][name] = hashlib.sha256(payload).hexdigest()
     (resources / 'map.yml').write_text(yaml.safe_dump(data), encoding='utf-8')
     with_hole = load_fixed_map('janus_high_a')
     assert with_hole.mask[y, x] == 0

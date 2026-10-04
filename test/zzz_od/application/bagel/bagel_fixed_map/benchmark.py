@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from math import hypot
 from pathlib import Path
@@ -20,7 +19,6 @@ from zzz_od.application.bagel.bagel_minimap import (
     match_features,
     register_minimap,
 )
-from zzz_od.application.bagel.bagel_route import resource_root
 from zzz_od.application.bagel.bagel_route_vision import BagelRouteVision
 
 DATA: Path = Path(__file__).parent / 'data'
@@ -31,12 +29,12 @@ class LegacyVision:
     """仅用于对照的冻结旧算法，正式代码不保留回退分支。"""
 
     def __init__(self, map_id: str, cached: bool) -> None:
-        """旧参数取测试夹具，原参考图仍取主仓保留素材。"""
+        """旧参数和参考图均取测试仓夹具。"""
         self.cached: bool = cached
         self.data: dict = yaml.safe_load((DATA / f'{map_id}_legacy.yml').read_text(encoding='utf-8'))
         self.references: list[list[tuple]] = [[], []]
         for reference in self.data['references']:
-            image = cv2.imdecode(np.fromfile(resource_root(map_id) / reference['image'], np.uint8), cv2.IMREAD_COLOR)
+            image = cv2.imdecode(np.fromfile(DATA / map_id / reference['image'], np.uint8), cv2.IMREAD_COLOR)
             mask = minimap_mask(image, self.data['mask'])
             matrix = np.asarray(reference['to_global'])
             for mode in (0, 1):
@@ -99,7 +97,6 @@ def main() -> None:
             crop = np.zeros((201, 201, 3), np.uint8)
         else:
             payload = (SCREENS / case['image']).read_bytes()
-            case['image_sha256'] = hashlib.sha256(payload).hexdigest()
             crop = cv2.imdecode(np.frombuffer(payload, np.uint8), cv2.IMREAD_COLOR)[206:407, 1533:1734]
         crops.append(crop)
     factories = {

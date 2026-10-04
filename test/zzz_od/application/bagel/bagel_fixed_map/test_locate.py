@@ -38,7 +38,7 @@ def test_historical_positions_and_rejections(case: dict[str, object]) -> None:
         assert result.position is not None, result.reason
         assert np.allclose(result.position, case['expected'], atol=case['tolerance'], rtol=0)
         assert result.inliers >= 8 and result.median_residual_px <= .75
-    assert result.map_version and result.elapsed_ms >= 0
+    assert result.map_snapshot_id and result.elapsed_ms >= 0
 
 
 def test_spawn_conflict_rejected(monkeypatch: pytest.MonkeyPatch) -> None:

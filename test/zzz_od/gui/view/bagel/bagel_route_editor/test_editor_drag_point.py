@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
@@ -15,7 +13,6 @@ from zzz_od.application.bagel.bagel_flow import (
     load_published_flow,
     read_flow,
 )
-from zzz_od.application.bagel.bagel_route import BagelRouteConfig
 from zzz_od.gui.view.bagel.bagel_route_editor import (
     BagelRouteEditor,
 )
@@ -43,4 +40,3 @@ def test_mouse_drag_and_undo_save_only_draft(
     editor.save_draft()
     assert read_flow(draft_path(editor.map_id)) == changed
     assert load_published_flow(editor.map_id) == published
-    assert not Path(BagelRouteConfig(99).file_path).exists()
