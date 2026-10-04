@@ -12,6 +12,9 @@
 - **UID 打码**:右下 UID 区域涂色(对齐 `controller.fill_uid_black`),防账号信息随 fixture 外泄;识别不依赖 UID,打码无损识别。
 
 ## 已归档
+- `贝果-备战/`：`clear_loadout_carried`、`clear_loadout_empty`、`clear_loadout_tools_only`、`clear_loadout_second_weapon_stored`、`clear_loadout_weapon_detail`、`clear_loadout_equipment_detail`、`clear_loadout_item_detail`、`clear_loadout_dense_inventory`、`clear_loadout_dense_detail`、`preset_two`，用于启动清空的携带读数、槽位、详情与预设画面参考。
+- `贝果-仓库/`：`clear_loadout_backpack_carried`、`clear_loadout_prepare_warehouse_empty`、`clear_carried_six_before`、`clear_carried_six_animation`，用于批量转存、携带数量与图标动画回归。
+- 上述启动清空图均为原生 1080p 并已遮挡 UID。用于携带读数、槽位和图标变化回归的画面采用无损 WebP；仅作画面参考的 `clear_loadout_dense_detail` 与 `preset_two` 采用 WebP q90。详情及动画帧只用于对应状态，不作为稳定主画面或连续实机流程证据。裁模板使用原始 PNG，有损归档不能作为原图。具体画面事实见主仓 `docs/game/screens/贝果计划.md`「启动清空相关画面」。
 - `贝果-局内/电子保险箱交互-HUD错字-20260930.webp`：原生1080p失败截图，无损 WebP 并遮挡 UID，保留 `UPROAR` 被识别成 `IPROAR` 的像素，用于交互前 HUD 容错回归。
 - `打开游戏/`:ready、loading、退出登录弹窗、账号确认、账号确认-下拉、验证码登录、扫码登录、扫码成功、账号密码登录、选区服、登录服务器中、登录成功(12)
 - `加载画面/`:港口工厂旧址(lore tip 代表帧)

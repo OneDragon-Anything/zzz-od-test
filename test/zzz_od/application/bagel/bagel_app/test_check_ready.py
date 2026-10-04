@@ -44,6 +44,7 @@ def test_enter_refuses_settlement_with_safe_items(
     ctx = MagicMock()
     ctx.controller.screenshot.return_value = (0.0, screen)
     app = BagelApp(ctx, config, record)
+    app.initial_clear_pending = False
     monkeypatch.setattr(app, 'round_by_find_area', lambda *_args: MagicMock(is_success=True))
     result = app.enter()
     assert result.is_fail
