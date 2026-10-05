@@ -149,3 +149,23 @@ def test_repeated_investment_does_not_change_amount(
     monkeypatch.setattr(op, 'round_by_find_and_click_area', click)
     assert op.confirm_entry().status == '零投资入场未生效'
     click.assert_not_called()
+
+
+@pytest.mark.parametrize('investment_confirmed', [False, True])
+def test_death_during_entry_is_forwarded_only_after_verified_investment(
+    test_context: TestContext, monkeypatch: pytest.MonkeyPatch,
+    investment_confirmed: bool,
+) -> None:
+    """零投资已确认的入场死亡交正式任务结算，不能绕过投资校验假称已入场。"""
+    test_context.mock_screen('贝果-结算', '高危空局失败-原生1080')
+    op = BagelEnter(test_context)
+    op.zero_checked = True
+    op.investment_confirmed = investment_confirmed
+    op.screenshot()
+    click = MagicMock()
+    monkeypatch.setattr(test_context.controller, 'click', click)
+    result = op.confirm_entry()
+    assert result.is_success == investment_confirmed
+    if investment_confirmed:
+        assert result.status == '已进入雅努斯高危'
+    click.assert_not_called()

@@ -308,5 +308,6 @@ def test_controller_error_after_f_does_not_refresh_interaction_budget(
 
     monkeypatch.setattr(controller, 'interact', failing_interact)
     result = execute(op)
-    assert not result.success and result.data == '容器开箱交互已达3次上限'
-    assert [e[0] for e in controller.trace if e[0] in ('w', 'f')] == ['f', 'f', 'f']
+    assert not result.success and result.status == '异常'
+    assert '测试控制器在发送F后报错' in result.data
+    assert [e[0] for e in controller.trace if e[0] in ('w', 'f')] == ['f']

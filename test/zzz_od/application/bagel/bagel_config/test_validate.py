@@ -6,6 +6,11 @@ from zzz_od.application.bagel.bagel_config import BagelConfig
 @pytest.mark.parametrize(
     ('field', 'value'),
     [
+        ('max_failure_retries', -1),
+        ('max_failure_retries', 101),
+        ('max_failure_retries', True),
+        ('max_failure_retries', 1.5),
+        ('max_failure_retries', '5'),
         ('max_success_rounds', -1),
         ('max_success_rounds', 1001),
         ('max_success_rounds', True),
@@ -51,6 +56,21 @@ def test_legacy_targets_text_is_not_read_or_rewritten(config: BagelConfig) -> No
     assert config.data['targets_text'] == ['旧名单内容']
 
 
+@pytest.mark.parametrize('limit', [0, 1, 5, 100])
+def test_failure_retries_persist(config: BagelConfig, limit: int) -> None:
+    """额外入场额度按整数范围保存，旧配置缺省为五。"""
+    config.max_failure_retries = limit
+    config.validate()
+    assert BagelConfig(99, 'standalone').max_failure_retries == limit
+
+
+@pytest.mark.parametrize('limit', [-1, 101, True, 1.5, '5', None])
+def test_invalid_failure_retries_setter(config: BagelConfig, limit: object) -> None:
+    """保存前拒绝越界、布尔值和非整数。"""
+    with pytest.raises(ValueError, match='0 至 100'):
+        config.max_failure_retries = limit
+
+
 def test_auto_clean_warehouse_defaults_on() -> None:
     """仓库清理开关默认打开。"""
     assert BagelConfig(99, 'standalone').auto_clean_warehouse is True
@@ -58,6 +78,7 @@ def test_auto_clean_warehouse_defaults_on() -> None:
 
 def test_default_clean_selection_preserves_old_behavior(config: BagelConfig) -> None:
     """旧配置不用补字段，仍只卖三种类型与 C 到 S。"""
+    assert config.max_failure_retries == 5
     assert config.max_success_rounds == 1
     assert config.clean_mode == 'default'
     assert config.clean_filter_areas() == (

@@ -103,6 +103,6 @@ def test_child_watchdog_stops_wait_when_business_timeout_is_disabled(
     monkeypatch.setattr(ContainerRecovery, 'error', lambda _: None)
     monkeypatch.setattr(WatchedOpenBox, 'watchdog_max_rounds', 5)
     result = execute(op)
-    assert not result.success and '看门狗' in str(result.data)
+    assert not result.success and '看门狗' in str(result.status)
     assert [e[0] for e in controller.trace if e[0] in ('w', 'f')] == ['f']
     assert controller.frames < 20

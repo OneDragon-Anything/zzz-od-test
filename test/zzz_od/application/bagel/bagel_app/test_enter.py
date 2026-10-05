@@ -18,6 +18,7 @@ def test_application_consumes_first_entry_even_before_spawn(
     config: BagelConfig, record: BagelRunRecord, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """资格按启动隔离，不因入场失败、出生点未识别或暂停而重复授予。"""
+    monkeypatch.setattr('zzz_od.application.bagel.bagel_app.release_flow_inputs', lambda _: None)
     ctx = MagicMock()
     app = BagelApp(ctx, config, record)
     monkeypatch.setattr(app, 'screenshot', MagicMock())

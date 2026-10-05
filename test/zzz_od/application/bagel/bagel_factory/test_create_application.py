@@ -38,6 +38,8 @@ def test_pending_round_reaches_entry_check(
 ) -> None:
     """完整执行忽略旧局状态，进入入场核验并保留子操作的失败结果。"""
     ctx = MagicMock()
+    ctx.controller.game_config.get_action_keys.return_value = {'move_w': 'w', 'interact': 'f'}
+    ctx.controller.background_mode = False
     ctx.game_account_config.game_refresh_hour_offset = 4
     ctx.run_context.is_context_stop = False
     ctx.run_context.is_context_pause = False

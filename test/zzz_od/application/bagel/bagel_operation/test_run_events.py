@@ -31,6 +31,8 @@ def op(
 ) -> FinishOperation | BagelApp:
     """两条真实事件总线配合模拟上下文，不连接游戏。"""
     ctx = MagicMock()
+    ctx.controller.game_config.get_action_keys.return_value = {'move_w': 'w', 'interact': 'f'}
+    ctx.controller.background_mode = False
     ctx.debug_trace_bus = None
     ctx.run_context.is_context_stop = False
     ctx.run_context.is_context_pause = False

@@ -31,7 +31,6 @@ from zzz_od.application.bagel.bagel_navigate import BagelNavigate
 from zzz_od.application.bagel.bagel_open_box import BagelOpenBox
 from zzz_od.application.bagel.bagel_operation import BagelOperation
 from zzz_od.application.bagel.bagel_return import BagelReturn
-from zzz_od.application.bagel.bagel_run_flow import BagelRunFlow
 from zzz_od.application.bagel.bagel_run_record import BagelRunRecord
 from zzz_od.application.bagel.bagel_settle import BagelSettleWarehouse
 from zzz_od.application.bagel.bagel_slots import (
@@ -644,8 +643,12 @@ def test_full_capacity_and_empty_safe_without_growth_is_unproven(
 def app_setup(
     test_context: TestContext, monkeypatch: pytest.MonkeyPatch,
 ) -> tuple[BagelConfig, BagelRunRecord, list[str]]:
-    """子操作全部替换，只验证单局编排顺序。"""
+    """注入默认出生画面和子操作替身，验证正式任务的编排顺序。"""
+    controller = FixtureController(test_context)
+    controller.set_phases([{'frame': ('贝果-局内', '高危A出生-原生1080')}])
+    monkeypatch.setattr(test_context, 'controller', controller)
     monkeypatch.setattr('zzz_od.application.bagel.bagel_run_flow.BagelRunFlow.precondition', lambda *_: None)
+    monkeypatch.setattr('zzz_od.application.bagel.bagel_app.release_flow_inputs', lambda _: None)
     monkeypatch.setattr('zzz_od.application.bagel.bagel_run_flow.release_flow_inputs', lambda _: None)
     config = BagelConfig(99, 'standalone')
     config.max_success_rounds = 1
@@ -862,63 +865,12 @@ def test_app_interrupted_store_exits_and_reenters(
         assert result.success, result.status
         assert attempts == 2
         assert op.success_rounds == 1
-        assert op.defeat_rounds == 0
+        assert op.defeat_rounds == 1
+        assert op.failure_retries_used == 1
         assert len(drags) == 1
         assert events[:events.index('enter', 1)] == [
             'enter', 'move', 'navigate', 'open', 'store', 'exit', 'settle', 'return',
         ]
-    finally:
-        reset_running_state(test_context, op)
-
-
-def test_app_defeat_exits_to_warehouse_without_counting_success(
-    test_context: TestContext,
-    app_setup: tuple[BagelConfig, BagelRunRecord, list[str]],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """执行器报告失败后先结算，前两次重开，第三次结算后停止。"""
-    config, record, events = app_setup
-    controller = FixtureController(test_context)
-    monkeypatch.setattr(test_context, 'controller', controller)
-    monkeypatch.setattr('one_dragon.base.operation.operation.time.sleep', lambda _: None)
-    monkeypatch.setattr(BagelExit, 'execute', BagelOperation.execute)
-    controller.set_phases([{'frame': ('贝果-局内', '雅努斯出生-r01-39s')}])
-    def enter(self: BagelEnter) -> OperationResult:
-        """重开时恢复出生画面，避免沿用上一局仓库图。"""
-        events.append('enter')
-        controller.set_phases([{'frame': ('贝果-局内', '雅努斯出生-r01-39s')}])
-        return OperationResult(True)
-
-    monkeypatch.setattr(BagelEnter, 'execute', enter)
-
-    def defeated(self: BagelRunFlow) -> OperationResult:
-        """执行器统一报告整局失败，后续使用真实结算画面。"""
-        events.append('defeat')
-        controller.set_phases([
-            {'frame': ('贝果-结算', '高危空局失败-原生1080'),
-             'exit': ('on_click_in', '贝果-结算', '继续')},
-            {'frame': ('贝果-仓库', '空局仓库-原生1080')},
-        ])
-        return OperationResult(False, BagelOperation.STATUS_DEFEATED)
-
-    monkeypatch.setattr(BagelRunFlow, 'execute', defeated)
-    # 使用现有工厂配置构造，不创建额外运行记录。
-    op = WatchedApp(test_context, config, record)
-    op.watchdog_max_rounds = 80
-    enter_running_state(test_context)
-    try:
-        result = op.execute()
-        assert not result.success
-        assert result.status == '连续 3 局失败，已完成仓库结算，停止自动重开'
-        assert controller.phase_idx == 1
-        assert controller.click_hit_area('贝果-结算', '继续')
-        assert [event for event in events if event in ('enter', 'defeat', 'settle', 'return')] == [
-            'enter', 'defeat', 'settle', 'return',
-            'enter', 'defeat', 'settle', 'return',
-            'enter', 'defeat', 'settle',
-        ]
-        assert op.success_rounds == 0
-        assert op.defeat_rounds == 3
     finally:
         reset_running_state(test_context, op)
 
@@ -930,15 +882,16 @@ def test_app_defeat_exits_to_warehouse_without_counting_success(
     (['interrupted', 'defeat', 'interrupted'], 1, False, 0),
     (['interrupted', 'success'], 1, True, 1),
 ])
-def test_app_only_deposited_success_resets_defeat_streak(
+def test_app_success_and_skip_do_not_reset_failure_retries(
     test_context: TestContext,
     app_setup: tuple[BagelConfig, BagelRunRecord, list[str]],
     monkeypatch: pytest.MonkeyPatch, rounds: list[str], limit: int,
     success: bool, expected_count: int,
 ) -> None:
-    """成功入仓清零连续失败；非支持出生点和空箱局不清零，也不计成功。"""
+    """成功、非支持出生点和空箱均不清零；失败有物入仓仍不计成功。"""
     config, record, events = app_setup
     config.max_success_rounds = limit
+    config.max_failure_retries = 5 if success else 2
     controller = FixtureController(test_context)
     monkeypatch.setattr(test_context, 'controller', controller)
     monkeypatch.setattr('one_dragon.base.operation.operation.time.sleep', lambda _: None)
@@ -982,9 +935,10 @@ def test_app_only_deposited_success_resets_defeat_streak(
         assert events.count('settle') == len(rounds) - rounds.count('skip')
         assert events.count('return') == len(rounds) - (not success)
         assert op.success_rounds == expected_count
-        assert op.defeat_rounds == (0 if success else 3)
+        assert op.defeat_rounds == rounds.count('defeat') + rounds.count('interrupted')
+        assert op.failure_retries_used == op.defeat_rounds - (not success)
         if not success:
-            assert '连续 3 局失败' in result.status
+            assert '整体重试已用 2/2' in result.status
     finally:
         reset_running_state(test_context, op)
 
@@ -1013,7 +967,8 @@ def test_app_defeat_cleanup_error_stops_without_reentry(
     try:
         result = op.execute()
         assert not result.success
-        assert result.status == '收尾核验失败'
+        assert '收尾核验失败' in result.status
+        assert BagelOperation.STATUS_DEFEATED in result.status
         assert events.count('enter') == 1
         assert op.success_rounds == 0
         if failed_stage in (BagelExit, BagelSettleWarehouse):

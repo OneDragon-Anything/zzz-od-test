@@ -115,6 +115,7 @@ def test_settings_rebind_updates_selection_description(
     qapp.processEvents()
     qapp.processEvents()
     other = BagelConfig(99, 'another_group')
+    other.max_failure_retries = 7
     other.clean_mode = 'custom'
     other.clean_types = ['装备', '贵重物品']
     other.clean_qualities = ['S', 'Z']
@@ -125,6 +126,7 @@ def test_settings_rebind_updates_selection_description(
     qapp.processEvents()
     qapp.processEvents()
     try:
+        assert view.failure_retries_card.spin_box.value() == 7
         assert set(view.clean_types_card.get_value()) == {'装备', '贵重物品'}
         assert view.clean_types_card.contentLabel.text() == '已选 2 项'
         assert view.clean_qualities_card.contentLabel.text() == '已选 2 项'
@@ -144,6 +146,12 @@ def test_settings_save_and_show_relevant_options(qapp: QApplication, config: Bag
     view.show()
     qapp.processEvents()
     qapp.processEvents()
+    assert view.failure_retries_card.spin_box.value() == 5
+    assert view.failure_retries_card.spin_box.minimum() == 0
+    assert view.failure_retries_card.spin_box.maximum() == 100
+    assert view.failure_retries_card.titleLabel.text() == '整体重试次数'
+    view.failure_retries_card.spin_box.setValue(100)
+    assert BagelConfig(99, 'standalone').max_failure_retries == 100
     assert view.success_rounds_card.spin_box.value() == 1
     assert view.success_rounds_card.spin_box.minimum() == 0
     assert view.success_rounds_card.titleLabel.text() == '成功次数'

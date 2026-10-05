@@ -33,5 +33,8 @@ def test_spawn_unknown_screen_stops_after_limit(test_context: TestContext, monke
     monkeypatch.setattr(app, 'round_by_find_area', lambda *_: app.round_fail('未知'))
     for _ in range(3):
         assert app.check_spawn().result == OperationRoundResultEnum.WAIT
-    assert app.check_spawn().status == '未识别贝果局内画面'
+    from zzz_od.application.bagel.bagel_operation import BagelOperation
+    result = app.check_spawn()
+    assert result.status == BagelOperation.STATUS_ROUND_FAILED
+    assert result.data == '未识别贝果局内画面'
     assert app.attempts == 0

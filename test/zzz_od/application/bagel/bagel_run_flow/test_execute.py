@@ -16,7 +16,10 @@ from one_dragon.base.operation.operation_base import OperationResult
 from one_dragon.base.operation.operation_round_result import OperationRoundResultEnum
 from one_dragon.utils import cv2_utils
 from zzz_od.application.bagel.bagel_flow import load_published_flow
-from zzz_od.application.bagel.bagel_operation import BagelOperation
+from zzz_od.application.bagel.bagel_operation import (
+    BagelOperation,
+    BagelRecoverableFailure,
+)
 from zzz_od.application.bagel.bagel_run_flow import BagelRunFlow
 
 if TYPE_CHECKING:
@@ -91,10 +94,7 @@ def test_sequence_stops_at_failed_step(
     monkeypatch.setattr(op, 'build_operation', lambda _: child)
     first = op.run_step()
     if failed_status:
-        expected = (
-            failed_status if failed_status == BagelOperation.STATUS_DEFEATED
-            else BagelOperation.STATUS_CONTAINER_FAILED
-        )
+        expected = failed_status
         assert first.is_fail and first.status == expected
         if expected == BagelOperation.STATUS_CONTAINER_FAILED:
             assert first.data == failed_status
@@ -239,7 +239,9 @@ def test_failed_container_step_checks_new_frame(
 
     monkeypatch.setattr(op, 'screenshot', screenshot)
     child = MagicMock()
-    child.execute.return_value = OperationResult(False, '原始子操作错误')
+    child.execute.return_value = OperationResult(
+        False, '原始子操作错误', BagelRecoverableFailure('原始子操作错误'),
+    )
     monkeypatch.setattr(op, 'build_operation', lambda _: child)
     result = op.run_step()
     assert result.is_fail
