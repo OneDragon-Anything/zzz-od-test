@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from unittest.mock import MagicMock
 
 import pytest
 from test.harness.bagel_container import phases, prepare
@@ -30,7 +31,8 @@ def test_formal_app_routes_real_container_result(
         {**prompt, 'on': 'f'}, {**prompt, 'on': 'f'}, {**prompt, 'on': 'f'},
         panel if succeeds else prompt,
     ])
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_app.BagelRunFlow', lambda *args, **kwargs: flow_op)
+    factory = MagicMock(return_value=flow_op)
+    monkeypatch.setattr('zzz_od.application.bagel.bagel_app.BagelRunFlow', factory)
     app = BagelApp(test_context, config, record)
     app.matched_map_id = 'janus_high_b'
     app.flow_snapshot = {'janus_high_b': flow_op.flow}
@@ -40,6 +42,7 @@ def test_formal_app_routes_real_container_result(
     enter_running_state(test_context)
     try:
         result = app.run_flow()
+        assert factory.call_args.kwargs['continuous_safe_unlock'] is True
         next_node = app._get_next_node(result)
         assert next_node.cn == ('结算仓库' if succeeds else '失败局退出')
         assert app.defeat_rounds == 2 and app.success_rounds == 0

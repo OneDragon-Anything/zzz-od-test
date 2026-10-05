@@ -184,6 +184,26 @@ def test_safe_phase_at_real_unlock_screen(
     controller.interact.assert_not_called()
 
 
+@pytest.mark.parametrize('continuous,actions,phase', [
+    (False, ('interact', 'unlock'), 'interact'),
+    (True, ('interact', 'unlock'), 'full'),
+    (True, ('interact',), 'interact'),
+    (True, ('unlock',), 'unlock'),
+    (True, ('interact', 'store'), 'interact'),
+])
+def test_safe_continuity_respects_selection(
+    continuous: bool, actions: tuple[str, ...], phase: str,
+) -> None:
+    """连续执行只合并已选中的相邻动作；开发工具默认保持独立阶段。"""
+    flow = load_published_flow('janus_high_a')
+    selected = tuple(s.id for s in flow.steps if s.target == 'safe' and s.action in actions)
+    runner = BagelRunFlow(MagicMock(), flow, selected, continuous_safe_unlock=continuous)
+    operation = runner.build_operation(runner.flow.steps[runner.index])
+    assert isinstance(operation, BagelUnlockSafe)
+    assert operation.phase == phase
+    assert (operation.on_unlock_ready is not None) is (phase == 'full')
+
+
 def test_unlock_does_not_perform_initial_interaction(
     test_context: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:

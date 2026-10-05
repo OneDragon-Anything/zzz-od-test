@@ -12,7 +12,11 @@ from test.harness.fixture_controller import (
     reset_running_state,
 )
 
+from one_dragon.base.operation.operation import Operation
 from one_dragon.utils import cv2_utils
+from zzz_od.application.bagel.bagel_flow import load_published_flow
+from zzz_od.application.bagel.bagel_operation import BagelRecoverableFailure
+from zzz_od.application.bagel.bagel_run_flow import BagelRunFlow
 from zzz_od.application.bagel.bagel_unlock_safe import BagelUnlockSafe
 
 if TYPE_CHECKING:
@@ -50,6 +54,12 @@ class UnlockController(FixtureController):
 
 class WatchedUnlock(WatchdogOperationMixin, BagelUnlockSafe):
     """接错边或少按一次时，及时结束真实执行循环。"""
+
+    watchdog_max_rounds: int = 40
+
+
+class WatchedFlow(WatchdogOperationMixin, BagelRunFlow):
+    """连续解锁仍运行真实执行器，错误流转用轮次上限结束。"""
 
     watchdog_max_rounds: int = 40
 
@@ -164,6 +174,103 @@ def test_interact_phase_stops_at_unlock_ui(
     assert op.hits_done == 0
     assert unlock_controller.presses == [(interaction, 0.2)]
     assert unlock_controller.frames == [interaction] * 3 + ['电子保险箱第1轮小圈']
+    assert unlock_controller.recorded_clicks == []
+
+
+@pytest.mark.parametrize('phase', ['unlock', 'full'])
+def test_first_small_ring_is_used_on_ui_confirmation(
+    test_context: TestContext, unlock_controller: UnlockController, phase: str,
+) -> None:
+    """首轮小圈只出现在确认界面的一帧，完整执行仍须在首轮命中帧按键。"""
+    interaction = '电子保险箱交互-HUD错字-20260930'
+    phases = [] if phase == 'unlock' else [
+        {'frame': ('贝果-局内', interaction), 'press_time': 0.2},
+    ]
+    cycles = ring_phases(4)
+    cycles[0]['exit'] = ('on_polls', 1)
+    phases.extend(cycles)
+    phases.append({'frame': ('贝果-局内', '电子保险箱搜索完成')})
+    unlock_controller.set_phases(phases)
+    op = WatchedUnlock(test_context, phase=phase)
+
+    result = execute(op)
+
+    assert result.success, result.status
+    expected = [] if phase == 'unlock' else [(interaction, 0.2)]
+    expected.extend((f'电子保险箱第{cycle}轮命中', 0.05) for cycle in range(1, 5))
+    assert unlock_controller.presses == expected
+    assert unlock_controller.frames.count('电子保险箱第1轮小圈') == 1
+
+
+@pytest.mark.parametrize('outcome', ['success', 'interrupted', 'existing_search', 'unlock_timeout'])
+def test_continuous_flow_keeps_first_ring_and_stage_events(
+    test_context: TestContext, unlock_controller: UnlockController,
+    monkeypatch: pytest.MonkeyPatch, outcome: str,
+) -> None:
+    """从真实箱前交互贯穿连续解锁，核对输入、阶段事件和中断原因。"""
+    interaction = '电子保险箱交互-HUD错字-20260930'
+    search = '电子保险箱搜索完成'
+    phases = [{'frame': ('贝果-局内', interaction), 'press_time': 0.2}]
+    if outcome == 'existing_search':
+        phases.append({'frame': ('贝果-局内', search)})
+    else:
+        phases.append({'frame': ('贝果-局内', interaction), 'exit': ('on_polls', 2)})
+        cycles = ring_phases(1 if outcome == 'interrupted' else 4)
+        cycles[0]['exit'] = ('on_polls', 1)
+        phases.extend(cycles)
+        final_frame = {
+            'success': search, 'interrupted': interaction,
+            'unlock_timeout': '电子保险箱第4轮反馈',
+        }[outcome]
+        phases.append({'frame': ('贝果-局内', final_frame)})
+    unlock_controller.set_phases(phases)
+    monkeypatch.setattr(WatchedUnlock, 'watchdog_max_rounds', 100)
+    monkeypatch.setattr('zzz_od.application.bagel.bagel_run_flow.BagelUnlockSafe', WatchedUnlock)
+    monkeypatch.setattr('zzz_od.application.bagel.bagel_run_flow.release_flow_inputs', lambda _: None)
+    flow = load_published_flow('janus_high_a')
+    selected = tuple(s.id for s in flow.steps if s.target == 'safe' and s.action in ('interact', 'unlock'))
+    events: list[dict[str, object]] = []
+    op = WatchedFlow(
+        test_context, flow, selected, on_event=events.append, continuous_safe_unlock=True,
+    )
+    build = MagicMock(wraps=op.build_operation)
+    monkeypatch.setattr(op, 'build_operation', build)
+    waits: list[tuple[int, float | None]] = []
+    original_wait = Operation._after_round_wait
+
+    def record_wait(
+        operation: Operation, wait: float | None = None, wait_round_time: float | None = None,
+    ) -> None:
+        """保留受控等待时钟，记录首轮输入前是否存在固定观察空档。"""
+        waits.append((len(unlock_controller.presses), wait))
+        original_wait(operation, wait=wait, wait_round_time=wait_round_time)
+
+    monkeypatch.setattr(Operation, '_after_round_wait', record_wait)
+    enter_running_state(test_context)
+    try:
+        result = op.execute()
+    finally:
+        reset_running_state(test_context, op)
+
+    failed = outcome in ('interrupted', 'unlock_timeout')
+    assert result.success is not failed, result.status
+    if outcome == 'interrupted':
+        assert result.status == op.STATUS_INTERRUPTED
+        assert result.data == '解锁界面消失，无法点按'
+    elif outcome == 'unlock_timeout':
+        assert result.status == op.STATUS_TIMEOUT
+        assert isinstance(result.data, BagelRecoverableFailure)
+        assert result.data.reason == op.STATUS_TIMEOUT
+    build.assert_called_once_with(next(s for s in flow.steps if s.id == selected[0]))
+    expected = [(interaction, 0.2)]
+    hits = 0 if outcome == 'existing_search' else 1 if outcome == 'interrupted' else 4
+    expected.extend((f'电子保险箱第{cycle}轮命中', 0.05) for cycle in range(1, hits + 1))
+    assert unlock_controller.presses == expected
+    assert all((wait or 0) <= 0.02 for presses, wait in waits if presses == 1)
+    assert [(e['kind'], e['step_id']) for e in events if e['kind'] in ('start', 'done', 'failed')] == [
+        ('start', selected[0]), ('done', selected[0]),
+        ('start', selected[1]), ('failed' if failed else 'done', selected[1]),
+    ]
     assert unlock_controller.recorded_clicks == []
 
 
