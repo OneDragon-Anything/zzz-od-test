@@ -11,6 +11,13 @@ def test_screen_area_type_values_and_legacy_aliases() -> None:
     assert ScreenArea(area_type='ocr').area_type == ScreenAreaType.TEXT
 
 
+def test_invalid_area_type_degrades_to_none() -> None:
+    area = ScreenArea(area_name='坏类型', area_type='colour', text='标题')
+
+    assert area.area_type == ScreenAreaType.NONE
+    assert ScreenArea(area_type='').area_type == ScreenAreaType.NONE
+
+
 def test_old_yaml_area_type_inference_uses_recognition_fields() -> None:
     text_area = ScreenArea(text='快捷手册')
     template_area = ScreenArea(template_id='back')
