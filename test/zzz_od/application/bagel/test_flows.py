@@ -68,18 +68,6 @@ def test_open_box_retries_missed_interaction_once(
         {'frame': ('贝果-局内', '武备箱搜索结果-r07')},
     ])
     op = WatchedOpenBox(test_context)
-    original = op.screenshot
-    clock = 0.0
-
-    def screenshot() -> object:
-        """每张测试截图递增时间，避免等待真实秒数。"""
-        nonlocal clock
-        result = original()
-        clock += 1
-        op.last_screenshot_time = clock
-        return result
-
-    monkeypatch.setattr(op, 'screenshot', screenshot)
     enter_running_state(test_context)
     try:
         result = op.execute()
@@ -96,8 +84,8 @@ def test_open_box_does_not_press_while_search_panel_open(
     controller.set_phases([{'frame': ('贝果-局内', '武备箱搜查中-r07')}])
     op = WatchedOpenBox(test_context)
     op.screenshot()
-    op.interact_attempts = 1
-    op.last_interact_time = op.last_screenshot_time - 2
+    op.recovery.interactions = 1
+    op.recovery.last_interact_at = op.recovery.clock() - 2
     assert op.wait_search().status == '已进入武备箱搜查'
     assert controller.recorded_inputs == []
 
@@ -109,22 +97,22 @@ def test_open_box_retries_after_search_panel_closes(
     controller.set_phases([{'frame': ('贝果-局内', '雅努斯箱前-r07-32s')}])
     op = WatchedOpenBox(test_context)
     op.screenshot()
-    op.interact_attempts = 1
-    op.last_interact_time = op.last_screenshot_time - 2
+    op.recovery.interactions = 1
+    op.recovery.last_interact_at = op.recovery.clock() - 2
     assert op.wait_search().status == '武备箱未打开，补按一次交互'
     assert controller.recorded_inputs == ['f']
 
 
-def test_open_box_stops_after_two_missed_interactions(
+def test_open_box_stops_after_three_missed_interactions(
     test_context: TestContext, controller: BagelFixtureController,
 ) -> None:
-    """两次输入均未打开时提前终止，不等到超时或无上限补按。"""
+    """三次输入均未打开时提前终止，不允许第四次交互。"""
     controller.set_phases([{'frame': ('贝果-局内', '雅努斯箱前-r07-32s')}])
     op = WatchedOpenBox(test_context)
     op.screenshot()
-    op.interact_attempts = 2
-    op.last_interact_time = op.last_screenshot_time - 2
-    assert op.wait_search().status == '两次交互后仍未打开武备箱'
+    op.recovery.interactions = 3
+    op.recovery.last_interact_at = op.recovery.clock() - 2
+    assert op.wait_search().status == '容器开箱交互已达3次上限'
     assert controller.recorded_inputs == []
 
 
@@ -140,8 +128,8 @@ def test_open_box_live_failure_can_retry(
     op = WatchedOpenBox(test_context)
     op.last_screenshot = cv2_utils.read_image(str(root / 'screens/贝果-局内/批次失败-开箱未进入面板.webp'))
     op.last_screenshot_time = 3
-    op.interact_attempts = 1
-    op.last_interact_time = 0
+    op.recovery.interactions = 1
+    op.recovery.last_interact_at = op.recovery.clock() - 3
     assert op.wait_search().status == '武备箱未打开，补按一次交互'
     assert controller.recorded_inputs == ['f']
 
@@ -153,11 +141,12 @@ class WatchedReturn(WatchdogOperationMixin, BagelReturn):
 
 
 @pytest.fixture
-def controller(test_context: TestContext, monkeypatch: pytest.MonkeyPatch) -> BagelFixtureController:
+def controller(
+    test_context: TestContext, monkeypatch: pytest.MonkeyPatch, no_round_wait: None,
+) -> BagelFixtureController:
     """使用真截图、OCR 和区域，只替换输入及等待。"""
     result = BagelFixtureController(test_context)
     monkeypatch.setattr(test_context, 'controller', result)
-    monkeypatch.setattr('one_dragon.base.operation.operation.time.sleep', lambda _: None)
     return result
 
 
@@ -292,11 +281,16 @@ def test_return_to_hub_after_warehouse(
         original_interact(press=press, press_time=press_time, release=release)
 
     monkeypatch.setattr(controller, 'interact', record_interact)
-    monkeypatch.setattr(
-        'one_dragon.base.operation.operation.time.sleep',
-        lambda seconds: events.append(('wait', controller.phase_idx, seconds)),
-    )
     op = WatchedReturn(test_context)
+    original_wait = op._after_round_wait
+
+    def record_wait(wait: float | None = None, wait_round_time: float | None = None) -> None:
+        """记录逻辑等待，并使用受控时钟推进。"""
+        if wait is not None:
+            events.append(('wait', controller.phase_idx, wait))
+        original_wait(wait=wait, wait_round_time=wait_round_time)
+
+    monkeypatch.setattr(op, '_after_round_wait', record_wait)
     enter_running_state(test_context)
     try:
         result = op.execute()
@@ -442,7 +436,7 @@ def test_open_box_without_prompt_stops(
     try:
         result = op.execute()
         assert not result.success
-        assert result.status == '未发现武备箱交互提示'
+        assert result.status == '容器提示消失，需要重新靠近'
         assert controller.recorded_inputs == []
         assert controller.recorded_clicks == []
     finally:
@@ -460,7 +454,7 @@ def test_open_box_waits_without_attack_button(
     rect = test_context.screen_loader.get_area('战斗画面', '按键-普通攻击').rect
     op.last_screenshot[rect.y1:rect.y2, rect.x1:rect.x2] = 0
     for _ in range(3):
-        assert op.open_box().result == OperationRoundResultEnum.RETRY
+        assert op.open_box().result == OperationRoundResultEnum.WAIT
     assert controller.recorded_inputs == []
 
 

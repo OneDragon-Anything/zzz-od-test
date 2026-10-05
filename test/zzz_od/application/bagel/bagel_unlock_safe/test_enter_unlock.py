@@ -48,12 +48,12 @@ def test_enter_unlock_requires_hud_and_interaction(
     press = MagicMock()
     monkeypatch.setattr(test_context.controller, 'interact', press)
 
-    assert op.enter_unlock().is_fail
+    assert not op.enter_unlock().is_success
     press.assert_not_called()
 
 
 @pytest.mark.parametrize('state, expected_status', [
-    ('高危开局大地图-原生1080', '未发现电子保险箱交互提示'),
+    ('高危开局大地图-原生1080', '等待容器面板或局内画面确认'),
     ('电子保险箱搜索完成', BagelUnlockSafe.STATUS_UNLOCKED),
     ('电子保险箱第1轮小圈', '已在解锁界面'),
 ])

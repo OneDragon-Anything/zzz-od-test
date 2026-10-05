@@ -125,6 +125,8 @@ def test_box_prompt_stops_before_moving(op: BagelNavigate, test_context: TestCon
     """独立第七局箱前提示出现后，不能继续沿目标点过冲。"""
     test_context.mock_screen('贝果-局内', '雅努斯箱前-r07-32s')
     op = published_navigation(op.ctx, action='approach')
+    assert op.move_to_target().status == '发现容器提示，松键后确认停稳'
+    op.last_screenshot_time = op._settle_until
     assert op.move_to_target().status == BagelNavigate.STATUS_ARRIVED_BOX
     for key in 'wasd':
         getattr(op.ctx.controller, f'move_{key}').assert_not_called()
@@ -637,6 +639,8 @@ def test_box_prompt_appears_during_stop(
     assert op.move_to_target().status == '目标前停步等待交互提示'
     test_context.mock_screen('贝果-局内', '雅努斯箱前-r07-32s')
     op.screenshot()
+    assert op.move_to_target().status == '发现容器提示，松键后确认停稳'
+    op.last_screenshot_time = op._settle_until
     assert op.move_to_target().status == BagelNavigate.STATUS_ARRIVED_BOX
     for key in 'wasd':
         getattr(op.ctx.controller, f'move_{key}').assert_not_called()
@@ -686,6 +690,8 @@ def test_b_spawn_uses_position_and_stops_at_prompt(
     navigation.screenshot()
     navigation.last_screenshot_time = navigation.last_input_frame + 1
     monkeypatch.setattr(navigation.vision, 'locate', lambda _: (130.5, 69.4))
+    assert navigation.move_to_target().status == '发现容器提示，松键后确认停稳'
+    navigation.last_screenshot_time = navigation._settle_until
     assert navigation.move_to_target().status == BagelNavigate.STATUS_ARRIVED_BOX
 
 
@@ -751,20 +757,28 @@ def test_safe_route_walks_then_uses_small_steps(
     monkeypatch.setattr(navigation.vision, 'locate', lambda _: navigation.active_waypoints[-1][1])
     monkeypatch.setattr(navigation, 'is_bagel_result', lambda: False)
     monkeypatch.setattr(navigation, 'round_by_find_area',
-                        lambda *args: navigation.round_fail() if args[-1] == '交互F键' else navigation.round_success())
+                        lambda *args: navigation.round_success() if args[-1] in (
+                            '按键-普通攻击', '电子保险箱交互',
+                        ) else navigation.round_fail())
     assert navigation.move_to_target().status == '目标前停步等待交互提示'
     op.ctx.controller.move_w.assert_not_called()
     navigation.last_screenshot_time += 1
     navigation.steps = 100
-    monkeypatch.setattr(navigation, 'round_by_find_area', lambda *_: navigation.round_success())
+    monkeypatch.setattr(navigation, 'round_by_find_area', lambda *args: (
+        navigation.round_success() if args[-1] in (
+            '按键-普通攻击', '电子保险箱交互', '交互F键',
+        ) else navigation.round_fail()
+    ))
+    assert navigation.move_to_target().status == '发现容器提示，松键后确认停稳'
+    navigation.last_screenshot_time = navigation._settle_until
     assert navigation.move_to_target().status == BagelNavigate.STATUS_ARRIVED_SAFE
     op.ctx.controller.move_w.assert_not_called()
 
 
 @pytest.mark.parametrize('role,position,angle,arrived', [
     ('entry', (160, 92), 0, False),
-    ('entry', (178.6, 84.9), 0, True),
-    ('entry', (194.6, 84.9), 0, True),
+    ('entry', (186.6, 84.9), 0, True),
+    ('entry', (187.6, 84.9), 0, True),
     ('turn', (194, 100), 40, False),
     ('turn', (186.6, 84.9), 30, False),
 ])
@@ -925,13 +939,14 @@ def test_braked_move_execute_waits_until_destination(
     monkeypatch.setattr(navigation.vision, 'player_angle', lambda _: 0)
     original_screenshot = navigation.screenshot
     polls = 0
+    frame_started = navigation.last_screenshot_time
 
     def screenshot_with_clock() -> None:
         """读取存档画面并推进截图时间，避免真实睡眠。"""
         nonlocal polls
         original_screenshot()
         polls += 1
-        navigation.last_screenshot_time = polls * 0.3
+        navigation.last_screenshot_time = max(frame_started + polls * 0.3, navigation.last_screenshot_time)
 
     monkeypatch.setattr(navigation, 'screenshot', screenshot_with_clock)
     enter_running_state(test_context)
@@ -973,6 +988,10 @@ def test_safe_prompt_requires_real_f_button(
     monkeypatch.setattr(navigation.vision, 'locate', lambda _: position)
     monkeypatch.setattr(navigation.vision, 'player_angle', lambda _: None)
     result = navigation.move_to_target()
+    if arrived:
+        assert result.status == '发现容器提示，松键后确认停稳'
+        navigation.last_screenshot_time = navigation._settle_until
+        result = navigation.move_to_target()
     assert (result.status == navigation.STATUS_ARRIVED_SAFE) is arrived
     test_context.controller.move_w.assert_not_called()
 
@@ -1063,7 +1082,7 @@ def test_reaching_point_waits_without_moving_then_succeeds_or_fails(
     op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
     mode: str, target: str, after_arrival: str,
 ) -> None:
-    """到点后定位漂移或丢失均不再走；两秒内有效提示可成功，否则失败。"""
+    """到点后只观察；定位丢失时不采信提示，提示出现后仍确认停稳。"""
     navigation = published_navigation(op.ctx, action='approach', target=target)
     navigation.navigation = replace(navigation.navigation, final_mode=mode)
     xy = navigation.active_waypoints[-1][1]
@@ -1078,14 +1097,27 @@ def test_reaching_point_waits_without_moving_then_succeeds_or_fails(
     elif after_arrival == 'lost':
         monkeypatch.setattr(navigation.vision, 'locate', lambda _: None)
     navigation.last_screenshot_time = started + 1
-    assert navigation.move_to_target().status == '目标前停步等待交互提示'
+    waiting = navigation.move_to_target()
+    assert waiting.status == (
+        '小地图暂时对不上，再看一帧' if after_arrival == 'lost'
+        else '目标前停步等待交互提示'
+    )
     navigation.last_screenshot_time = started + 2.1
-    if after_arrival == 'late_prompt':
-        monkeypatch.setattr(navigation, 'round_by_find_area', lambda *_: navigation.round_success())
-    if after_arrival == 'prompt':
-        navigation.last_screenshot_time = started + 1.5
-        monkeypatch.setattr(navigation, 'round_by_find_area', lambda *_: navigation.round_success())
+    if after_arrival in ('prompt', 'late_prompt'):
+        if after_arrival == 'prompt':
+            navigation.last_screenshot_time = started + 1.5
+        monkeypatch.setattr(navigation, 'round_by_find_area', lambda *args: (
+            navigation.round_success() if args[-1] in (
+                '按键-普通攻击', navigation.interact_area, '交互F键',
+            ) else navigation.round_fail()
+        ))
+        assert navigation.move_to_target().status == '发现容器提示，松键后确认停稳'
+        navigation.last_screenshot_time = navigation._settle_until
         assert navigation.move_to_target().status == navigation.arrive_status
+    elif after_arrival == 'lost':
+        for _ in range(3):
+            result = navigation.move_to_target()
+        assert result.is_fail and '小地图定位失败' in result.status
     else:
         result = navigation.move_to_target()
         assert result.result == OperationRoundResultEnum.FAIL
@@ -1126,13 +1158,14 @@ def test_arrival_wait_runs_with_real_frames_without_more_input(
     controller.set_phases(phases)
     original_screenshot = navigation.screenshot
     polls = 0
+    frame_started = navigation.last_screenshot_time
 
     def screenshot_with_clock() -> None:
         """保留真实画面读取，每次观察推进半秒供超时分支判断。"""
         nonlocal polls
         original_screenshot()
         polls += 1
-        navigation.last_screenshot_time = polls * 0.5
+        navigation.last_screenshot_time = frame_started + polls * 0.5
 
     monkeypatch.setattr(navigation, 'screenshot', screenshot_with_clock)
     enter_running_state(test_context)

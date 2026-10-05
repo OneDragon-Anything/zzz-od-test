@@ -138,7 +138,7 @@ def test_corrupt_resource_never_falls_back(
 def test_repeated_container_prompt_requires_target_position(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """上一个同类容器的提示不能提前结束新移动步骤。"""
+    """另一处同类容器提示须先停稳核对位置，不能继续移动或提前到达。"""
     flow = load_published_flow('janus_high_b')
     step = flow.steps[1]
     nav = BagelNavigate(
@@ -150,12 +150,21 @@ def test_repeated_container_prompt_requires_target_position(
     )
     nav.last_screenshot_time = 1
     monkeypatch.setattr(nav, 'is_bagel_result', lambda: False)
-    monkeypatch.setattr(nav, 'round_by_find_area', lambda *_: nav.round_success())
+    monkeypatch.setattr(nav, 'round_by_find_area', lambda *args: (
+        nav.round_success() if args[-1] in ('按键-普通攻击', '武备箱交互', '交互F键')
+        else nav.round_fail()
+    ))
     monkeypatch.setattr(nav, 'minimap', lambda: None)
     monkeypatch.setattr(nav.vision, 'player_angle', lambda _: 0)
     monkeypatch.setattr(nav.vision, 'locate', lambda _: (100, 100))
     cruise = MagicMock(return_value=nav.round_wait('继续移动'))
     monkeypatch.setattr(nav, '_cruise_toward', cruise)
-    assert nav.move_to_target().status == '继续移动'
+    assert nav.move_to_target().status == '发现容器提示，松键后确认停稳'
+    nav.last_screenshot_time = nav._settle_until
+    assert nav.move_to_target().status == '容器交互提示与当前目标位置不符'
+    cruise.assert_not_called()
+    nav.handle_init()
     monkeypatch.setattr(nav.vision, 'locate', lambda _: step.waypoints[-1].xy)
+    assert nav.move_to_target().status == '发现容器提示，松键后确认停稳'
+    nav.last_screenshot_time = nav._settle_until
     assert nav.move_to_target().status == nav.STATUS_ARRIVED_BOX

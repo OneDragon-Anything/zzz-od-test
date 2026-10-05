@@ -91,7 +91,13 @@ def test_sequence_stops_at_failed_step(
     monkeypatch.setattr(op, 'build_operation', lambda _: child)
     first = op.run_step()
     if failed_status:
-        assert first.is_fail and first.status == failed_status
+        expected = (
+            failed_status if failed_status == BagelOperation.STATUS_DEFEATED
+            else BagelOperation.STATUS_CONTAINER_FAILED
+        )
+        assert first.is_fail and first.status == expected
+        if expected == BagelOperation.STATUS_CONTAINER_FAILED:
+            assert first.data == failed_status
         assert op.index == 2
         assert [e['kind'] for e in events] == ['start', 'failed']
     else:

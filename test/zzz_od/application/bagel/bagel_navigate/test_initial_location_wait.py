@@ -127,7 +127,11 @@ def test_only_initial_insufficient_geometry_waits(
         wait.assert_called_with(wait=0.3, wait_round_time=None)
         assert sum(call.kwargs.get('wait') is not None for call in wait.call_args_list) == 1
     else:
-        assert result.is_fail and result.status == '小地图定位失败，停止移动'
+        expected = (
+            f'小地图定位失败：{reason}' if action == 'approach'
+            else '小地图定位失败，停止移动'
+        )
+        assert result.is_fail and result.status == expected
     assert op.last_position is None
     no_motion(op)
     op.ctx.controller.stop_moving_forward.assert_called()

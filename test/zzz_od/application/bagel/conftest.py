@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 import pytest
@@ -11,11 +12,17 @@ from zzz_od.application.bagel.bagel_run_record import BagelRunRecord
 
 @pytest.fixture
 def no_round_wait(monkeypatch: pytest.MonkeyPatch) -> None:
-    """仅跳过节点结果的等待；不替换线程、事件总线共用的 time.sleep。"""
+    """推进受控等待时钟，不替换线程和事件总线共用的 sleep。"""
+    original_clock = time.time
+    elapsed = 0.0
+    monkeypatch.setattr(time, 'time', lambda: original_clock() + elapsed)
+
     def skip_wait(
         self: Operation, wait: float | None = None, wait_round_time: float | None = None,
     ) -> None:
-        """画面由测试剧本推进，节点无需等待真实时间。"""
+        """推进逻辑等待时间，画面仍由控制器按实际输入推进。"""
+        nonlocal elapsed
+        elapsed += wait or max(0, (wait_round_time or 0) - (time.time() - self.round_start_time))
 
     monkeypatch.setattr(Operation, '_after_round_wait', skip_wait)
 
