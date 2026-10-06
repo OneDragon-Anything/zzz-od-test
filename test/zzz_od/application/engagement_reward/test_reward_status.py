@@ -21,7 +21,6 @@ def fake_operation() -> SimpleNamespace:
     """仅替换识别和点击辅助函数，不调用 Application 构造函数。"""
     return SimpleNamespace(
         last_screenshot=object(),
-        STATUS_REWARD_VERIFIED=EngagementRewardApp.STATUS_REWARD_VERIFIED,
         round_by_find_area=Mock(),
         round_by_find_and_click_area=Mock(),
         round_success=lambda status: outcome(True, status),
