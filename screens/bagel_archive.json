@@ -2,6 +2,10 @@
   "note": "以下素材遮挡 UID 后以无损 WebP 保存。有损来源无法恢复原 PNG 精度；不得作为无损模板裁剪源。",
   "images": [
     {
+      "image": "screens/贝果-研究站/出发切换黑屏-20261006.webp",
+      "pixel_source": "1080p H.264 实机录像第 57 秒解码像素，遮挡 UID 后无损 WebP 编码；不是原生无损模板来源"
+    },
+    {
       "image": "screens/贝果-仓库/入仓后安全箱空-r07-118s.webp",
       "pixel_source": "有损 WebP 解码像素"
     },

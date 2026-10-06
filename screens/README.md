@@ -14,6 +14,7 @@
 贝果部分历史归档以有损 WebP 像素为来源，UID 遮挡后改用无损编码，不能恢复原 PNG 精度；逐图来源见 [贝果归档像素来源](bagel_archive.json)。这些素材可沿用识别回归，不作为无损模板裁剪源。
 
 ## 已归档
+- `贝果-研究站/出发切换黑屏-20261006.webp`：达塔对话点击「出发出发」后的黑屏过渡，来源为 1080p 画面。遮挡 UID 后使用无损 WebP 编码；仅用于返回与下一局入场的流程回归，不作为无损模板来源或连续实机流程的验收证据。
 - `画面-通用/贝果返回阻挡页.webp`：1920×1080 阻挡画面，WebP q90，UID 已遮挡。用于通用返回大世界的流程回归，只核对既有返回按钮，不建立签到页专用识别，也不作模板裁剪源。
 - `贝果-局内/四格安全箱部分占用-20261004.webp`：四格安全箱识别样本及主仓锁图标模板的像素来源，详见[贝果素材索引](bagel_archive.json)。两格、三格及小容量仓库测试画面在运行时合成，不作为实拍归档。
 - `贝果-备战/`：`clear_loadout_carried`、`clear_loadout_empty`、`clear_loadout_tools_only`、`clear_loadout_second_weapon_stored`、`clear_loadout_weapon_detail`、`clear_loadout_equipment_detail`、`clear_loadout_item_detail`、`clear_loadout_dense_inventory`、`clear_loadout_dense_detail`、`preset_two`，用于启动清空的携带读数、槽位、详情与预设画面参考。
