@@ -11,7 +11,7 @@ from test.harness.bagel_loadout import running_operation
 from test.harness.fixture_controller import WatchdogOperationMixin
 
 from zzz_od.application.bagel.bagel_enter import BagelEnter
-from zzz_od.application.bagel.bagel_screen import read_area
+from zzz_od.application.bagel.bagel_investment import read_investment
 
 if TYPE_CHECKING:
     from cv2.typing import MatLike
@@ -32,9 +32,11 @@ def investment_frame(ctx: TestContext, amount: str) -> MatLike:
     if amount == '500K':
         return ctx.load_screen('贝果-入场确认', '高危投资500K-原生1080').copy()
     frame = ctx.load_screen('贝果-入场确认', '高危零投资-原生1080').copy()
+    coin = frame[700:754, 927:966].copy()
     cv2.rectangle(frame, (780, 700), (1139, 753), (28, 28, 28), -1)
+    frame[700:754, 780:819] = coin
     if amount:
-        cv2.putText(frame, amount, (800, 740), cv2.FONT_HERSHEY_SIMPLEX,
+        cv2.putText(frame, amount, (825, 740), cv2.FONT_HERSHEY_SIMPLEX,
                     1.1, (255, 255, 255), 2, cv2.LINE_AA)
     return frame
 
@@ -66,7 +68,7 @@ def test_investment_rechecked_before_entry(
     """全流程覆盖初始为零、非零归零、更新延迟以及 OCR 暂缺后恢复。"""
     phases = entry_phases()
     before = investment_frame(test_context, amount)
-    assert read_area(test_context, before, '贝果-入场确认', '投资金额') == amount
+    assert read_investment(test_context, before) == amount
     if amount != '0':
         if amount:
             phases.append({'frame': before, 'exit': ('on_click_in', '贝果-入场确认', '投资最小值')})

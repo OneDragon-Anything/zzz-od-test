@@ -1,0 +1,35 @@
+{
+  "source_name": "2026-10-07 17-14-31.flv",
+  "source_sha256": "d7f45e8df7a3c10fb1d65fef73f63175079b8dd76a675cae00d7daba47666bb4",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "fps": 60,
+  "decoded_frames": 1288,
+  "model": "ppocrv6 CPU",
+  "original_roi": [
+    780,
+    700,
+    1140,
+    754
+  ],
+  "pr_roi": [
+    960,
+    700,
+    1140,
+    754
+  ],
+  "color_range": [
+    [
+      180,
+      180,
+      180
+    ],
+    [
+      255,
+      255,
+      255
+    ]
+  ]
+}

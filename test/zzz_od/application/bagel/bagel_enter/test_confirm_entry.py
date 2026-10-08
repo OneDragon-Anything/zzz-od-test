@@ -47,7 +47,7 @@ def test_nonzero_investment_waits_for_new_zero_frame(
         op.round_success() if area == '投资标题' else op.round_retry()
     ))
     read = MagicMock(side_effect=[amount, '0'])
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_enter.read_area', read)
+    monkeypatch.setattr('zzz_od.application.bagel.bagel_enter.read_investment', read)
     click = MagicMock(return_value=op.round_success())
     monkeypatch.setattr(op, 'round_by_find_and_click_area', click)
 
@@ -74,7 +74,7 @@ def test_unclear_investment_has_bounded_reads_without_clicks(
     monkeypatch.setattr(op, 'round_by_find_area', lambda _screen, _name, area: (
         op.round_success() if area == '投资标题' else op.round_retry()
     ))
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_enter.read_area', lambda *_: amount)
+    monkeypatch.setattr('zzz_od.application.bagel.bagel_enter.read_investment', lambda *_: amount)
     click = MagicMock()
     monkeypatch.setattr(op, 'round_by_find_and_click_area', click)
     for _ in range(3):
@@ -97,7 +97,7 @@ def test_min_click_result_requires_recheck(
     monkeypatch.setattr(op, 'round_by_find_area', lambda _screen, _name, area: (
         op.round_success() if area == '投资标题' else op.round_retry()
     ))
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_enter.read_area', lambda *_: '1000000')
+    monkeypatch.setattr('zzz_od.application.bagel.bagel_enter.read_investment', lambda *_: '1000000')
     results = {
         'success': op.round_success(),
         'not_found': op.round_retry('未找到 投资最小值'),
@@ -123,7 +123,7 @@ def test_initial_zero_does_not_click_min(
     monkeypatch.setattr(op, 'round_by_find_area', lambda _screen, _name, area: (
         op.round_success() if area == '投资标题' else op.round_retry()
     ))
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_enter.read_area', lambda *_: '0')
+    monkeypatch.setattr('zzz_od.application.bagel.bagel_enter.read_investment', lambda *_: '0')
     click = MagicMock(side_effect=[op.round_retry('点击失败'), op.round_success()])
     monkeypatch.setattr(op, 'round_by_find_and_click_area', click)
     assert op.confirm_entry().result == OperationRoundResultEnum.RETRY
@@ -144,7 +144,7 @@ def test_repeated_investment_does_not_change_amount(
     monkeypatch.setattr(op, 'round_by_find_area', lambda _screen, _name, area: (
         op.round_success() if area == '投资标题' else op.round_retry()
     ))
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_enter.read_area', lambda *_: '500000')
+    monkeypatch.setattr('zzz_od.application.bagel.bagel_enter.read_investment', lambda *_: '500000')
     click = MagicMock()
     monkeypatch.setattr(op, 'round_by_find_and_click_area', click)
     assert op.confirm_entry().status == '零投资入场未生效'

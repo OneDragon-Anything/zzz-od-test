@@ -101,7 +101,7 @@ def test_repeat_investment_page_does_not_click(
     op = BagelEnter(test_context)
     op.zero_checked = True
     op.investment_confirmed = True
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_enter.read_area', lambda *_: '0')
+    monkeypatch.setattr('zzz_od.application.bagel.bagel_enter.read_investment', lambda *_: '0')
     click = MagicMock()
     monkeypatch.setattr(test_context.controller, 'click', click)
     op.screenshot()
