@@ -41,6 +41,7 @@ def test_transfer_waits_for_status_then_checks_original_frames(
         assert not result.is_fail
         assert op._pending_before is before
     monkeypatch.setattr(op, '_search_ready', lambda: True)
+    monkeypatch.setattr(op._panel_guard, 'observe', lambda *_: True)
     assert op.confirm_transfer().status == '继续装入'
     assert op.moved == 1
     assert op._pending_before is None

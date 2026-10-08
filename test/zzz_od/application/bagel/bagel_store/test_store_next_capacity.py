@@ -25,6 +25,7 @@ def test_full_four_slot_safe_never_drags_into_locked_slot(
     op.last_screenshot = screen
     monkeypatch.setattr(op, 'is_bagel_result', lambda: False)
     monkeypatch.setattr(op, '_search_ready', lambda: True)
+    monkeypatch.setattr(op._panel_guard, 'observe', lambda *_: True)
     monkeypatch.setattr(op, '_search_complete', lambda: True)
     drag = MagicMock()
     monkeypatch.setattr(op, '_drag_item', drag)
@@ -49,9 +50,12 @@ def test_unknown_safe_stops_without_dragging(
     op.last_screenshot = screen
     monkeypatch.setattr(op, 'is_bagel_result', lambda: False)
     monkeypatch.setattr(op, '_search_ready', lambda: True)
+    monkeypatch.setattr(op._panel_guard, 'observe', lambda *_: True)
     monkeypatch.setattr(op, '_search_complete', lambda: True)
     drag = MagicMock()
     monkeypatch.setattr(op, '_drag_item', drag)
+    for _ in range(3):
+        assert not op.store_next().is_fail
     result = op.store_next()
     assert result.is_fail and '状态不明' in result.status
     drag.assert_not_called()

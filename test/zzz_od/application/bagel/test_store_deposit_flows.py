@@ -364,6 +364,7 @@ def test_store_stops_when_swapped_slot_has_different_item(
     mark = BagelSlotMark(4, RESULT_SLOT_CENTERS[4], 'S', '材料')
     choice = StoreChoice(ACTION_SWAP, 4, 4, mark)
     monkeypatch.setattr(op, '_search_ready', lambda: True)
+    monkeypatch.setattr(op._panel_guard, 'observe', lambda *_: True)
     monkeypatch.setattr(op, '_search_complete', lambda: True)
     monkeypatch.setattr(
         'zzz_od.application.bagel.bagel_store.inspect_occupied', lambda *_args: [mark],
@@ -676,10 +677,16 @@ def app_setup(
         BagelStoreSafe, 'execute',
         lambda self: ok('store', BagelStoreSafe.STATUS_DONE),
     )
-    monkeypatch.setattr(
-        BagelUnlockSafe, 'execute',
-        lambda self: ok('interact_safe' if self.phase == 'interact' else 'unlock', BagelUnlockSafe.STATUS_UNLOCKED),
-    )
+    def unlock_ok(self: BagelUnlockSafe) -> OperationResult:
+        """完整操作模拟交互与解锁，并通过真实通知推进连续执行的步骤。"""
+        if self.phase in ('interact', 'full'):
+            ok('interact_safe')
+        if self.phase == 'interact':
+            return OperationResult(True, BagelUnlockSafe.STATUS_READY)
+        self._notify_unlock_ready()
+        return ok('unlock', BagelUnlockSafe.STATUS_UNLOCKED)
+
+    monkeypatch.setattr(BagelUnlockSafe, 'execute', unlock_ok)
     monkeypatch.setattr(BagelCloseSearch, 'execute', lambda self: ok('close'))
     monkeypatch.setattr(
         BagelSettleWarehouse, 'execute',

@@ -29,6 +29,7 @@ def test_waits_for_new_result_while_searching(
     op = BagelStoreSafe(test_context)
     monkeypatch.setattr(op, 'is_bagel_result', lambda: False)
     monkeypatch.setattr(op, '_search_ready', lambda: True)
+    monkeypatch.setattr(op._panel_guard, 'observe', lambda *_: True)
     monkeypatch.setattr(op, '_search_complete', lambda: False)
     monkeypatch.setattr(op, '_stable_results', lambda results: results)
     monkeypatch.setattr('zzz_od.application.bagel.bagel_store.inspect_occupied', lambda *_args: [])
@@ -44,6 +45,7 @@ def test_visible_item_is_moved_before_search_finishes(
     op.screenshot()
     monkeypatch.setattr(op, 'is_bagel_result', lambda: False)
     monkeypatch.setattr(op, '_search_ready', lambda: True)
+    monkeypatch.setattr(op._panel_guard, 'observe', lambda *_: True)
     monkeypatch.setattr(op, '_search_complete', lambda: False)
     monkeypatch.setattr(op, '_stable_results', lambda results: results)
     mark = BagelSlotMark(0, RESULT_SLOT_CENTERS[0], 'S', '贵重物品')
@@ -65,6 +67,7 @@ def test_no_further_choice_waits_until_search_complete(
     op.screenshot()
     monkeypatch.setattr(op, 'is_bagel_result', lambda: False)
     monkeypatch.setattr(op, '_search_ready', lambda: True)
+    monkeypatch.setattr(op._panel_guard, 'observe', lambda *_: True)
     monkeypatch.setattr(op, '_search_complete', lambda: False)
     monkeypatch.setattr(op, '_stable_results', lambda results: results)
     mark = BagelSlotMark(0, RESULT_SLOT_CENTERS[0], 'A', '其他')
@@ -149,7 +152,7 @@ def test_search_panel_waits_when_safe_label_and_status_both_flicker(test_context
     assert op._has_search_title()
     assert not op._search_ready()
     assert op.store_next().result == OperationRoundResultEnum.WAIT
-    assert op._status_missing_rounds == 1
+    assert op._panel_wait_rounds == 1
 
 
 def test_unknown_panel_waits_then_stops_without_input(
@@ -165,11 +168,11 @@ def test_unknown_panel_waits_then_stops_without_input(
     monkeypatch.setattr(test_context.controller, 'interact', interact)
     for _ in range(5):
         assert op.store_next().result == OperationRoundResultEnum.WAIT
-    assert op.store_next().status == '未识别搜查结果面板'
+    assert op.store_next().status == '搜查面板状态持续不明，停止并保留现场'
     interact.assert_not_called()
 
 
-def test_interrupted_box_search_waits_for_prompt_to_return(
+def test_interrupted_search_does_not_require_f_prompt(
     test_context: TestContext, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     op = BagelStoreSafe(test_context)
@@ -188,10 +191,9 @@ def test_interrupted_box_search_waits_for_prompt_to_return(
     monkeypatch.setattr(op, 'round_by_find_area', find_area)
     interact = MagicMock()
     monkeypatch.setattr(test_context.controller, 'interact', interact)
-    assert op.store_next().result == OperationRoundResultEnum.WAIT
-    assert op.store_next().result == OperationRoundResultEnum.WAIT
+    assert op.store_next().status == op.STATUS_INTERRUPTED
     prompt_visible = True
-    assert op.store_next().status == '搜查面板已关闭，请重新执行交互步骤'
+    assert op.store_next().status == op.STATUS_INTERRUPTED
     interact.assert_not_called()
 
 
@@ -204,6 +206,7 @@ def test_does_not_swap_while_search_is_running(
     op.screenshot()
     monkeypatch.setattr(op, 'is_bagel_result', lambda: False)
     monkeypatch.setattr(op, '_search_ready', lambda: True)
+    monkeypatch.setattr(op._panel_guard, 'observe', lambda *_: True)
     monkeypatch.setattr(op, '_search_complete', lambda: False)
     monkeypatch.setattr(op, '_stable_results', lambda results: results)
     mark = BagelSlotMark(4, RESULT_SLOT_CENTERS[4], 'S', '其他')

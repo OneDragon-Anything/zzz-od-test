@@ -15,9 +15,20 @@ from zzz_od.application.bagel.bagel_slots import RESULT_SLOT_CENTERS, SAFE_SLOT_
 from zzz_od.application.bagel.bagel_store import BagelStoreSafe
 
 if TYPE_CHECKING:
+    from cv2.typing import MatLike
     from test.conftest import TestContext
 
     from one_dragon.base.geometry.point import Point
+
+
+def copy_result_item(screen: MatLike, source: MatLike, start: Point, end: Point) -> None:
+    """只合成图标底色和角标，保留结果面板自己的格框和行距。"""
+    screen[end.y-40:end.y+40, end.x-40:end.x+40] = source[
+        start.y-40:start.y+40, start.x-40:start.x+40,
+    ]
+    screen[end.y-56:end.y-32, end.x-46:end.x-22] = source[
+        start.y-56:start.y-32, start.x-46:start.x-22,
+    ]
 
 
 class SafeDragController(TransferController):
@@ -54,20 +65,20 @@ def test_store_fills_or_swaps_only_unlocked_slots(
     native = native_four_slot_screen()
     before = pending.copy()
     # 清空结果，用同一件 S 贵重物品占两个结果格；第二件应因满箱且无升级而留下。
-    for center in RESULT_SLOT_CENTERS:
-        copy_safe_slot(before, pending, RESULT_SLOT_CENTERS[4], center)
+    for center in RESULT_SLOT_CENTERS[:5]:
+        copy_result_item(before, pending, RESULT_SLOT_CENTERS[4], center)
     for center in SAFE_SLOT_CENTERS[:capacity - 1]:
         copy_safe_slot(before, native, SAFE_SLOT_CENTERS[0], center)
     if swap:
         copy_safe_slot(before, pending, RESULT_SLOT_CENTERS[0], SAFE_SLOT_CENTERS[capacity - 1])
     for center in RESULT_SLOT_CENTERS[:2]:
-        copy_safe_slot(before, native, SAFE_SLOT_CENTERS[0], center)
+        copy_result_item(before, native, SAFE_SLOT_CENTERS[0], center)
     before = lock_safe_suffix(before, capacity)
     after = before.copy()
     if swap:
-        copy_safe_slot(after, pending, RESULT_SLOT_CENTERS[0], RESULT_SLOT_CENTERS[0])
+        copy_result_item(after, pending, RESULT_SLOT_CENTERS[0], RESULT_SLOT_CENTERS[0])
     else:
-        copy_safe_slot(after, pending, RESULT_SLOT_CENTERS[4], RESULT_SLOT_CENTERS[0])
+        copy_result_item(after, pending, RESULT_SLOT_CENTERS[4], RESULT_SLOT_CENTERS[0])
     copy_safe_slot(after, native, SAFE_SLOT_CENTERS[0], SAFE_SLOT_CENTERS[capacity - 1])
     controller = SafeDragController(test_context)
     monkeypatch.setattr(test_context, 'controller', controller)

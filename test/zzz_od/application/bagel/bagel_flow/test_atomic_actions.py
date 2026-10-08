@@ -219,15 +219,14 @@ def test_unlock_does_not_perform_initial_interaction(
 def test_store_stops_if_panel_is_interrupted(
     test_context: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """收集中被攻击关闭面板后停止，不补做交互。"""
+    """收集中确认面板消失且回到局内后报告中断，不补做交互。"""
     controller = record_controller(test_context, monkeypatch)
     op = BagelStoreSafe(test_context)
     test_context.mock_screen('贝果-局内', '雅努斯箱前-r07-32s')
     op.screenshot()
-    assert op.store_next().result == OperationRoundResultEnum.WAIT
     result = op.store_next()
     assert result.is_fail
-    assert result.status == '搜查面板已关闭，请重新执行交互步骤'
+    assert result.status == op.STATUS_INTERRUPTED
     controller.interact.assert_not_called()
     controller.click.assert_not_called()
     controller.drag_to.assert_not_called()
