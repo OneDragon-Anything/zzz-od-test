@@ -23,6 +23,7 @@ def test_log_start(config: BagelConfig, monkeypatch: pytest.MonkeyPatch, clean: 
     text = '\n'.join(messages)
     assert f'成功次数上限：{limit or "不限"}' in text
     assert '整体重试次数上限：9' in text
+    assert '空箱结算跳过出售，仍核对安全箱和仓库容量；仓库满时停止' in text
     assert ('出售范围：' in text) == clean
     if clean:
         assert ('装备、Z' in text) == custom

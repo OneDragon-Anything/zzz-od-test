@@ -301,12 +301,13 @@ def test_settle_full_stops_before_sale(
 
 
 @pytest.mark.parametrize('auto_clean', [True, False])
+@pytest.mark.parametrize('deposit_status', [BagelDeposit.STATUS_DONE, BagelDeposit.STATUS_EMPTY])
 def test_settle_rechecks_full_capacity_after_successful_deposit(
     test_context: TestContext, controller: FixtureController,
-    monkeypatch: pytest.MonkeyPatch, auto_clean: bool,
+    monkeypatch: pytest.MonkeyPatch, auto_clean: bool, deposit_status: str,
 ) -> None:
-    """入仓成功但仓库刚好满、又没有可卖项时，停止在仓库而不是继续开局。"""
-    events = _patch_settle_ops(monkeypatch, [BagelDeposit.STATUS_DONE], BagelCleanWarehouse.STATUS_SKIPPED)
+    """有物入仓或空箱结算后仓库仍满时，都必须停止，空箱不能触发出售。"""
+    events = _patch_settle_ops(monkeypatch, [deposit_status], BagelCleanWarehouse.STATUS_SKIPPED)
     controller.set_phases([{'frame': ('贝果-仓库', '空局仓库-原生1080')}])
     monkeypatch.setattr('zzz_od.application.bagel.bagel_screen.parse_capacity_pair', lambda _text: (280, 280))
     op = WatchedSettle(test_context, auto_clean=auto_clean)
@@ -315,7 +316,8 @@ def test_settle_rechecks_full_capacity_after_successful_deposit(
         result = op.execute()
         assert not result.success
         assert '仓库已满' in result.status
-        assert events == (['deposit', 'clean'] if auto_clean else ['deposit'])
+        should_clean = auto_clean and deposit_status == BagelDeposit.STATUS_DONE
+        assert events == (['deposit', 'clean'] if should_clean else ['deposit'])
         assert not controller.click_hit_area('贝果-仓库', '返回研究站')
     finally:
         reset_running_state(test_context, op)
@@ -327,8 +329,15 @@ def test_settle_preserves_verified_deposit_terminal(
     test_context: TestContext, controller: FixtureController,
     monkeypatch: pytest.MonkeyPatch, auto_clean: bool, deposit_status: str,
 ) -> None:
-    """结算终态保留入仓证明，并按开关执行清理，不重复入仓。"""
+    """空箱只跳过出售，有物按开关清理；两者都核对容量并保留原入仓状态。"""
     events = _patch_settle_ops(monkeypatch, [deposit_status])
+
+    def read_capacity(text: str) -> tuple[int, int]:
+        """只有真实末尾核验读取容量时才记录，不能提前结束结算。"""
+        events.append('capacity')
+        return 279, 280
+
+    monkeypatch.setattr('zzz_od.application.bagel.bagel_screen.parse_capacity_pair', read_capacity)
     controller.set_phases([{'frame': ('贝果-仓库', '空局仓库-原生1080')}])
     op = WatchedSettle(test_context, auto_clean=auto_clean)
     enter_running_state(test_context)
@@ -336,7 +345,66 @@ def test_settle_preserves_verified_deposit_terminal(
         result = op.execute()
         assert result.success, result.status
         assert result.status == deposit_status
-        assert events == (['deposit', 'clean'] if auto_clean else ['deposit'])
+        should_clean = auto_clean and deposit_status == BagelDeposit.STATUS_DONE
+        assert events == (['deposit', 'clean', 'capacity'] if should_clean else ['deposit', 'capacity'])
+        assert not controller.click_hit_area('贝果-仓库', '返回研究站')
+    finally:
+        reset_running_state(test_context, op)
+
+
+@pytest.mark.parametrize('case, expected', [
+    ('safe_occupied', '结算后安全箱仍有物资'),
+    ('count_missing', '结算后无法核对仓库容量'),
+])
+def test_empty_settlement_rejects_unverified_final_state(
+    test_context: TestContext, controller: FixtureController,
+    monkeypatch: pytest.MonkeyPatch, case: str, expected: str, no_round_wait: None,
+) -> None:
+    """首次报告空箱后，末帧有残留或容量不明仍应停止，不能出售或返回。"""
+    events = _patch_settle_ops(monkeypatch, [BagelDeposit.STATUS_EMPTY])
+    state = '带物资仓库-r07-117s' if case == 'safe_occupied' else '空局仓库-原生1080'
+    controller.set_phases([{'frame': ('贝果-仓库', state)}])
+    if case == 'count_missing':
+        monkeypatch.setattr('zzz_od.application.bagel.bagel_screen.parse_capacity_pair', lambda _text: None)
+    op = WatchedSettle(test_context, auto_clean=True)
+    enter_running_state(test_context)
+    try:
+        result = op.execute()
+        assert not result.success
+        assert expected in result.status
+        assert events == ['deposit']
+        assert controller.recorded_clicks == []
+    finally:
+        reset_running_state(test_context, op)
+
+
+@pytest.mark.parametrize('auto_clean', [True, False])
+@pytest.mark.parametrize('full', [True, False])
+def test_empty_settlement_from_real_deposit(
+    test_context: TestContext, controller: FixtureController,
+    monkeypatch: pytest.MonkeyPatch, auto_clean: bool, full: bool,
+) -> None:
+    """真实空箱截图经过入仓和结算节点，不点击出售；最终满仓仍停止。"""
+    controller.set_phases([{'frame': ('贝果-仓库', '空局仓库-原生1080')}])
+    capacity_reads: list[str] = []
+
+    def final_capacity(text: str) -> tuple[int, int]:
+        """只替换末尾容量读数，入仓仍从存档画面核验空箱。"""
+        capacity_reads.append(text)
+        return (280 if full else 279), 280
+
+    monkeypatch.setattr('zzz_od.application.bagel.bagel_screen.parse_capacity_pair', final_capacity)
+    op = WatchedSettle(test_context, auto_clean=auto_clean)
+    enter_running_state(test_context)
+    try:
+        result = op.execute()
+        assert result.success is not full
+        assert len(capacity_reads) == 1
+        assert controller.recorded_clicks == []
+        if full:
+            assert '结算后仓库已满' in result.status
+        else:
+            assert result.status == BagelDeposit.STATUS_EMPTY
     finally:
         reset_running_state(test_context, op)
 
