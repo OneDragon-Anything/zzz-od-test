@@ -14,6 +14,7 @@ from zzz_od.application.bagel.bagel_enter import BagelEnter
 from zzz_od.application.bagel.bagel_return import BagelReturn
 
 if TYPE_CHECKING:
+    from cv2.typing import MatLike
     from test.conftest import TestContext
 
 pytestmark = pytest.mark.usefixtures('no_round_wait')
@@ -226,5 +227,46 @@ def test_generic_return_is_bounded_when_page_never_closes(
         assert op.world_recovery_attempted and controller.phase_idx == 1
         assert 2 <= len(controller.recorded_clicks) <= 42
         assert controller.recorded_inputs == []
+    finally:
+        reset_running_state(test_context, op)
+
+
+@pytest.mark.parametrize('partial', ['arrow', 'title'])
+@pytest.mark.parametrize('after_dialogue', [False, True])
+def test_return_waits_for_hub_reveal(
+    test_context: TestContext, controller: BagelFixtureController,
+    monkeypatch: pytest.MonkeyPatch, partial: str, after_dialogue: bool,
+) -> None:
+    """遮挡稳定截图模拟渐显；这不是现场录制的动画帧。"""
+    original_load = test_context.load_screen
+    hub = original_load('贝果-研究站', '主界面-原生1080').copy()
+    hub[100:, :] = 0
+    if partial == 'arrow':
+        hub[:100, 160:] = 0
+
+    def load(screen_name: str, state: str) -> MatLike:
+        """合成帧仍走真实 OCR 和模板识别。"""
+        return hub if state == '合成渐显' else original_load(screen_name, state)
+
+    monkeypatch.setattr(test_context, 'load_screen', load)
+    controller.set_phases([
+        {'frame': ('贝果-仓库', '空局仓库-原生1080'),
+         'exit': ('on_click_in', '贝果-仓库', '返回研究站')},
+        *([{'frame': ('贝果-研究站', '返回研究站达塔前-原生1080'), 'key': 'f'},
+           {'frame': ('贝果-研究站', '达塔对话-原生1080'),
+            'exit': ('on_click_in', '贝果-研究站', '出发对话')}] if after_dialogue else []),
+        {'frame': ('贝果-研究站', '合成渐显'), 'exit': ('on_polls', 4)},
+        {'frame': ('贝果-研究站', '主界面-原生1080')},
+    ])
+    op = BagelReturn(test_context)
+    recovery = MagicMock(return_value=OperationResult(False, '错误地恢复了渐显入口'))
+    monkeypatch.setattr('zzz_od.application.bagel.bagel_return.BackToNormalWorld.execute', recovery)
+    enter_running_state(test_context)
+    try:
+        result = op.execute()
+        assert result.success and result.status == '已返回贝果入口'
+        recovery.assert_not_called()
+        assert controller.recorded_inputs == (['f'] if after_dialogue else [])
+        assert len(controller.recorded_clicks) == (2 if after_dialogue else 1)
     finally:
         reset_running_state(test_context, op)
