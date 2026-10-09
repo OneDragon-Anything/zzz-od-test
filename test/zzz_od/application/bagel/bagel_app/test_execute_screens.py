@@ -56,10 +56,6 @@ def entry_phases() -> list[dict]:
         {'frame': ('贝果-研究站', '主界面-原生1080'),
          'exit': ('on_click_in', '贝果-研究站', '前往空洞')},
         {'frame': ('贝果-选图', '雅努斯高危-原生1080'),
-         'exit': ('on_click_in', '贝果-选图', '雅努斯')},
-        {'frame': ('贝果-选图', '雅努斯高危-原生1080'),
-         'exit': ('on_click_in', '贝果-选图', '高危')},
-        {'frame': ('贝果-选图', '雅努斯高危-原生1080'),
          'exit': ('on_click_in', '贝果-选图', '前往备战')},
         {'frame': ('贝果-备战', '高危零携带-原生1080'),
          'exit': ('on_click_in', '贝果-备战', '前往空洞')},
@@ -89,8 +85,9 @@ def test_failed_round_settles_before_real_reentry(
     first = entry_phases()
     second = entry_phases()
     if manual_stop:
-        second[6] = {'frame': ('贝果-局内', '高危A出生-原生1080'), 'stop': True}
-        second = second[:7]
+        arrival = next(index for index, phase in enumerate(second) if phase['frame'][0] == '贝果-局内')
+        second[arrival] = {'frame': ('贝果-局内', '高危A出生-原生1080'), 'stop': True}
+        second = second[:arrival + 1]
     controller.set_phases([
         *first,
         {'frame': ('贝果-仓库', '带物资仓库-r07-117s'),

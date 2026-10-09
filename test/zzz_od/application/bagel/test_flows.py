@@ -185,8 +185,6 @@ def test_enter_from_reception(
         {'frame': ('贝果-研究站', '返回研究站达塔前-原生1080'), 'key': 'f'},
         {'frame': ('贝果-研究站', '达塔对话-原生1080'), 'exit': ('on_click_in', '贝果-研究站', '出发对话')},
         {'frame': ('贝果-研究站', '主界面-原生1080'), 'exit': ('on_click_in', '贝果-研究站', '前往空洞')},
-        {'frame': ('贝果-选图', '雅努斯高危-原生1080'), 'exit': ('on_click_in', '贝果-选图', '雅努斯')},
-        {'frame': ('贝果-选图', '雅努斯高危-原生1080'), 'exit': ('on_click_in', '贝果-选图', '高危')},
         {'frame': ('贝果-选图', '雅努斯高危-原生1080'), 'exit': ('on_click_in', '贝果-选图', '前往备战')},
         {'frame': ('贝果-备战', '高危零携带-原生1080'), 'exit': ('on_click_in', '贝果-备战', '前往空洞')},
     ]
@@ -361,7 +359,6 @@ def test_enter_from_prepare_reselects_map_before_entering(
     phases = [
         {'frame': ('贝果-备战', prepare_state), 'exit': ('on_click_in', '菜单', '返回')},
         {'frame': ('贝果-选图', '城郊高危-20260926'), 'exit': ('on_click_in', '贝果-选图', '雅努斯')},
-        {'frame': ('贝果-选图', '雅努斯高危-原生1080'), 'exit': ('on_click_in', '贝果-选图', '高危')},
         {'frame': ('贝果-选图', '雅努斯高危-原生1080'), 'exit': ('on_click_in', '贝果-选图', '前往备战')},
         {'frame': ('贝果-备战', '高危零携带-原生1080'), 'exit': ('on_click_in', '贝果-备战', '前往空洞')},
         {'frame': ('贝果-入场确认', '高危零投资-原生1080'), 'exit': ('on_click_in', '贝果-入场确认', '零投资前往空洞')},
@@ -376,7 +373,7 @@ def test_enter_from_prepare_reselects_map_before_entering(
         assert controller.phase_idx == len(phases) - 1
         assert controller.click_hit_area('菜单', '返回')
         assert controller.click_hit_area('贝果-选图', '雅努斯')
-        assert controller.click_hit_area('贝果-选图', '高危')
+        assert not controller.click_hit_area('贝果-选图', '高危')
     finally:
         reset_running_state(test_context, op)
 

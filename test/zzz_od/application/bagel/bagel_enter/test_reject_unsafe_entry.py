@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 @pytest.mark.parametrize('checked,repeat,expected', [
     (False, False, '尚未核对零携带'),
-    (True, True, '入场确认未消失'),
+    (True, True, '已处理的入场提示再次出现'),
 ])
 def test_confirmation_guard(
     test_context: TestContext, monkeypatch: pytest.MonkeyPatch,
@@ -32,7 +32,7 @@ def test_confirmation_guard(
     op.screenshot()
     result = op.confirm_entry()
     assert expected in result.status
-    assert result.result == (OperationRoundResultEnum.RETRY if repeat else OperationRoundResultEnum.FAIL)
+    assert result.result == OperationRoundResultEnum.FAIL
     click.assert_not_called()
 
 

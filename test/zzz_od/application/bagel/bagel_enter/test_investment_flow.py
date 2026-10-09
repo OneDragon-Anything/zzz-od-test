@@ -44,7 +44,7 @@ def investment_frame(ctx: TestContext, amount: str) -> MatLike:
 def entry_phases() -> list[dict]:
     """从选图开始，经过难度、零携带与三类确认后到投资页。"""
     return [
-        {'frame': ('贝果-选图', '雅努斯困难-原生1080'),
+        {'frame': ('贝果-选图', '城郊高危-20260926'),
          'exit': ('on_click_in', '贝果-选图', '雅努斯')},
         {'frame': ('贝果-选图', '雅努斯困难-原生1080'),
          'exit': ('on_click_in', '贝果-选图', '高危')},
