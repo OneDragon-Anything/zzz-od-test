@@ -8,6 +8,7 @@ import pytest
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
+from qfluentwidgets import BodyLabel
 
 from one_dragon.base.operation.application.application_factory_manager import (
     ApplicationFactoryManager,
@@ -17,7 +18,7 @@ from one_dragon_qt.services.app_setting.app_setting_manager import AppSettingMan
 from one_dragon_qt.widgets.base_interface import BaseInterface
 from one_dragon_qt.widgets.fast_scroll_area import FastScrollArea
 from one_dragon_qt.widgets.pivot_navi_interface import PivotNavigatorInterface
-from zzz_od.application.bagel import bagel_const
+from zzz_od.application.bagel import bagel_const, bagel_usage
 from zzz_od.application.bagel.bagel_config import BagelConfig
 from zzz_od.gui.app_setting.bagel_setting_interface import BagelSettingInterface
 
@@ -116,6 +117,7 @@ def test_settings_rebind_updates_selection_description(
     qapp.processEvents()
     other = BagelConfig(99, 'another_group')
     other.max_failure_retries = 7
+    other.auto_clean_warehouse = False
     other.clean_mode = 'custom'
     other.clean_types = ['装备', '贵重物品']
     other.clean_qualities = ['S', 'Z']
@@ -126,6 +128,7 @@ def test_settings_rebind_updates_selection_description(
     qapp.processEvents()
     qapp.processEvents()
     try:
+        assert view.sale_title.text() == '已关闭自动出售'
         assert view.failure_retries_card.spin_box.value() == 7
         assert set(view.clean_types_card.get_value()) == {'装备', '贵重物品'}
         assert view.clean_types_card.contentLabel.text() == '已选 2 项'
@@ -155,12 +158,12 @@ def test_settings_save_and_show_relevant_options(qapp: QApplication, config: Bag
     assert view.success_rounds_card.spin_box.value() == 1
     assert view.success_rounds_card.spin_box.minimum() == 0
     assert view.success_rounds_card.titleLabel.text() == '成功次数'
-    assert view.success_rounds_card.contentLabel.text() == '成功局数上限；填 0 不限次数。'
+    assert view.success_rounds_card.contentLabel.text() == bagel_usage.SUCCESS_HINT
     assert view.auto_clean_switch.titleLabel.text() == '清理仓库'
-    assert view.auto_clean_switch.contentLabel.text() == '成功与失败局入仓后清理仓库'
+    assert view.auto_clean_switch.contentLabel.text() == bagel_usage.CLEAN_SWITCH_HINT
     assert view.clean_mode_card.titleLabel.text() == '出售方案'
-    assert view.clean_mode_card.default_content == '默认出售贵重物品、战术棱镜和其他物品的 C–S 品质'
-    assert view.clean_mode_card.contentLabel.text() == '默认出售贵重物品、战术棱镜和其他物品的 C–S 品质'
+    assert view.clean_mode_card.default_content == bagel_usage.DEFAULT_SALE_HINT
+    assert view.clean_mode_card.contentLabel.text() == bagel_usage.DEFAULT_SALE_HINT
     assert not hasattr(view, 'targets_edit')
     assert view.auto_clean_switch.btn.isChecked()
     assert not view.clean_mode_card.isHidden()
@@ -169,6 +172,8 @@ def test_settings_save_and_show_relevant_options(qapp: QApplication, config: Bag
     view.success_rounds_card.spin_box.setValue(0)
     assert BagelConfig(99, 'standalone').max_success_rounds == 0
     view.clean_mode_card.combo_box.setCurrentIndex(1)
+    assert not view.sale_validation.isHidden()
+    assert view.clean_mode_card.contentLabel.text() == bagel_usage.CUSTOM_SALE_HINT
     assert BagelConfig(99, 'standalone').clean_mode == 'custom'
     assert not view.clean_types_card.isHidden()
     assert not view.clean_qualities_card.isHidden()
@@ -179,6 +184,10 @@ def test_settings_save_and_show_relevant_options(qapp: QApplication, config: Bag
     assert BagelConfig(99, 'standalone').clean_filter_areas() == ('筛选-装备', '筛选-Z')
     view.auto_clean_switch.btn.setChecked(False)
     assert BagelConfig(99, 'standalone').auto_clean_warehouse is False
+    assert view.sale_title.text() == '已关闭自动出售'
+    assert view.sale_hint.text() == bagel_usage.NO_CLEAN_HINT
+    assert not view.usage_card.isHidden()
+    assert view.sale_validation.isHidden()
     assert view.clean_mode_card.isHidden()
     assert view.clean_types_card.isHidden()
     assert view.clean_qualities_card.isHidden()
@@ -192,3 +201,30 @@ def test_settings_save_and_show_relevant_options(qapp: QApplication, config: Bag
         group_id='standalone',
     )
     view.close()
+
+
+@pytest.mark.parametrize('width,height', [(1000, 600), (1280, 720)])
+def test_hint_layout_has_no_clipped_text(qapp: QApplication, config: BagelConfig, width: int, height: int) -> None:
+    """仅检查离屏组件几何，不启动 OneDragon 或操作桌面。"""
+    ctx = MagicMock(current_instance_idx=99)
+    ctx.run_context.get_config.return_value = config
+    view = BagelSettingInterface(ctx)
+    view.group_id = 'standalone'
+    view.resize(width, height)
+    view.on_interface_shown()
+    view.show()
+    try:
+        for _ in range(5):
+            qapp.processEvents()
+        scroll = view.findChild(FastScrollArea)
+        assert scroll.horizontalScrollBar().maximum() == 0
+        for card in (view.success_rounds_card, view.failure_retries_card, view.auto_clean_switch, view.clean_mode_card):
+            label = card.contentLabel
+            assert label.wordWrap()
+            assert label.height() >= label.heightForWidth(label.width())
+            assert label.geometry().bottom() < card.height()
+        for label in view.usage_card.findChildren(BodyLabel):
+            assert label.height() >= label.heightForWidth(label.width())
+        assert view.guide_link.url == bagel_usage.GUIDE_URL
+    finally:
+        view.close()

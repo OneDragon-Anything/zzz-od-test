@@ -69,6 +69,8 @@ def navigation(test_context: TestContext, monkeypatch: pytest.MonkeyPatch) -> Ba
 def test_real_initial_gap_recovers_only_on_fresh_position(navigation: BagelNavigate) -> None:
     """起点通过后的原失败帧最多等五次，恢复帧才开始导航。"""
     op = navigation
+    notification = MagicMock()
+    op.on_location_wait = notification
     assert op.check_start().status == '开始移动'
     assert op.last_position is None
     op.ctx.mock_screen('贝果-局内', MISSING)
@@ -87,6 +89,7 @@ def test_real_initial_gap_recovers_only_on_fresh_position(navigation: BagelNavig
     assert not result.is_fail, result.status
     assert op.last_position == pytest.approx((99.710, 99.821), abs=0.01)
     assert op.initial_locate_misses == 0
+    assert notification.call_count == 5
 
 
 def test_persistent_real_initial_gap_fails_on_sixth_observation(navigation: BagelNavigate) -> None:

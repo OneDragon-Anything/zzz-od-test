@@ -400,6 +400,8 @@ def test_roadside_pickup_never_moves_without_location(
 ) -> None:
     """已定位后丢失位置，即使有路边 F 提示也必须松键，三次等待后停止。"""
     monkeypatch.setattr(op.vision, 'locate', lambda _: None)
+    notification = MagicMock()
+    op.on_location_wait = notification
     op.last_position = (50.0, 100.0)
     op.vision.last_location = MapLocation(None, op.vision.map.snapshot_id, reason, '', 0, None, 0)
 
@@ -417,6 +419,7 @@ def test_roadside_pickup_never_moves_without_location(
         op.ctx.controller.stop_moving_forward.assert_called()
         op.ctx.controller.start_moving_forward.assert_not_called()
     assert op.move_to_target().is_fail
+    assert notification.call_count == 3
     op.ctx.controller.start_moving_forward.assert_not_called()
     for key in 'wasd':
         getattr(op.ctx.controller, f'move_{key}').assert_not_called()

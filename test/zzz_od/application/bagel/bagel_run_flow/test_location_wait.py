@@ -46,6 +46,8 @@ def test_real_location_gap_recovers_without_input(
 ) -> None:
     """原失败帧等待且不推进，恢复帧才完成出生检查。"""
     op = location_op
+    notification = MagicMock()
+    op.on_location_wait = notification
     build = MagicMock(return_value=None)
     monkeypatch.setattr(op, 'build_operation', build)
     for _ in range(5):
@@ -61,6 +63,7 @@ def test_real_location_gap_recovers_without_input(
     assert op.run_step().is_success
     build.assert_called_once()
     assert op._location_waits == 0
+    assert notification.call_count == 5
 
 
 def test_persistent_real_location_gap_stops(
