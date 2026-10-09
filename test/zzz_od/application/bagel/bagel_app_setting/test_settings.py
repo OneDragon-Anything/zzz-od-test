@@ -5,10 +5,10 @@ from unittest.mock import MagicMock
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 import pytest
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
-from qfluentwidgets import BodyLabel
+from qfluentwidgets import BodyLabel, HyperlinkButton
 
 from one_dragon.base.operation.application.application_factory_manager import (
     ApplicationFactoryManager,
@@ -203,7 +203,7 @@ def test_settings_save_and_show_relevant_options(qapp: QApplication, config: Bag
     view.close()
 
 
-@pytest.mark.parametrize('width,height', [(1000, 600), (1280, 720)])
+@pytest.mark.parametrize('width,height', [(680, 600), (1000, 600), (1280, 720)])
 def test_hint_layout_has_no_clipped_text(qapp: QApplication, config: BagelConfig, width: int, height: int) -> None:
     """仅检查离屏组件几何，不启动 OneDragon 或操作桌面。"""
     ctx = MagicMock(current_instance_idx=99)
@@ -225,6 +225,29 @@ def test_hint_layout_has_no_clipped_text(qapp: QApplication, config: BagelConfig
             assert label.geometry().bottom() < card.height()
         for label in view.usage_card.findChildren(BodyLabel):
             assert label.height() >= label.heightForWidth(label.width())
-        assert view.guide_link.url == bagel_usage.GUIDE_URL
+        assert not view.findChildren(HyperlinkButton)
+        assert view.usage_card.y() < view.settings_heading.y() < view.success_rounds_card.y()
+        assert len(view.hint_cards) == 3
+        assert view.sale_card is view.hint_cards[-1]
+        for left, right in zip(view.hint_cards, view.hint_cards[1:], strict=False):
+            assert left.y() == right.y()
+            assert left.geometry().right() < right.geometry().left()
+            assert abs(left.width() - right.width()) <= 1
+        # 在窄页和宽页间切换，并重新加载文案，防止旧高度造成大片空白。
+        for current_width, mode in ((680, 'custom'), (width, 'default'), (680, 'default'), (width, 'custom')):
+            view.resize(current_width, height)
+            view.clean_mode_card.combo_box.setCurrentIndex(1 if mode == 'custom' else 0)
+            for _ in range(5):
+                qapp.processEvents()
+            card = view.clean_mode_card
+            label = card.contentLabel
+            text_height = label.fontMetrics().boundingRect(
+                QRect(0, 0, label.width(), 10000), Qt.TextFlag.TextWordWrap, label.text(),
+            ).height()
+            assert text_height <= label.height() <= text_height + 4
+            assert label.geometry().bottom() < card.height()
+            assert label.geometry().right() < card.combo_box.geometry().left()
+            assert label.text() == (bagel_usage.CUSTOM_SALE_HINT if mode == 'custom' else bagel_usage.DEFAULT_SALE_HINT)
+            assert scroll.horizontalScrollBar().maximum() == 0
     finally:
         view.close()
