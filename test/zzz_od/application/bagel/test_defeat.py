@@ -1,4 +1,4 @@
-"""撤离失败时停止局内动作，未知结算不自动退出。"""
+"""出现 DEFEAT 时停止局内动作，不限制地图名称。"""
 
 from __future__ import annotations
 
@@ -45,15 +45,15 @@ def test_defeat_interrupts_local_actions(
         getattr(test_context.controller, name).assert_not_called()
 
 
-@pytest.mark.parametrize('screen,state', [
-    ('贝果-结算', '空局失败-原生1080'),
-    ('贝果-局内', '雅努斯出生-r01-39s'),
+@pytest.mark.parametrize('screen,state,defeated', [
+    ('贝果-结算', '空局失败-原生1080', True),
+    ('贝果-局内', '雅努斯出生-r01-39s', False),
 ])
-def test_wrong_map_and_normal_hud_not_defeat(
-    test_context: TestContext, screen: str, state: str,
+def test_defeat_does_not_require_map_title(
+    test_context: TestContext, screen: str, state: str, defeated: bool,
 ) -> None:
-    """困难旧结算或正常局内不能冒充高危雅努斯撤离失败。"""
+    """困难结算同样识别为失败，正常局内不能误判。"""
     test_context.mock_screen(screen, state)
     op = BagelOpenBox(test_context)
     op.screenshot()
-    assert not op.is_bagel_result()
+    assert op.is_bagel_result() is defeated

@@ -117,6 +117,7 @@ def test_settings_rebind_updates_selection_description(
     qapp.processEvents()
     other = BagelConfig(99, 'another_group')
     other.max_failure_retries = 7
+    other.sell_interval = 3
     other.auto_clean_warehouse = False
     other.clean_mode = 'custom'
     other.clean_types = ['装备', '贵重物品']
@@ -130,6 +131,8 @@ def test_settings_rebind_updates_selection_description(
     try:
         assert view.sale_title.text() == '已关闭自动出售'
         assert view.failure_retries_card.spin_box.value() == 7
+        assert view.sell_interval_card.spin_box.value() == 3
+        assert view.sell_interval_card.isHidden()
         assert set(view.clean_types_card.get_value()) == {'装备', '贵重物品'}
         assert view.clean_types_card.contentLabel.text() == '已选 2 项'
         assert view.clean_qualities_card.contentLabel.text() == '已选 2 项'
@@ -149,6 +152,10 @@ def test_settings_save_and_show_relevant_options(qapp: QApplication, config: Bag
     view.show()
     qapp.processEvents()
     qapp.processEvents()
+    assert view.sell_interval_card.spin_box.value() == 1
+    view.sell_interval_card.spin_box.setValue(2)
+    assert BagelConfig(99, 'standalone').sell_interval == 2
+    assert view.sell_interval_card.contentLabel.text() == bagel_usage.SELL_INTERVAL_HINT
     assert view.failure_retries_card.spin_box.value() == 5
     assert view.failure_retries_card.spin_box.minimum() == 0
     assert view.failure_retries_card.spin_box.maximum() == 100

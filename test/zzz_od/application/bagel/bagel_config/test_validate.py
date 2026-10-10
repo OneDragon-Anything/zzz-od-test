@@ -6,6 +6,7 @@ from zzz_od.application.bagel.bagel_config import BagelConfig
 @pytest.mark.parametrize(
     ('field', 'value'),
     [
+        *[('sell_interval', value) for value in (0, 1000, True, 1.5, '2', None)],
         ('max_failure_retries', -1),
         ('max_failure_retries', 101),
         ('max_failure_retries', True),

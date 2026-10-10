@@ -195,3 +195,24 @@ def test_zero_count_with_unconfirmed_slots_stops(
         assert op._stable_image is None
         assert len(controller.recorded_clicks) == (1 if after_click else 0)
         assert not controller.recorded_scrolls
+
+
+@pytest.mark.parametrize('kind', ['unchanged', 'partial', 'empty_retry'])
+def test_recovery_transfer_returns_remaining_without_extra_click(
+    test_context: TestContext, controller: TransferController, kind: str,
+) -> None:
+    """启动转存用稳定两帧报告残留；出售后即使空包也只补点一次。"""
+    before, partial, empty = warehouse_frames(test_context)
+    if kind == 'empty_retry':
+        controller.set_phases([{'frame': empty}])
+    else:
+        controller.set_phases([
+            {'frame': before, 'exit': ('on_click_in', '贝果-仓库', '放入仓库')},
+            {'frame': before if kind == 'unchanged' else partial},
+        ])
+    op = WatchedStore(test_context, return_on_remaining=True, click_when_empty=kind == 'empty_retry')
+    with running_operation(op):
+        result = op.execute()
+    assert result.success, result.status
+    assert result.status == ('携带物已全部转存' if kind == 'empty_retry' else '仓库已满')
+    assert len(controller.recorded_clicks) == 1

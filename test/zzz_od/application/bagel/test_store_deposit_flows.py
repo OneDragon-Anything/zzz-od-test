@@ -260,7 +260,7 @@ def test_store_empty_result_preserves_panel_without_drag(
 def test_store_stops_when_drag_has_no_effect(
     test_context: TestContext, controller: BagelDragController,
 ) -> None:
-    """拖拽后源格还在则再拖一次，仍不变就停，不继续盲拖。"""
+    """填空最多首次加三次重拖，仍不变就停，不继续盲拖。"""
     controller.set_phases([
         {'frame': ('贝果-局内', '武备箱待入箱-实机'), 'exit': ('on_drag',)},
         {'frame': ('贝果-局内', '武备箱待入箱-实机')},
@@ -271,19 +271,20 @@ def test_store_stops_when_drag_has_no_effect(
         result = op.execute()
         assert not result.success
         assert '无变化' in result.status
-        assert len(controller.recorded_drags) == 2
-        assert controller.recorded_drags[0] == controller.recorded_drags[1]
+        assert len(controller.recorded_drags) == 4
+        assert all(drag == controller.recorded_drags[0] for drag in controller.recorded_drags)
     finally:
         reset_running_state(test_context, op)
 
 
+@pytest.mark.parametrize('missed_drags', [1, 3])
 def test_store_second_drag_can_land(
-    test_context: TestContext, controller: BagelDragController,
+    test_context: TestContext, controller: BagelDragController, missed_drags: int,
 ) -> None:
     """第一次拖完画面没变时，再拖一次可以把同一件拖进安全箱。"""
     pending, mid, done = _pending_store_frames()
     controller.set_phases([
-        {'frame': pending, 'exit': ('on_drag',)},
+        *[{'frame': pending, 'exit': ('on_drag',)} for _ in range(missed_drags)],
         {'frame': pending, 'exit': ('on_drag',)},
         {'frame': mid, 'exit': ('on_drag',)},
         {'frame': done},
@@ -298,7 +299,8 @@ def test_store_second_drag_can_land(
             (RESULT_SLOT_CENTERS[1], SAFE_SLOT_CENTERS[0]),
             (RESULT_SLOT_CENTERS[1], SAFE_SLOT_CENTERS[0]),
         ]
-        assert controller.recorded_drags[2] == (RESULT_SLOT_CENTERS[0], SAFE_SLOT_CENTERS[1])
+        assert len(controller.recorded_drags) == missed_drags + 2
+        assert controller.recorded_drags[-1] == (RESULT_SLOT_CENTERS[0], SAFE_SLOT_CENTERS[1])
     finally:
         reset_running_state(test_context, op)
 

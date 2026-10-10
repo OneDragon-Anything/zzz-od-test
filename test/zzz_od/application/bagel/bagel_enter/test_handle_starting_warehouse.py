@@ -7,7 +7,7 @@ import pytest
 from one_dragon.base.operation.operation_base import OperationResult
 from zzz_od.application.bagel.bagel_enter import BagelEnter
 from zzz_od.application.bagel.bagel_return import BagelReturn
-from zzz_od.application.bagel.bagel_store_carried import BagelStoreCarried
+from zzz_od.application.bagel.bagel_settle import BagelSettleWarehouse
 
 if TYPE_CHECKING:
     from test.conftest import TestContext
@@ -22,8 +22,10 @@ def test_starting_settlement_stores_before_return(
     op = BagelEnter(test_context, allow_clear_loadout=allowed)
     calls: list[str] = []
 
-    def store(_: BagelStoreCarried) -> OperationResult:
+    def store(op: BagelSettleWarehouse) -> OperationResult:
         """模拟仓库转存结果。"""
+        assert op.starting and not op.sell_due
+        assert not op.auto_clean
         calls.append('store')
         return OperationResult(stored, '转存结果')
 
@@ -32,7 +34,7 @@ def test_starting_settlement_stores_before_return(
         calls.append('return')
         return OperationResult(True, '已到入口')
 
-    monkeypatch.setattr(BagelStoreCarried, 'execute', store)
+    monkeypatch.setattr(BagelSettleWarehouse, 'execute', store)
     monkeypatch.setattr(BagelReturn, 'execute', return_hub)
     op.screenshot()
     result = op.handle_starting_warehouse()

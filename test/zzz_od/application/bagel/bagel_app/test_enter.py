@@ -27,6 +27,8 @@ def test_application_consumes_first_entry_even_before_spawn(
 
     def enter(op: BagelEnter) -> OperationResult:
         """记录入场资格，并模拟第一次入场尚未成功就停止。"""
+        assert op.recovery_auto_clean == config.auto_clean_warehouse
+        assert op.recovery_filter_areas == config.clean_filter_areas()
         allowed.append(op.allow_clear_loadout)
         return OperationResult(False, '模拟入场失败')
 

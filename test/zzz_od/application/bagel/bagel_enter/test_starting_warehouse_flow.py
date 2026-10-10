@@ -67,7 +67,7 @@ def test_starting_warehouse_returns_through_map_and_entry(
         assert op.zero_checked and op.investment_confirmed
         assert op.confirmed_warnings == {'零装备价值', '未装备武备', '未穿戴队伍装备'}
         assert op.visited == [(name, False) for name in (
-            '检测游戏窗口', '处理启动仓库', '返回启动仓库上一页', '打开贝果主界面', '备战返回选图',
+            '检测游戏窗口', '恢复启动贝果局', '处理启动仓库', '返回启动仓库上一页', '打开贝果主界面', '备战返回选图',
             '选择雅努斯', '选择高危', '打开备战', '核对零携带', '确认入场并等待加载',
         )]
 
@@ -101,7 +101,7 @@ def test_starting_warehouse_return_failure_stops(
         assert not result.success
         expected = {'unchanged': '等待仓库返回备战或研究站入口', 'timeout': '超时', 'click_failed': '点击失败 返回'}
         assert expected[failure] in result.status
-        assert [name for name, _ in op.visited] == ['检测游戏窗口', '处理启动仓库', '返回启动仓库上一页']
+        assert [name for name, _ in op.visited] == ['检测游戏窗口', '恢复启动贝果局', '处理启动仓库', '返回启动仓库上一页']
         assert not op.zero_checked and not op.investment_confirmed
         assert len(controller.recorded_clicks) == (4 if failure == 'click_failed' else 1)
         assert all(controller._pos_in_region(pos, (0, 0, 200, 100)) for pos in controller.recorded_clicks)
@@ -119,5 +119,5 @@ def test_starting_sale_screen_never_navigates(
     with running_operation(op):
         result = op.execute()
         assert not result.success and '出售状态' in result.status
-        assert op.visited == [('检测游戏窗口', False), ('处理启动仓库', False)]
+        assert op.visited == [('检测游戏窗口', False), ('恢复启动贝果局', False), ('处理启动仓库', False)]
         assert not controller.recorded_clicks

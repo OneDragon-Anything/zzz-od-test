@@ -8,7 +8,7 @@ import pytest
 from one_dragon.base.operation.operation_base import OperationResult
 from zzz_od.application.bagel.bagel_enter import BagelEnter
 from zzz_od.application.bagel.bagel_return import BagelReturn
-from zzz_od.application.bagel.bagel_store_carried import BagelStoreCarried
+from zzz_od.application.bagel.bagel_settle import BagelSettleWarehouse
 
 if TYPE_CHECKING:
     from test.conftest import TestContext
@@ -22,7 +22,7 @@ def test_restart_in_prepare_warehouse_returns_after_store(
     op = BagelEnter(test_context, allow_clear_loadout=True)
     stored = MagicMock(return_value=OperationResult(True, '携带物已全部转存'))
     returned = MagicMock()
-    monkeypatch.setattr(BagelStoreCarried, 'execute', stored)
+    monkeypatch.setattr(BagelSettleWarehouse, 'execute', stored)
     monkeypatch.setattr(BagelReturn, 'execute', returned)
     op.screenshot()
     assert op.handle_starting_warehouse().status == '启动仓库返回'
