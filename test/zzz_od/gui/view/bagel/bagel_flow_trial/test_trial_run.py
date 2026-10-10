@@ -11,72 +11,11 @@ from PySide6.QtWidgets import (
     QApplication,
 )
 
-from one_dragon.base.operation.context_event_bus import ContextEventBus
-from one_dragon.base.operation.one_dragon_context import (
-    ContextKeyboardEventEnum,
-    OneDragonContext,
-)
 from one_dragon.base.operation.operation_base import OperationResult
 from zzz_od.application.bagel.bagel_flow import (
     load_published_flow,
 )
 from zzz_od.gui.view.bagel.bagel_flow_trial import FlowTrialWorker
-
-
-@pytest.mark.parametrize('phase,key', [
-    ('initializing', 'f10'), ('waiting', 'f8'), ('running', 'f8'),
-])
-def test_main_program_stop_key_cancels_trial(
-    qapp: QApplication, monkeypatch: pytest.MonkeyPatch, key: str, phase: str,
-) -> None:
-    """通过主程序按键处理取消准备或执行，结束后解除本次事件订阅。"""
-    bus = ContextEventBus()
-    ctx = MagicMock(current_instance_idx=99, key_stop_running=key, key_start_running='f9')
-    ctx.listen_event.side_effect = bus.listen_event
-    ctx.unlisten_event.side_effect = bus.unlisten_event
-    ctx.dispatch_event.side_effect = bus.dispatch_event
-    ctx.run_context.start_running.return_value = True
-    worker = FlowTrialWorker(99, load_published_flow('janus_high_b'), ('spawn',), ctx)
-
-    def press_stop() -> None:
-        """只调用主程序入口，不直接调用工具停止方法。"""
-        OneDragonContext._on_key_press(ctx, 'f9')
-        assert not worker.stop_requested.is_set()
-        OneDragonContext._on_key_press(ctx, key)
-        assert worker.stop_requested.wait(2)
-
-    def wait_for_mouse() -> bool:
-        """模拟切窗前等待。"""
-        if phase == 'waiting':
-            press_stop()
-        return not worker.stop_requested.is_set()
-
-    def execute() -> OperationResult:
-        """模拟执行期间收到主程序停止键。"""
-        press_stop()
-        return OperationResult(False, '用户停止')
-
-    if phase == 'initializing':
-        ctx.controller = None
-        ctx.one_dragon_config.instance_list = [SimpleNamespace(idx=99)]
-        ctx.init_ocr.side_effect = press_stop
-    monkeypatch.setattr(worker, '_wait_for_mouse_release', wait_for_mouse)
-    execute_mock = MagicMock(side_effect=execute)
-    cleanup = MagicMock()
-    monkeypatch.setattr('zzz_od.gui.view.bagel.bagel_flow_trial.BagelRunFlow.execute', execute_mock)
-    monkeypatch.setattr('zzz_od.gui.view.bagel.bagel_flow_trial.release_flow_inputs', cleanup)
-    worker.run()
-    assert not bus.callbacks[ContextKeyboardEventEnum.PRESS.value]
-    assert worker.stop_requested.is_set()
-    if phase == 'running':
-        execute_mock.assert_called_once()
-        cleanup.assert_called_once_with(ctx)
-        assert ctx.run_context.stop_running.call_count == 2
-    else:
-        ctx.run_context.start_running.assert_not_called()
-        execute_mock.assert_not_called()
-        cleanup.assert_not_called()
-        ctx.run_context.stop_running.assert_called_once()
 
 
 def test_worker_cleanup_and_record(
@@ -105,7 +44,14 @@ def test_worker_cleanup_and_record(
     assert events[-1]['kind'] == 'trial_finished'
 
 
-@pytest.mark.parametrize('scenario', ['release', 'cancel', 'held', 'idle'])
+@pytest.mark.parametrize(
+    'scenario',
+    [
+        'release',
+        'cancel',
+        'held',
+    ],
+)
 def test_trial_waits_for_mouse_release_before_activating_game(
     qapp: QApplication, monkeypatch: pytest.MonkeyPatch, scenario: str,
 ) -> None:

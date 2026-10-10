@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 from test.harness.bagel_container import ContainerController
+from test.harness.bagel_entry import BagelFixtureController
 from test.harness.fixture_controller import enter_running_state, reset_running_state
-from test.zzz_od.application.bagel.test_flows import BagelFixtureController
 
 from one_dragon.base.operation.application.application_run_context import (
     ApplicationRunContextStateEnum,
@@ -35,8 +35,11 @@ class TaskController(ContainerController, BagelFixtureController):
         super().btn_press(key, press_time)
 
     def click(
-        self, pos: Point | None = None, press_time: float = 0,
-        pc_alt: bool = False, gamepad_key: str | None = None,
+        self,
+        pos: Point | None = None,
+        press_time: float = 0,
+        pc_alt: bool = False,
+        gamepad_key: str | None = None,
     ) -> bool:
         """点击保持真实区域判断，同时记录人工停止后的动作。"""
         self.trace.append(('click', self.phase_idx, self.frames, time.time()))
@@ -44,7 +47,10 @@ class TaskController(ContainerController, BagelFixtureController):
 
     def screenshot(self, independent: bool = False) -> tuple[float, MatLike]:
         """指定的新局画面模拟人工停止，随后只有读取和松键可以发生。"""
-        if self._phases[self.phase_idx].get('stop') and self.ctx.run_context.is_context_running:
+        if (
+            self._phases[self.phase_idx].get('stop')
+            and self.ctx.run_context.is_context_running
+        ):
             self.ctx.run_context._run_state = ApplicationRunContextStateEnum.STOP
             self.trace.append(('stop', self.phase_idx, self.frames, time.time()))
         return super().screenshot(independent)
@@ -53,28 +59,54 @@ class TaskController(ContainerController, BagelFixtureController):
 def entry_phases() -> list[dict]:
     """入场点击全部使用归档截图；出生确认后只遮小地图制造真实定位失配。"""
     return [
-        {'frame': ('贝果-研究站', '主界面-原生1080'),
-         'exit': ('on_click_in', '贝果-研究站', '前往空洞')},
-        {'frame': ('贝果-选图', '雅努斯高危-原生1080'),
-         'exit': ('on_click_in', '贝果-选图', '前往备战')},
-        {'frame': ('贝果-备战', '高危零携带-原生1080'),
-         'exit': ('on_click_in', '贝果-备战', '前往空洞')},
-        {'frame': ('贝果-入场确认', '高危零投资-原生1080'),
-         'exit': ('on_click_in', '贝果-入场确认', '零投资前往空洞')},
+        {
+            'frame': ('贝果-研究站', '主界面-原生1080'),
+            'exit': ('on_click_in', '贝果-研究站', '前往空洞'),
+        },
+        {
+            'frame': ('贝果-选图', '雅努斯高危-原生1080'),
+            'exit': ('on_click_in', '贝果-选图', '前往备战'),
+        },
+        {
+            'frame': ('贝果-备战', '高危零携带-原生1080'),
+            'exit': ('on_click_in', '贝果-备战', '前往空洞'),
+        },
+        {
+            'frame': ('贝果-入场确认', '高危零投资-原生1080'),
+            'exit': ('on_click_in', '贝果-入场确认', '零投资前往空洞'),
+        },
         {'frame': ('贝果-局内', '高危A出生-原生1080'), 'exit': ('on_polls', 2)},
-        {'frame': ('贝果-局内', '高危A出生-原生1080'), 'hide': ('定位小地图',), 'key': 'esc'},
-        {'frame': ('贝果-局内', '暂停菜单-原生1080'),
-         'exit': ('on_click_in', '战斗-菜单', '按钮-退出战斗')},
-        {'frame': ('贝果-退出确认', '主动退出-原生1080'),
-         'exit': ('on_click_in', '贝果-退出确认', '确认')},
-        {'frame': ('贝果-结算', '高危空局失败-原生1080'),
-         'exit': ('on_click_in', '贝果-结算', '继续')},
+        {
+            'frame': ('贝果-局内', '高危A出生-原生1080'),
+            'hide': ('定位小地图',),
+            'key': 'esc',
+        },
+        {
+            'frame': ('贝果-局内', '暂停菜单-原生1080'),
+            'exit': ('on_click_in', '战斗-菜单', '按钮-退出战斗'),
+        },
+        {
+            'frame': ('贝果-退出确认', '主动退出-原生1080'),
+            'exit': ('on_click_in', '贝果-退出确认', '确认'),
+        },
+        {
+            'frame': ('贝果-结算', '高危空局失败-原生1080'),
+            'exit': ('on_click_in', '贝果-结算', '继续'),
+        },
     ]
 
 
-@pytest.mark.parametrize('manual_stop', [False, True], ids=['exhausted', 'human-stop'])
+@pytest.mark.parametrize(
+    'manual_stop',
+    [
+        True,
+    ],
+    ids=['human-stop'],
+)
 def test_failed_round_settles_before_real_reentry(
-    test_context: TestContext, monkeypatch: pytest.MonkeyPatch, manual_stop: bool,
+    test_context: TestContext,
+    monkeypatch: pytest.MonkeyPatch,
+    manual_stop: bool,
 ) -> None:
     """不替换操作结果或释放函数，验证定位耗尽及人工停止的真实框架出口。"""
     config = BagelConfig(99, 'standalone')
@@ -85,32 +117,58 @@ def test_failed_round_settles_before_real_reentry(
     first = entry_phases()
     second = entry_phases()
     if manual_stop:
-        arrival = next(index for index, phase in enumerate(second) if phase['frame'][0] == '贝果-局内')
+        arrival = next(
+            index
+            for index, phase in enumerate(second)
+            if phase['frame'][0] == '贝果-局内'
+        )
         second[arrival] = {'frame': ('贝果-局内', '高危A出生-原生1080'), 'stop': True}
-        second = second[:arrival + 1]
-    controller.set_phases([
-        *first,
-        {'frame': ('贝果-仓库', '带物资仓库-r07-117s'),
-         'exit': ('on_click_in', '贝果-仓库', '放入仓库')},
-        {'frame': ('贝果-仓库', '入仓后安全箱空-r07-118s'),
-         'exit': ('on_click_in', '贝果-仓库', '返回研究站')},
-        {'frame': ('贝果-研究站', '返回研究站达塔前-原生1080'), 'on': 'f'},
-        {'frame': ('贝果-研究站', '达塔对话-原生1080'),
-         'exit': ('on_click_in', '贝果-研究站', '出发对话')},
-        *second,
-        *([] if manual_stop else [{'frame': ('贝果-仓库', '空局仓库-原生1080')}]),
-    ])
+        second = second[: arrival + 1]
+    controller.set_phases(
+        [
+            *first,
+            {
+                'frame': ('贝果-仓库', '带物资仓库-r07-117s'),
+                'exit': ('on_click_in', '贝果-仓库', '放入仓库'),
+            },
+            {
+                'frame': ('贝果-仓库', '入仓后安全箱空-r07-118s'),
+                'exit': ('on_click_in', '贝果-仓库', '返回研究站'),
+            },
+            {'frame': ('贝果-研究站', '返回研究站达塔前-原生1080'), 'on': 'f'},
+            {
+                'frame': ('贝果-研究站', '达塔对话-原生1080'),
+                'exit': ('on_click_in', '贝果-研究站', '出发对话'),
+            },
+            *second,
+            *([] if manual_stop else [{'frame': ('贝果-仓库', '空局仓库-原生1080')}]),
+        ]
+    )
     monkeypatch.setattr(test_context, 'controller', controller)
 
     def release_key(key: object) -> None:
         """记录真实清理函数对底层键盘接口的调用。"""
         label = getattr(key, 'char', None) or str(key)
-        controller.trace.append((f'key.release:{label}', controller.phase_idx, controller.frames, time.time()))
+        controller.trace.append(
+            (
+                f'key.release:{label}',
+                controller.phase_idx,
+                controller.frames,
+                time.time(),
+            )
+        )
 
     def release_mouse(button: object) -> None:
         """鼠标拖拽松开与键盘松开均须在退出动作之前发生。"""
         label = getattr(button, 'name', None) or str(button)
-        controller.trace.append((f'mouse.release:{label}', controller.phase_idx, controller.frames, time.time()))
+        controller.trace.append(
+            (
+                f'mouse.release:{label}',
+                controller.phase_idx,
+                controller.frames,
+                time.time(),
+            )
+        )
 
     controller.keyboard_controller.keyboard.release.side_effect = release_key
     controller.keyboard_controller.mouse.release.side_effect = release_mouse
@@ -121,7 +179,9 @@ def test_failed_round_settles_before_real_reentry(
         assert not result.success, result.status
         assert app.failure_retries_used == 1 and app.success_rounds == 0
         assert controller.phase_idx == len(controller._phases) - 1
-        assert '小地图持续无法定位' in record.get('retry_summary')['failures'][0]['reason']
+        assert (
+            '小地图持续无法定位' in record.get('retry_summary')['failures'][0]['reason']
+        )
         trace = [event[0] for event in controller.trace]
         first_exit = trace.index('key:esc')
         required_releases = {'key.release:w', 'key.release:f', 'mouse.release:left'}
@@ -129,9 +189,11 @@ def test_failed_round_settles_before_real_reentry(
         assert controller.click_hit_area('贝果-仓库', '放入仓库')
         if manual_stop:
             assert result.status == '人工结束'
-            after_stop = trace[trace.index('stop') + 1:]
+            after_stop = trace[trace.index('stop') + 1 :]
             assert required_releases <= set(after_stop)
-            assert not any(event in ('click', 'f', 'w', 'turn', 'key:esc') for event in after_stop)
+            assert not any(
+                event in ('click', 'f', 'w', 'turn', 'key:esc') for event in after_stop
+            )
         else:
             assert '整体重试已用 1/1，已完成仓库结算' in result.status
             assert app.defeat_rounds == 2

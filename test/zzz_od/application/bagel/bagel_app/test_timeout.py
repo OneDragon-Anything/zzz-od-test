@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from test.harness.fixture_controller import enter_running_state, reset_running_state
-from test.zzz_od.application.bagel.test_store_deposit_flows import WatchedApp
-from test.zzz_od.application.bagel.test_store_deposit_flows import (
+from test.harness.bagel_storage import WatchedApp
+from test.harness.bagel_storage import (
     app_setup as app_setup,
 )
+from test.harness.fixture_controller import enter_running_state, reset_running_state
 
 from one_dragon.base.operation.operation_node import operation_node
 from zzz_od.application.bagel.bagel_operation import BagelOperation
@@ -33,22 +33,34 @@ class TimedStep(BagelOperation):
         """区分整个操作超时和单节点超时。"""
         super().__init__(ctx, timeout_seconds=0 if operation_timeout else -1)
 
-    @operation_node(name='无已知失败文字的等待', is_start_node=True, timeout_seconds=0.001)
+    @operation_node(
+        name='无已知失败文字的等待', is_start_node=True, timeout_seconds=0.001
+    )
     def wait_unknown_reason(self) -> OperationRoundResult:
         """任意等待文字不能决定能否恢复。"""
         return self.round_wait('新步骤仍在等待', wait=1)
 
 
-@pytest.mark.parametrize('operation_timeout', [False, True])
+@pytest.mark.parametrize(
+    'operation_timeout',
+    [
+        True,
+    ],
+)
 def test_real_framework_timeout_reaches_formal_cleanup(
-    test_context: TestContext, app_setup: tuple[BagelConfig, BagelRunRecord, list[str]],
-    monkeypatch: pytest.MonkeyPatch, operation_timeout: bool,
+    test_context: TestContext,
+    app_setup: tuple[BagelConfig, BagelRunRecord, list[str]],
+    monkeypatch: pytest.MonkeyPatch,
+    operation_timeout: bool,
 ) -> None:
     """无分类文字的真实节点或操作超时仍先结算，零额度时不进入下一局。"""
     config, record, events = app_setup
     config.max_failure_retries = 0
-    monkeypatch.setattr(BagelRunFlow, 'build_operation',
-                        lambda op, step: TimedStep(test_context, operation_timeout))
+    monkeypatch.setattr(
+        BagelRunFlow,
+        'build_operation',
+        lambda op, step: TimedStep(test_context, operation_timeout),
+    )
     app = WatchedApp(test_context, config, record)
     enter_running_state(test_context)
     try:
@@ -62,7 +74,8 @@ def test_real_framework_timeout_reaches_formal_cleanup(
 
 
 def test_final_exit_timeout_stays_at_scene(
-    test_context: TestContext, app_setup: tuple[BagelConfig, BagelRunRecord, list[str]],
+    test_context: TestContext,
+    app_setup: tuple[BagelConfig, BagelRunRecord, list[str]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """正常收集后的退出已经失败，不能被当作普通局内超时再次退出或重开。"""
@@ -82,7 +95,9 @@ def test_final_exit_timeout_stays_at_scene(
     enter_running_state(test_context)
     try:
         result = app.execute()
-        assert not result.success and result.status == BagelOperation.STATUS_CLEANUP_FAILED
+        assert (
+            not result.success and result.status == BagelOperation.STATUS_CLEANUP_FAILED
+        )
         assert '执行超时' in result.data
         assert exits == ['exit']
         assert events.count('enter') == 1

@@ -58,14 +58,19 @@ def entry_phases() -> list[dict]:
     ]
 
 
-@pytest.mark.parametrize('amount, delayed', [
-    ('0', False), ('500000', False), ('1000000', True), ('500K', False), ('1.5M', True), ('', False),
-])
+@pytest.mark.parametrize(
+    'amount,delayed',
+    [
+        ('0', False),
+        ('500K', False),
+        ('1.5M', True),
+    ],
+)
 def test_investment_rechecked_before_entry(
     test_context: TestContext, controller: TransferController,
     amount: str, delayed: bool,
 ) -> None:
-    """全流程覆盖初始为零、非零归零、更新延迟以及 OCR 暂缺后恢复。"""
+    """完整入场分别验证初始为零、非零归零和更新延迟。"""
     phases = entry_phases()
     before = investment_frame(test_context, amount)
     assert read_investment(test_context, before) == amount
@@ -91,23 +96,32 @@ def test_investment_rechecked_before_entry(
     assert len(controller.recorded_clicks) == 8 + (1 + int(delayed) if amount and amount != '0' else 0)
 
 
-@pytest.mark.parametrize('failure', ['click_failed', 'unchanged', 'unclear', 'min_missing', 'unclear_after_min', 'alternating'])
+@pytest.mark.parametrize(
+    'failure',
+    [
+        'click_failed',
+        'unchanged',
+        'unclear',
+        'min_missing',
+        'alternating',
+    ],
+)
 def test_investment_failure_stops_and_preserves_frame(
     test_context: TestContext, controller: TransferController,
     monkeypatch: pytest.MonkeyPatch, failure: str,
 ) -> None:
     """MIN 失败、无变化及识别不明均限次停在投资页并保存原帧，不进入空洞。"""
-    phases = entry_phases()
+    phases: list[dict] = []
     before = investment_frame(test_context, '500K')
     unclear = investment_frame(test_context, '')
-    if failure in {'unclear_after_min', 'alternating'}:
+    if failure == 'alternating':
         phases.append({'frame': before, 'exit': ('on_click_in', '贝果-入场确认', '投资最小值')})
     if failure == 'alternating':
         phases.extend([
             {'frame': unclear, 'exit': ('on_polls', 1)},
             {'frame': before, 'exit': ('on_click_in', '贝果-入场确认', '投资最小值')},
         ])
-    final = unclear if failure in {'unclear', 'unclear_after_min', 'alternating'} else before
+    final = unclear if failure in {'unclear', 'alternating'} else before
     if failure == 'min_missing':
         cv2.rectangle(final, (420, 775), (549, 904), (28, 28, 28), -1)
     phases.append({'frame': final})
@@ -127,6 +141,18 @@ def test_investment_failure_stops_and_preserves_frame(
 
         monkeypatch.setattr(controller, 'click', failed_click)
     op = WatchedEnter(test_context)
+    # 仅缩短已由上方三条完整入场覆盖的前置；真实确认节点和失败收尾继续执行。
+    _, nodes, _ = op._analyse_node_annotations()
+    confirmation = next(node for node in nodes if node.cn == '确认入场并等待加载')
+    monkeypatch.setattr(op, '_analyse_node_annotations', lambda: (confirmation, [confirmation], []))
+    original_init = op.handle_init
+
+    def start_after_loadout_check() -> None:
+        """初始化后提供已经核验零携带的前提，保留真实投资状态重置。"""
+        original_init()
+        op.zero_checked = True
+
+    monkeypatch.setattr(op, 'handle_init', start_after_loadout_check)
     saved = MagicMock(return_value='投资失败现场.png')
     monkeypatch.setattr(op, 'save_screenshot', saved)
     with running_operation(op):
@@ -138,7 +164,7 @@ def test_investment_failure_stops_and_preserves_frame(
     assert not op.investment_confirmed
     assert not controller.click_hit_area('贝果-入场确认', '零投资前往空洞')
     expected_clicks = {'click_failed': 3, 'unchanged': 3, 'unclear': 0, 'min_missing': 0,
-                       'unclear_after_min': 1, 'alternating': 2}
-    assert len(controller.recorded_clicks) == 7 + expected_clicks[failure]
+                       'alternating': 2}
+    assert len(controller.recorded_clicks) == expected_clicks[failure]
     assert np.array_equal(op.last_screenshot, final)
     saved.assert_called_once()

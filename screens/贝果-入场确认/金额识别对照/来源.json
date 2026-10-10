@@ -31,5 +31,120 @@
       255,
       255
     ]
-  ]
+  ],
+  "source_type": "录像；其解码像素不代表原始采集无损",
+  "files": {
+    "../投资0-20261007-无损.webp": {
+      "purpose": "投资金额完整读取回归",
+      "source_type": "录像代表帧",
+      "source_id": "2026-10-07 17-14-31.flv",
+      "frame_index": null,
+      "source_gap": "代表帧与原录像的精确帧号未留档",
+      "dimensions": [
+        1920,
+        1080
+      ],
+      "processing": "据既有记录遮挡UID后无损WebP编码；不能据编码推定原始采集无损",
+      "uid_review": "已有文档记已遮挡；本次未逐图视觉复核",
+      "sha256": "c3fd57283c8ebfadc35d795af5c59fa57a1dc66a57bef284de317db0689599a2"
+    },
+    "../投资1.5M-20261007-无损.webp": {
+      "purpose": "投资金额完整读取回归",
+      "source_type": "录像代表帧",
+      "source_id": "2026-10-07 17-14-31.flv",
+      "frame_index": null,
+      "source_gap": "代表帧与原录像的精确帧号未留档",
+      "dimensions": [
+        1920,
+        1080
+      ],
+      "processing": "据既有记录遮挡UID后无损WebP编码；不能据编码推定原始采集无损",
+      "uid_review": "已有文档记已遮挡；本次未逐图视觉复核",
+      "sha256": "c74834b9e1bf0372fc863242366df0c5bc851f592f9d76649cb3fe58bc9efe85"
+    },
+    "../投资1M-20261007-无损.webp": {
+      "purpose": "投资金额完整读取回归",
+      "source_type": "录像代表帧",
+      "source_id": "2026-10-07 17-14-31.flv",
+      "frame_index": null,
+      "source_gap": "代表帧与原录像的精确帧号未留档",
+      "dimensions": [
+        1920,
+        1080
+      ],
+      "processing": "据既有记录遮挡UID后无损WebP编码；不能据编码推定原始采集无损",
+      "uid_review": "已有文档记已遮挡；本次未逐图视觉复核",
+      "sha256": "6cf53bd17677acec8263f830fc2aae73fa42767841a11250e4a08adc336b63bd"
+    },
+    "../投资2.5M-20261007-无损.webp": {
+      "purpose": "投资金额完整读取回归",
+      "source_type": "录像代表帧",
+      "source_id": "2026-10-07 17-14-31.flv",
+      "frame_index": null,
+      "source_gap": "代表帧与原录像的精确帧号未留档",
+      "dimensions": [
+        1920,
+        1080
+      ],
+      "processing": "据既有记录遮挡UID后无损WebP编码；不能据编码推定原始采集无损",
+      "uid_review": "已有文档记已遮挡；本次未逐图视觉复核",
+      "sha256": "4321cadaa735c569c0deb389b44d1b12ddfeb449e54efe89819e3f0ea5692692"
+    },
+    "../投资2M-20261007-无损.webp": {
+      "purpose": "投资金额完整读取回归",
+      "source_type": "录像代表帧",
+      "source_id": "2026-10-07 17-14-31.flv",
+      "frame_index": null,
+      "source_gap": "代表帧与原录像的精确帧号未留档",
+      "dimensions": [
+        1920,
+        1080
+      ],
+      "processing": "据既有记录遮挡UID后无损WebP编码；不能据编码推定原始采集无损",
+      "uid_review": "已有文档记已遮挡；本次未逐图视觉复核",
+      "sha256": "0cd484e9ed8861706c12885dba6921f7bc2f7d52966e872709666771ef575480"
+    },
+    "../投资3M-20261007-无损.webp": {
+      "purpose": "投资金额完整读取回归",
+      "source_type": "录像代表帧",
+      "source_id": "2026-10-07 17-14-31.flv",
+      "frame_index": null,
+      "source_gap": "代表帧与原录像的精确帧号未留档",
+      "dimensions": [
+        1920,
+        1080
+      ],
+      "processing": "据既有记录遮挡UID后无损WebP编码；不能据编码推定原始采集无损",
+      "uid_review": "已有文档记已遮挡；本次未逐图视觉复核",
+      "sha256": "d124fdb55a59da4ae1a55b6148266c9218963fe97b1ff2d32c85d63f58a40bc6"
+    },
+    "../投资500K-20261007-无损.webp": {
+      "purpose": "投资金额完整读取回归",
+      "source_type": "录像代表帧",
+      "source_id": "2026-10-07 17-14-31.flv",
+      "frame_index": null,
+      "source_gap": "代表帧与原录像的精确帧号未留档",
+      "dimensions": [
+        1920,
+        1080
+      ],
+      "processing": "据既有记录遮挡UID后无损WebP编码；不能据编码推定原始采集无损",
+      "uid_review": "已有文档记已遮挡；本次未逐图视觉复核",
+      "sha256": "f9c0a779023b46873211d91eae5f2056cc9e1e18d64bafb3c62bc5f76a00a592"
+    },
+    "../零投资金币误读2-20261007-无损.webp": {
+      "purpose": "金币误读故障回归",
+      "source_type": "独立PNG故障截图",
+      "source_id": null,
+      "frame_index": null,
+      "source_gap": "原PNG文件标识与采集方式未留档",
+      "dimensions": [
+        1920,
+        1080
+      ],
+      "processing": "据既有记录遮挡UID后无损WebP编码；不能据编码推定原始采集无损",
+      "uid_review": "已有文档记已遮挡；本次未逐图视觉复核",
+      "sha256": "f8df466125509c161c6caaaba2c48d11b2e71a8bf92397528b0b919fb2c7a6c4"
+    }
+  }
 }

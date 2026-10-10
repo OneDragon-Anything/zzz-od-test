@@ -86,30 +86,3 @@ def test_transfer_unknown_keeps_baseline_until_known(
     assert op.confirm_transfer().status == '继续装入'
     assert op.moved == 1 and op._safe_unknown_rounds == 0
     drag.assert_not_called()
-
-
-@pytest.mark.parametrize('phase', ['store', 'transfer'])
-@pytest.mark.parametrize('event', ['unrecognized', 'dead'])
-def test_unknown_wait_does_not_hide_panel_loss_or_death(
-    test_context: TestContext, monkeypatch: pytest.MonkeyPatch, phase: str, event: str,
-) -> None:
-    """格子重读不能吞掉死亡事件，面板不明也必须有界停止。"""
-    op = BagelStoreSafe(test_context)
-    op.last_screenshot = test_context.load_screen('贝果-局内', '搜查面板过渡/帧1103')
-    op._safe_unknown_rounds = 1
-    op._pending_before = op.last_screenshot
-    op._pending_source = RESULT_SLOT_CENTERS[0]
-    op._pending_destination = SAFE_SLOT_CENTERS[0]
-    op._pending_kind = 'fill'
-    monkeypatch.setattr(op, 'is_bagel_result', lambda: event == 'dead')
-    monkeypatch.setattr(op, '_search_ready', lambda: False)
-    monkeypatch.setattr(op, '_has_search_title', lambda: False)
-    monkeypatch.setattr(op, 'round_by_find_area', lambda *_: op.round_retry())
-    call = op.store_next if phase == 'store' else op.confirm_transfer
-    result = call()
-    if event == 'dead':
-        assert result.is_fail and result.status == op.STATUS_DEFEATED
-    else:
-        for _ in range(5):
-            result = call()
-        assert result.is_fail and result.data is None

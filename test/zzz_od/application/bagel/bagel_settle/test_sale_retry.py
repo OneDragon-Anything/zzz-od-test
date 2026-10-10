@@ -26,23 +26,34 @@ class WatchedSettle(WatchdogOperationMixin, BagelSettleWarehouse):
     watchdog_max_rounds: int = 20
 
 
-@pytest.mark.parametrize('starting', [False, True])
-@pytest.mark.parametrize('post_sale_full', [False, True])
-@pytest.mark.parametrize('first,second,auto_clean,due,full,expected_events,success', [
-    (BagelDeposit.STATUS_DONE, None, True, False, False, ['deposit'], True),
-    (BagelDeposit.STATUS_DONE, None, True, True, False, ['deposit', 'sale'], True),
-    (BagelDeposit.STATUS_DONE, None, True, False, True, ['deposit', 'sale'], True),
-    (BagelDeposit.STATUS_EMPTY, None, True, True, False, ['deposit'], True),
-    (BagelDeposit.STATUS_EMPTY, None, True, True, True, ['deposit'], True),
-    (BagelDeposit.STATUS_DONE, None, False, False, True, ['deposit'], True),
-    (BagelDeposit.STATUS_FULL, None, False, True, True, ['deposit'], False),
-    (BagelDeposit.STATUS_FULL, BagelDeposit.STATUS_DONE, True, False, True, ['deposit', 'sale', 'retry'], True),
-    (BagelDeposit.STATUS_FULL, BagelDeposit.STATUS_EMPTY, True, False, True, ['deposit', 'sale', 'retry'], True),
-    (BagelDeposit.STATUS_FULL, BagelDeposit.STATUS_FULL, True, True, True, ['deposit', 'sale', 'retry'], False),
-])
+@pytest.mark.parametrize(
+    'first,second,auto_clean,due,full,expected_events,success,starting,post_sale_full',
+    [
+        (BagelDeposit.STATUS_DONE, None, True, False, False, ['deposit'], True, False, True),
+        (BagelDeposit.STATUS_DONE, None, True, True, False, ['deposit', 'sale'], True, False, True),
+        (BagelDeposit.STATUS_DONE, None, True, False, True, ['deposit', 'sale'], True, False, True),
+        (BagelDeposit.STATUS_EMPTY, None, True, True, False, ['deposit'], True, False, True),
+        (BagelDeposit.STATUS_EMPTY, None, True, True, True, ['deposit'], True, False, True),
+        (BagelDeposit.STATUS_DONE, None, False, False, True, ['deposit'], True, False, True),
+        (BagelDeposit.STATUS_FULL, None, False, True, True, ['deposit'], False, False, True),
+        (BagelDeposit.STATUS_FULL, BagelDeposit.STATUS_DONE, True, False, True, ['deposit', 'sale', 'retry'], True, False, True),
+        (BagelDeposit.STATUS_FULL, BagelDeposit.STATUS_DONE, True, False, True, ['deposit', 'sale', 'retry'], True, True, False),
+        (BagelDeposit.STATUS_FULL, BagelDeposit.STATUS_EMPTY, True, False, True, ['deposit', 'sale', 'retry'], True, False, True),
+        (BagelDeposit.STATUS_FULL, BagelDeposit.STATUS_FULL, True, True, True, ['deposit', 'sale', 'retry'], False, False, True),
+        (BagelDeposit.STATUS_FULL, BagelDeposit.STATUS_FULL, True, True, True, ['deposit', 'sale', 'retry'], False, True, False),
+    ],
+)
 def test_settlement_limits_sale_and_deposit_retry(
-    test_context: TestContext, monkeypatch: pytest.MonkeyPatch, first: str, second: str | None,
-    auto_clean: bool, due: bool, full: bool, expected_events: list[str], success: bool, starting: bool,
+    test_context: TestContext,
+    monkeypatch: pytest.MonkeyPatch,
+    first: str,
+    second: str | None,
+    auto_clean: bool,
+    due: bool,
+    full: bool,
+    expected_events: list[str],
+    success: bool,
+    starting: bool,
     post_sale_full: bool,
 ) -> None:
     """真实操作图最多一次出售和一次再入仓，空箱永不出售，末尾容量仍核验。"""
@@ -58,7 +69,9 @@ def test_settlement_limits_sale_and_deposit_retry(
         if len(events) > 1:
             assert op.click_when_empty
         status = next(statuses)
-        return OperationResult(True, status, data={'moved': int(status == BagelDeposit.STATUS_DONE)})
+        return OperationResult(
+            True, status, data={'moved': int(status == BagelDeposit.STATUS_DONE)}
+        )
 
     def sale(op: BagelCleanWarehouse) -> OperationResult:
         events.append('sale')
@@ -68,9 +81,13 @@ def test_settlement_limits_sale_and_deposit_retry(
     monkeypatch.setattr(BagelDeposit, 'execute', deposit)
     monkeypatch.setattr(BagelCleanWarehouse, 'execute', sale)
     monkeypatch.setattr(BagelStoreCarried, 'execute', deposit)
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_screen.parse_capacity_pair',
-                        lambda _: (280 if full and ('sale' not in events or post_sale_full) else 279, 280))
-    monkeypatch.setattr('one_dragon.base.operation.operation.time.sleep', lambda _: None)
+    monkeypatch.setattr(
+        'zzz_od.application.bagel.bagel_screen.parse_capacity_pair',
+        lambda _: (
+            280 if full and ('sale' not in events or post_sale_full) else 279,
+            280,
+        ),
+    )
     op = WatchedSettle(test_context, auto_clean, sell_due=due, starting=starting)
     enter_running_state(test_context)
     try:

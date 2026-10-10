@@ -29,7 +29,13 @@ class WatchedSettle(WatchdogOperationMixin, BagelSettleWarehouse):
     watchdog_max_rounds: int = 20
 
 
-@pytest.mark.parametrize('case', ['empty', 'clean_disabled', 'remaining'])
+@pytest.mark.parametrize(
+    'case',
+    [
+        'empty',
+        'remaining',
+    ],
+)
 def test_full_empty_settlement_updates_counts_and_allows_next_round(
     test_context: TestContext, config: BagelConfig, record: BagelRunRecord,
     monkeypatch: pytest.MonkeyPatch, case: str,

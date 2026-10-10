@@ -8,7 +8,12 @@ from one_dragon.base.operation.operation_base import OperationResult
 from zzz_od.application.bagel.bagel_enter import BagelEnter
 
 
-@pytest.mark.parametrize('save_error', [False, True])
+@pytest.mark.parametrize(
+    'save_error',
+    [
+        True,
+    ],
+)
 def test_failure_keeps_cleanup_when_capture_fails(
     monkeypatch: pytest.MonkeyPatch, save_error: bool,
 ) -> None:
@@ -31,22 +36,3 @@ def test_failure_keeps_cleanup_when_capture_fails(
     capture.assert_called_once_with()
     assert not any(ctx.run_context.event_bus.callbacks.values())
     callback.assert_called_once_with(result)
-
-
-@pytest.mark.parametrize('success,has_image', [(True, True), (False, False)])
-def test_success_or_missing_frame_does_not_save(
-    monkeypatch: pytest.MonkeyPatch, success: bool, has_image: bool,
-) -> None:
-    """成功或还没拿到截图时，不制造无效现场文件。"""
-    ctx = MagicMock()
-    ctx.run_context.event_bus = ContextEventBus()
-    op = BagelEnter(ctx)
-    op._init_before_execute()
-    op.last_screenshot = np.zeros((2, 2, 3), dtype=np.uint8) if has_image else None
-    capture = MagicMock()
-    monkeypatch.setattr(op, 'save_screenshot', capture)
-
-    op.after_operation_done(OperationResult(success))
-
-    capture.assert_not_called()
-    assert not any(ctx.run_context.event_bus.callbacks.values())

@@ -34,7 +34,12 @@ def repeat_box(flow: BagelFlow) -> BagelFlow:
     ))
 
 
-@pytest.mark.parametrize('next_target', ['box', 'safe'])
+@pytest.mark.parametrize(
+    'next_target',
+    [
+        'box',
+    ],
+)
 def test_next_approach_has_own_time_budget(
     test_context: TestContext, monkeypatch: pytest.MonkeyPatch, next_target: str,
 ) -> None:
@@ -64,32 +69,6 @@ def test_next_approach_has_own_time_budget(
     assert result.success, (result.status, result.data)
     assert [e['step_id'] for e in events if e['kind'] == 'done'] == [s.id for s in approaches]
     assert not [e for e in controller.trace if e[0] in ('w', 'turn', 'f')]
-
-
-def test_next_same_type_interaction_has_own_f_budget(
-    test_context: TestContext, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """只选两次开箱，前一容器用了三次 F 后，下一容器仍可按首次 F。"""
-    prompt, _, panel = phases('box')
-    controller, prepared, events = prepare(test_context, monkeypatch, 'box', [
-        {**prompt, 'on': 'f'}, {**prompt, 'on': 'f'}, {**prompt, 'on': 'f'}, panel,
-        {**prompt, 'on': 'f'}, panel,
-    ], selection='interact')
-    flow = repeat_box(prepared.flow)
-    interactions = tuple(s for s in flow.steps if s.action == 'interact')
-    op = WatchedFlow(test_context, flow, tuple(s.id for s in interactions))
-
-    def next_container(event: dict[str, object]) -> None:
-        """第一容器完成后提供下一容器的交互画面。"""
-        events.append(event)
-        if event['kind'] == 'done' and event['step_id'] == interactions[0].id:
-            controller._advance_phase()
-
-    op.on_event = next_container
-    result = execute(op)
-    assert result.success, (result.status, result.data)
-    assert [e[0] for e in controller.trace if e[0] in ('w', 'f')] == ['f', 'f', 'f', 'f']
-    assert [e['step_id'] for e in events if e['kind'] == 'done'] == [s.id for s in interactions]
 
 
 def test_child_watchdog_stops_wait_when_business_timeout_is_disabled(

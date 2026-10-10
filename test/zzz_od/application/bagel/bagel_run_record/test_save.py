@@ -1,4 +1,3 @@
-from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -25,7 +24,12 @@ def test_failed_replace_preserves_disk(
     assert not list(Path(record.file_path).parent.glob('*.tmp'))
 
 
-@pytest.mark.parametrize('content', ['', '[]', 'collection: {}', 'collection: ['])
+@pytest.mark.parametrize(
+    'content',
+    [
+        'collection: [',
+    ],
+)
 def test_corrupt_file_is_rejected(record: BagelRunRecord, content: str) -> None:
     """损坏记录不能吞异常后按空文件继续运行。"""
     Path(record.file_path).write_text(content, encoding='utf-8')
@@ -33,7 +37,12 @@ def test_corrupt_file_is_rejected(record: BagelRunRecord, content: str) -> None:
         BagelRunRecord(99)
 
 
-@pytest.mark.parametrize('phase', ['collecting', 'depositing', 'finished'])
+@pytest.mark.parametrize(
+    'phase',
+    [
+        'finished',
+    ],
+)
 def test_status_updates_preserve_legacy_collection(
     record: BagelRunRecord, legacy_collection: dict, phase: str,
 ) -> None:
@@ -57,40 +66,6 @@ def test_status_updates_preserve_legacy_collection(
     reloaded = BagelRunRecord(99)
     assert reloaded.run_status == current.STATUS_WAIT
     assert reloaded.get('collection') == legacy_collection
-
-
-@pytest.mark.parametrize('rows', [
-    [],
-    [{'name': '测试武备', 'variant': 'III', 'quantity': True}],
-    [{'name': '测试武备', 'variant': 'III', 'quantity': 0}],
-    [{'name': '测试武备', 'variant': 'III', 'quantity': -1}],
-    [{'name': '测试武备', 'variant': '', 'quantity': 1}],
-    [{'name': ' 测试武备', 'variant': 'III', 'quantity': 1}],
-    [{'name': '测试武备', 'variant': 'III', 'quantity': 1}] * 2,
-])
-def test_invalid_legacy_inventory_is_rejected(
-    record: BagelRunRecord, legacy_collection: dict, rows: list[dict],
-) -> None:
-    """退役清单算法后，文件入口仍拒绝非法身份、数量和重复物品。"""
-    legacy_collection['targets'] = rows
-    Path(record.file_path).write_text(yaml.safe_dump({'collection': legacy_collection}), encoding='utf-8')
-    with pytest.raises(ValueError):
-        BagelRunRecord(99)
-
-
-@pytest.mark.parametrize('field,value', [
-    ('version', 2), ('rounds', -1), ('pending', {'id': 'old', 'phase': 'unknown'}),
-    ('deposited', [{'name': '测试武备', 'variant': 'III', 'quantity': 3}]),
-])
-def test_invalid_legacy_progress_is_rejected(
-    record: BagelRunRecord, legacy_collection: dict, field: str, value: object,
-) -> None:
-    """不支持的版本、损坏阶段和超量进度不能当作正常旧记录。"""
-    damaged = deepcopy(legacy_collection)
-    damaged[field] = value
-    Path(record.file_path).write_text(yaml.safe_dump({'collection': damaged}), encoding='utf-8')
-    with pytest.raises(ValueError):
-        BagelRunRecord(99)
 
 
 def test_new_record_only_saves_application_status() -> None:

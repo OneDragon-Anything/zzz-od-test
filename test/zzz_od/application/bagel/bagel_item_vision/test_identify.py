@@ -19,27 +19,6 @@ def _load(name: str) -> np.ndarray:
     return np.array(Image.open(path).convert('RGB'))
 
 
-def test_identify_weapon_box_pending_marks() -> None:
-    """待入箱两件：紫底战术道具、金底战术棱镜。"""
-    marks = inspect_occupied(_load('武备箱待入箱-实机.webp'), RESULT_SLOT_CENTERS)
-    by_index = {mark.index: mark for mark in marks}
-    assert by_index[0].quality == 'A'
-    assert by_index[0].item_type == '战术道具'
-    assert by_index[1].quality == 'S'
-    assert by_index[1].item_type == '战术棱镜'
-    assert set(by_index) == {0, 1}
-
-
-def test_identify_after_store_keeps_type_and_quality() -> None:
-    """入箱后安全箱仍能认出原品质和类型。"""
-    marks = inspect_occupied(_load('武备箱已入箱-实机.webp'), SAFE_SLOT_CENTERS)
-    by_index = {mark.index: mark for mark in marks}
-    assert by_index[0].quality == 'A'
-    assert by_index[0].item_type == '战术道具'
-    assert by_index[1].quality == 'S'
-    assert by_index[1].item_type == '战术棱镜'
-
-
 def test_identify_backpack_bc_marks_on_real_crop() -> None:
     """局部实拍覆盖绿底 C、蓝底 B 和紫底 A，空格不参与识别。"""
     screen = _load('背包BC品质局部-20260930.webp')

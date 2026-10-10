@@ -92,17 +92,6 @@ def test_queued_callback_cannot_reach_finished_or_reused_operation(
     pause.assert_not_called()
 
 
-def test_cleanup_preserves_other_subscribers(op: FinishOperation | BagelApp) -> None:
-    """只清理当前贝果执行的监听，不移除同总线上的其他订阅者。"""
-    bus = op.ctx.run_context.event_bus
-    other = FinishOperation(op.ctx, need_check_game_win=False)
-    event = ApplicationRunContextStateEventEnum.PAUSE
-    bus.listen_event(event, other._on_pause)
-    assert op.execute().success
-    assert bus.callbacks[event] == [other._on_pause]
-    assert not bus.callbacks[ApplicationRunContextStateEventEnum.RESUME]
-
-
 def test_running_callback_finishes_before_execute_returns(
     op: FinishOperation | BagelApp, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

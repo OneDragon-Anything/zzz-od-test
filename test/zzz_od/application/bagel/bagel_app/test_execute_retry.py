@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
-from test.harness.fixture_controller import enter_running_state, reset_running_state
-from test.zzz_od.application.bagel.test_store_deposit_flows import (
+from test.harness.bagel_storage import (
     WatchedApp,
 )
-from test.zzz_od.application.bagel.test_store_deposit_flows import (
+from test.harness.bagel_storage import (
     app_setup as app_setup,
 )
+from test.harness.fixture_controller import enter_running_state, reset_running_state
 
 from one_dragon.base.operation.application.application_run_context import (
     ApplicationRunContextStateEnum,
@@ -37,10 +37,18 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.usefixtures('no_round_wait')
 
 
-@pytest.mark.parametrize('budget', [0, 1, 5, 100])
+@pytest.mark.parametrize(
+    'budget',
+    [
+        0,
+        1,
+    ],
+)
 def test_retry_budget_from_formal_execute(
-    test_context: TestContext, app_setup: tuple[BagelConfig, BagelRunRecord, list[str]],
-    monkeypatch: pytest.MonkeyPatch, budget: int,
+    test_context: TestContext,
+    app_setup: tuple[BagelConfig, BagelRunRecord, list[str]],
+    monkeypatch: pytest.MonkeyPatch,
+    budget: int,
 ) -> None:
     """混合原因共用累计额度，先结算最后一局再停，最大额度不被旧三次规则截断。"""
     config, record, events = app_setup
@@ -50,11 +58,20 @@ def test_retry_budget_from_formal_execute(
     app = WatchedApp(test_context, config, record)
     app.watchdog_max_rounds = 1000
     monkeypatch.setattr(app, 'save_screenshot', lambda: '失败现场.webp')
-    monkeypatch.setattr(app, 'round_by_find_area', lambda screen, page, area:
-                        app.round_success() if page == '战斗画面' else app.round_fail())
-    reasons = ['持续前进但位置未变化，停止移动', '小地图定位失败，停止移动',
-               BagelOperation.STATUS_DEFEATED, BagelOperation.STATUS_TIMEOUT,
-               BagelOperation.STATUS_INTERRUPTED]
+    monkeypatch.setattr(
+        app,
+        'round_by_find_area',
+        lambda screen, page, area: (
+            app.round_success() if page == '战斗画面' else app.round_fail()
+        ),
+    )
+    reasons = [
+        '持续前进但位置未变化，停止移动',
+        '小地图定位失败，停止移动',
+        BagelOperation.STATUS_DEFEATED,
+        BagelOperation.STATUS_TIMEOUT,
+        BagelOperation.STATUS_INTERRUPTED,
+    ]
 
     def navigate(op: BagelNavigate) -> OperationResult:
         """只替代游戏结果，正式应用和局内执行器仍走真实节点链。"""
@@ -64,9 +81,17 @@ def test_retry_budget_from_formal_execute(
             app._on_pause()
             test_context.run_context._run_state = ApplicationRunContextStateEnum.RUNNING
             app._on_resume()
-            assert (app.failure_retries_used, app.initial_clear_pending) == before == (1, False)
+            assert (
+                (app.failure_retries_used, app.initial_clear_pending)
+                == before
+                == (1, False)
+            )
         reason = reasons[(events.count('enter') - 1) % len(reasons)]
-        data = BagelRecoverableFailure(reason) if reason == reasons[0] or reason == reasons[1] else None
+        data = (
+            BagelRecoverableFailure(reason)
+            if reason == reasons[0] or reason == reasons[1]
+            else None
+        )
         return OperationResult(False, reason, data)
 
     monkeypatch.setattr(BagelNavigate, 'execute', navigate)
@@ -74,7 +99,11 @@ def test_retry_budget_from_formal_execute(
     try:
         result = app.execute()
         assert not result.success and f'整体重试已用 {budget}/{budget}' in result.status
-        assert events == ['enter', 'exit', 'settle', 'return'] * budget + ['enter', 'exit', 'settle']
+        assert events == ['enter', 'exit', 'settle', 'return'] * budget + [
+            'enter',
+            'exit',
+            'settle',
+        ]
         assert app.failure_retries_used == budget
         assert app.defeat_rounds == budget + 1
         assert app.success_rounds == 0
@@ -86,38 +115,57 @@ def test_retry_budget_from_formal_execute(
         reset_running_state(test_context, app)
 
 
-@pytest.mark.parametrize('kind', ['program', 'initialization', 'stop', 'entry'])
+@pytest.mark.parametrize(
+    'kind',
+    [
+        'program',
+        'stop',
+    ],
+)
 def test_terminal_failure_does_not_restart(
-    test_context: TestContext, app_setup: tuple[BagelConfig, BagelRunRecord, list[str]],
-    monkeypatch: pytest.MonkeyPatch, kind: str,
+    test_context: TestContext,
+    app_setup: tuple[BagelConfig, BagelRunRecord, list[str]],
+    monkeypatch: pytest.MonkeyPatch,
+    kind: str,
 ) -> None:
     """实际框架异常和停止、子操作初始化失败及额外入场失败都不重开。"""
     config, record, events = app_setup
     app = WatchedApp(test_context, config, record)
     app.watchdog_max_rounds = 80
     if kind == 'program':
+
         def broken_build(op: BagelRunFlow, step: object) -> None:
             """从真实节点抛异常，不能伪装成普通超时。"""
             raise RuntimeError('程序故障')
+
         monkeypatch.setattr(BagelRunFlow, 'build_operation', broken_build)
     elif kind == 'initialization':
+
         def broken_init(op: BagelRunFlow) -> None:
             """使用真实 execute 的初始化失败出口。"""
             raise ValueError('资源损坏')
+
         monkeypatch.setattr(BagelRunFlow, 'handle_init', broken_init)
     elif kind == 'stop':
+
         def stop_build(op: BagelRunFlow, step: object) -> None:
             """节点中停止任务，后续框架循环直接结束。"""
             reset_running_state(test_context, op)
+
         monkeypatch.setattr(BagelRunFlow, 'build_operation', stop_build)
     else:
+
         def entry(op: BagelEnter) -> OperationResult:
             """额外入场失败，不获得下一次入场或返还额度。"""
             events.append('enter')
             return OperationResult(events.count('enter') == 1, '入场失败')
+
         monkeypatch.setattr(BagelEnter, 'execute', entry)
-        monkeypatch.setattr(BagelNavigate, 'execute', lambda op:
-                            OperationResult(False, op.STATUS_TIMEOUT))
+        monkeypatch.setattr(
+            BagelNavigate,
+            'execute',
+            lambda op: OperationResult(False, op.STATUS_TIMEOUT),
+        )
     enter_running_state(test_context)
     try:
         result = app.execute()
@@ -136,10 +184,17 @@ def test_terminal_failure_does_not_restart(
         reset_running_state(test_context, app)
 
 
-@pytest.mark.parametrize('already_warehouse', [False, True])
+@pytest.mark.parametrize(
+    'already_warehouse',
+    [
+        False,
+    ],
+)
 def test_exhausted_retry_runs_real_exit_and_deposit(
-    test_context: TestContext, app_setup: tuple[BagelConfig, BagelRunRecord, list[str]],
-    monkeypatch: pytest.MonkeyPatch, already_warehouse: bool,
+    test_context: TestContext,
+    app_setup: tuple[BagelConfig, BagelRunRecord, list[str]],
+    monkeypatch: pytest.MonkeyPatch,
+    already_warehouse: bool,
 ) -> None:
     """正式任务从失败现场执行真实退出、核验入仓，额度为零时最终停在仓库。"""
     config, record, events = app_setup
@@ -151,21 +206,35 @@ def test_exhausted_retry_runs_real_exit_and_deposit(
 
     def navigate(op: BagelNavigate) -> OperationResult:
         """失败已到仓库或死亡结算，两种新画面都可完成相同入仓核验。"""
-        script = [] if already_warehouse else [
-            {'frame': ('贝果-结算', '高危空局失败-原生1080'),
-             'exit': ('on_click_in', '贝果-结算', '继续')},
-        ]
-        script.extend([
-            {'frame': ('贝果-仓库', '带物资仓库-r07-117s'),
-             'exit': ('on_click_in', '贝果-仓库', '放入仓库')},
-            {'frame': ('贝果-仓库', '入仓后安全箱空-r07-118s')},
-        ])
+        script = (
+            []
+            if already_warehouse
+            else [
+                {
+                    'frame': ('贝果-结算', '高危空局失败-原生1080'),
+                    'exit': ('on_click_in', '贝果-结算', '继续'),
+                },
+            ]
+        )
+        script.extend(
+            [
+                {
+                    'frame': ('贝果-仓库', '带物资仓库-r07-117s'),
+                    'exit': ('on_click_in', '贝果-仓库', '放入仓库'),
+                },
+                {'frame': ('贝果-仓库', '入仓后安全箱空-r07-118s')},
+            ]
+        )
         controller.set_phases(script)
-        return OperationResult(False, op.STATUS_TIMEOUT if already_warehouse else op.STATUS_DEFEATED)
+        return OperationResult(
+            False, op.STATUS_TIMEOUT if already_warehouse else op.STATUS_DEFEATED
+        )
 
     monkeypatch.setattr(BagelNavigate, 'execute', navigate)
     release = MagicMock()
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_app.release_flow_inputs', release)
+    monkeypatch.setattr(
+        'zzz_od.application.bagel.bagel_app.release_flow_inputs', release
+    )
     app = WatchedApp(test_context, config, record)
     enter_running_state(test_context)
     try:

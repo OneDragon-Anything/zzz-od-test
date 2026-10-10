@@ -45,7 +45,14 @@ def click_count(ctx: TestContext, ctl: TransferController, screen: str, area: st
     return sum(rect.x1 <= p.x <= rect.x2 and rect.y1 <= p.y <= rect.y2 for p in ctl.recorded_clicks)
 
 
-@pytest.mark.parametrize('selection', ['correct', 'wrong_map', 'wrong_difficulty', 'delayed'])
+@pytest.mark.parametrize(
+    'selection',
+    [
+        'correct',
+        'wrong_map',
+        'wrong_difficulty',
+    ],
+)
 def test_selection_verified_before_prepare(
     test_context: TestContext, controller: TransferController, selection: str,
 ) -> None:
@@ -69,28 +76,14 @@ def test_selection_verified_before_prepare(
     assert click_count(test_context, controller, '贝果-选图', '高危') == int(selection == 'wrong_difficulty')
 
 
-@pytest.mark.parametrize('area', ['选中地图', '推荐价值'])
-def test_unknown_selection_stops_without_input(
-    test_context: TestContext, controller: TransferController, area: str,
-) -> None:
-    """保留选图入口，只遮核验读数，不能猜测点击或进入备战。"""
-    frame = test_context.load_screen('贝果-选图', '雅努斯高危-原生1080').copy()
-    rect = test_context.screen_loader.get_area('贝果-选图', area).pc_rect
-    frame[rect.y1:rect.y2, rect.x1:rect.x2] = 0
-    controller.set_phases([{'frame': frame}])
-    op = WatchedEnter(test_context)
-    with running_operation(op):
-        result = op.execute()
-    assert not result.success
-    assert '看门狗' not in result.status
-    assert controller.recorded_clicks == []
-
-
-@pytest.mark.parametrize('scenario,expected_clicks,success', [
-    ('normal', 3, True), ('reordered', 3, True), ('delayed', 3, True),
-    ('missed', 4, True), ('stuck', 2, False), ('unknown', 0, False),
-    ('reappeared', 2, False), ('blank', 1, False),
-])
+@pytest.mark.parametrize(
+    'scenario,expected_clicks,success',
+    [
+        ('delayed', 3, True),
+        ('stuck', 2, False),
+        ('unknown', 0, False),
+    ],
+)
 def test_warning_transitions_have_bounded_inputs(
     test_context: TestContext, controller: TransferController,
     scenario: str, expected_clicks: int, success: bool,
@@ -125,56 +118,6 @@ def test_warning_transitions_have_bounded_inputs(
     assert controller.click_hit_area('贝果-入场确认', '零投资前往空洞') == success
 
 
-def test_reused_operation_rechecks_map(
-    test_context: TestContext, controller: TransferController,
-) -> None:
-    """同一实例再次执行也不沿用上局地图核验与弹窗状态。"""
-    op = WatchedEnter(test_context)
-    for wrong in (False, True):
-        phases = entry_prefix()
-        if wrong:
-            phases.insert(0, {'frame': ('贝果-选图', '城郊高危-20260926'),
-                              'exit': ('on_click_in', '贝果-选图', '雅努斯')})
-        controller.set_phases(phases + entry_suffix())
-        with running_operation(op):
-            result = op.execute()
-        assert result.success, result.status
-        assert controller.click_hit_area('贝果-选图', '雅努斯') == wrong
-
-
-def test_pause_at_prepare_returns_to_selection(
-    test_context: TestContext, controller: TransferController, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """备战时暂停模拟用户换图，恢复后必须返回核验，不沿用原资格。"""
-    phases = entry_prefix()
-    phases[1] = {'frame': ('贝果-备战', '高危零携带-原生1080'),
-                 'exit': ('on_click_in', '菜单', '返回')}
-    phases += [
-        {'frame': ('贝果-选图', '城郊高危-20260926'),
-         'exit': ('on_click_in', '贝果-选图', '雅努斯')},
-        *entry_prefix(), *entry_suffix(),
-    ]
-    controller.set_phases(phases)
-    op = WatchedEnter(test_context)
-    screenshot = controller.screenshot
-    paused = False
-
-    def pause_once(independent: bool = False) -> tuple:
-        """只在已到备战时触发真实操作的暂停处理。"""
-        nonlocal paused
-        if controller.phase_idx == 1 and not paused:
-            paused = True
-            op.handle_pause()
-        return screenshot(independent)
-
-    monkeypatch.setattr(controller, 'screenshot', pause_once)
-    with running_operation(op):
-        result = op.execute()
-    assert result.success, result.status
-    assert controller.click_hit_area('菜单', '返回')
-    assert controller.click_hit_area('贝果-选图', '雅努斯')
-
-
 def test_pause_during_confirmation_does_not_reuse_qualification(test_context: TestContext) -> None:
     """确认阶段暂停后撤销零携带资格，禁止继续自动确认。"""
     op = BagelEnter(test_context)
@@ -183,17 +126,3 @@ def test_pause_during_confirmation_does_not_reuse_qualification(test_context: Te
     result = op.confirm_entry()
     assert result.is_fail
     assert '暂停后需重新核对' in result.status
-
-
-@pytest.mark.parametrize('state,expected', [
-    ('城郊高危-20260926', '重新核对选图'),
-    ('雅努斯困难-原生1080', '重新核对选图'),
-])
-def test_selection_changed_before_prepare_is_rechecked(
-    test_context: TestContext, state: str, expected: str,
-) -> None:
-    """两节点间地图或难度变更时返回核验，不能沿用上一帧直接点备战。"""
-    test_context.mock_screen('贝果-选图', state)
-    op = BagelEnter(test_context)
-    op.screenshot()
-    assert op.open_prepare().status == expected

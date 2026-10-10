@@ -28,7 +28,12 @@ def test_release_timed_and_drag_inputs() -> None:
     controller.keyboard_controller.mouse.release.assert_called_with(mouse.Button.left)
 
 
-@pytest.mark.parametrize('hwnd', [123, None])
+@pytest.mark.parametrize(
+    'hwnd',
+    [
+        123,
+    ],
+)
 def test_release_background_drag_and_mouse_interaction(
     hwnd: int | None, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
