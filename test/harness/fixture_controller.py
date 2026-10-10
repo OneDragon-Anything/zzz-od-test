@@ -211,6 +211,7 @@ class FixtureController(MockController):
         end: Point,
         start: Point | None = None,
         duration: float = 0.5,
+        press_time: float = 0,
     ) -> None:
         # 国际服换服滚动会触达；CN 登录流程不会。记录一次 click 以便调试。
         self.recorded_clicks.append(Point(int(end.x), int(end.y)))

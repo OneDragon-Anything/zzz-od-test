@@ -1,0 +1,26 @@
+{
+  "scope": "归档时的离线证据与本次配对PR验证分开记录",
+  "archived_validation": {
+    "scope": "归档时的离线测试及录像回放记录；不代表全部场景的实机覆盖",
+    "passed_unique_tests": 511,
+    "known_failures": [
+      "test_app_published_paths_return_before_reentry[1-video_store]",
+      "test_app_published_paths_return_before_reentry[2-video_store]",
+      "test_app_non_a_restarts_then_collects"
+    ],
+    "known_failure_file": "test/zzz_od/application/bagel/test_store_deposit_flows.py",
+    "baseline_check": "测试进程内将bagel_store和bagel_enter加载为主仓HEAD原代码；同样3失败2通过，未改工作区",
+    "failure_difference": "实际unlock，测试期待interact_safe；相关子操作已被测试替身替代",
+    "lint": "修改的源码和测试通过ruff check；两仓diff --check通过"
+  },
+  "current_validation": {
+    "passed_unique_tests": 523,
+    "remaining_failures": 0,
+    "legacy_failure_resolution": "更新保险箱测试替身：full模式记录交互，调用真实_notify_unlock_ready推进步骤，再记录解锁；原流程顺序断言保持不变",
+    "interruption_assertion": "确认面板消失且回到局内后立即返回STATUS_INTERRUPTED，不再期待先等待一轮或提示重新交互",
+    "verification": "原3失败2通过的同组用例变为5通过；测试文件与真实解锁回归通过；原子动作23项通过",
+    "lint": "修改文件Ruff与diff检查通过"
+  },
+  "live_acceptance": "用户反馈问题1、2的替代方案实机通过；未新增实机录像或日志，不扩大到所有容器、容量和窗口缩放",
+  "paired_pr": "https://github.com/Cora093/ZenlessZoneZero-OneDragon/pull/32"
+}

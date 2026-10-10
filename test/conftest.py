@@ -28,6 +28,7 @@ class MockController(ControllerBase):
         self.standard_width: int = standard_width
         self.standard_height: int = standard_height
         self.mock_screenshot: MatLike = None
+        self.is_moving: bool = False
 
     def click(self, pos: Point = None, press_time: float = 0, pc_alt: bool = False, gamepad_key: str | None = None) -> bool:
         if pos is None:
@@ -63,6 +64,10 @@ class MockController(ControllerBase):
 
     def move_w(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
         pass
+
+    def stop_moving_forward(self) -> None:
+        """测试控制器松开前进，不向实际游戏发送输入。"""
+        self.is_moving = False
 
     def move_s(self, press: bool = False, press_time: Optional[float] = None, release: bool = False) -> None:
         pass

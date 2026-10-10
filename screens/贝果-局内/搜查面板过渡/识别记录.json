@@ -1,0 +1,600 @@
+{
+  "decoded": 3209,
+  "anomalies_checked": 1856,
+  "ready_anomalies": [
+    {
+      "frame": 206,
+      "time": 3.4330000000000003,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜查中..."
+      ],
+      "ready": true,
+      "original": "未知",
+      "pr": "空",
+      "panel_score": 0.349,
+      "local": "空",
+      "nearest_event": "关闭",
+      "event_anchor": 204,
+      "anchor_distance_frames": 2
+    },
+    {
+      "frame": 207,
+      "time": 3.45,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜查中..."
+      ],
+      "ready": true,
+      "original": "占用",
+      "pr": "空",
+      "panel_score": 0.352,
+      "local": "未知",
+      "nearest_event": "关闭",
+      "event_anchor": 204,
+      "anchor_distance_frames": 3
+    },
+    {
+      "frame": 336,
+      "time": 5.6000000000000005,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜查中..."
+      ],
+      "ready": true,
+      "original": "占用",
+      "pr": "空",
+      "panel_score": 0.386,
+      "local": "未知",
+      "nearest_event": "打开",
+      "event_anchor": 342,
+      "anchor_distance_frames": 6
+    },
+    {
+      "frame": 337,
+      "time": 5.617,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜查中..."
+      ],
+      "ready": true,
+      "original": "未知",
+      "pr": "空",
+      "panel_score": 0.378,
+      "local": "未知",
+      "nearest_event": "打开",
+      "event_anchor": 342,
+      "anchor_distance_frames": 5
+    },
+    {
+      "frame": 438,
+      "time": 7.3,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "未知",
+      "pr": "空",
+      "panel_score": 0.335,
+      "local": "空",
+      "nearest_event": "关闭",
+      "event_anchor": 435,
+      "anchor_distance_frames": 3
+    },
+    {
+      "frame": 439,
+      "time": 7.317,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "占用",
+      "pr": "空",
+      "panel_score": 0.32,
+      "local": "未知",
+      "nearest_event": "关闭",
+      "event_anchor": 435,
+      "anchor_distance_frames": 4
+    },
+    {
+      "frame": 786,
+      "time": 13.1,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "占用",
+      "pr": "空",
+      "panel_score": 0.389,
+      "local": "未知",
+      "nearest_event": "打开",
+      "event_anchor": 793,
+      "anchor_distance_frames": 7
+    },
+    {
+      "frame": 787,
+      "time": 13.117,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "占用",
+      "pr": "空",
+      "panel_score": 0.379,
+      "local": "未知",
+      "nearest_event": "打开",
+      "event_anchor": 793,
+      "anchor_distance_frames": 6
+    },
+    {
+      "frame": 788,
+      "time": 13.133,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "占用",
+      "pr": "空",
+      "panel_score": 0.388,
+      "local": "未知",
+      "nearest_event": "打开",
+      "event_anchor": 793,
+      "anchor_distance_frames": 5
+    },
+    {
+      "frame": 967,
+      "time": 16.117,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "占用",
+      "pr": "空",
+      "panel_score": 0.34,
+      "local": "未知",
+      "nearest_event": "关闭",
+      "event_anchor": 964,
+      "anchor_distance_frames": 3
+    },
+    {
+      "frame": 968,
+      "time": 16.133,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "未知",
+      "pr": "空",
+      "panel_score": 0.294,
+      "local": "未知",
+      "nearest_event": "关闭",
+      "event_anchor": 964,
+      "anchor_distance_frames": 4
+    },
+    {
+      "frame": 1102,
+      "time": 18.367,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "占用",
+      "pr": "空",
+      "panel_score": 0.387,
+      "local": "未知",
+      "nearest_event": "打开",
+      "event_anchor": 1108,
+      "anchor_distance_frames": 6
+    },
+    {
+      "frame": 1103,
+      "time": 18.383,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "未知",
+      "pr": "空",
+      "panel_score": 0.387,
+      "local": "未知",
+      "nearest_event": "打开",
+      "event_anchor": 1108,
+      "anchor_distance_frames": 5
+    },
+    {
+      "frame": 1104,
+      "time": 18.400000000000002,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "未知",
+      "pr": "空",
+      "panel_score": 0.351,
+      "local": "空",
+      "nearest_event": "打开",
+      "event_anchor": 1108,
+      "anchor_distance_frames": 4
+    },
+    {
+      "frame": 1237,
+      "time": 20.617,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "占用",
+      "pr": "空",
+      "panel_score": 0.321,
+      "local": "未知",
+      "nearest_event": "关闭",
+      "event_anchor": 1234,
+      "anchor_distance_frames": 3
+    },
+    {
+      "frame": 1801,
+      "time": 30.017,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "占用",
+      "pr": "空",
+      "panel_score": 0.391,
+      "local": "未知",
+      "nearest_event": "打开",
+      "event_anchor": 1807,
+      "anchor_distance_frames": 6
+    },
+    {
+      "frame": 1802,
+      "time": 30.033,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "未知",
+      "pr": "空",
+      "panel_score": 0.384,
+      "local": "未知",
+      "nearest_event": "打开",
+      "event_anchor": 1807,
+      "anchor_distance_frames": 5
+    },
+    {
+      "frame": 2256,
+      "time": 37.6,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "未知",
+      "pr": "空",
+      "panel_score": 0.362,
+      "local": "未知",
+      "nearest_event": "关闭",
+      "event_anchor": 2253,
+      "anchor_distance_frames": 3
+    },
+    {
+      "frame": 2588,
+      "time": 43.133,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "占用",
+      "pr": "空",
+      "panel_score": 0.387,
+      "local": "未知",
+      "nearest_event": "打开",
+      "event_anchor": 2594,
+      "anchor_distance_frames": 6
+    },
+    {
+      "frame": 2589,
+      "time": 43.15,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "占用",
+      "pr": "空",
+      "panel_score": 0.387,
+      "local": "未知",
+      "nearest_event": "打开",
+      "event_anchor": 2594,
+      "anchor_distance_frames": 5
+    },
+    {
+      "frame": 2590,
+      "time": 43.167,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "未知",
+      "pr": "空",
+      "panel_score": 0.387,
+      "local": "空",
+      "nearest_event": "打开",
+      "event_anchor": 2594,
+      "anchor_distance_frames": 4
+    },
+    {
+      "frame": 2700,
+      "time": 45.0,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "占用",
+      "pr": "空",
+      "panel_score": 0.314,
+      "local": "未知",
+      "nearest_event": "关闭",
+      "event_anchor": 2697,
+      "anchor_distance_frames": 3
+    },
+    {
+      "frame": 2792,
+      "time": 46.533,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "占用",
+      "pr": "空",
+      "panel_score": 0.387,
+      "local": "未知",
+      "nearest_event": "打开",
+      "event_anchor": 2798,
+      "anchor_distance_frames": 6
+    },
+    {
+      "frame": 2793,
+      "time": 46.550000000000004,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "占用",
+      "pr": "空",
+      "panel_score": 0.377,
+      "local": "未知",
+      "nearest_event": "打开",
+      "event_anchor": 2798,
+      "anchor_distance_frames": 5
+    },
+    {
+      "frame": 2940,
+      "time": 49.0,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "占用",
+      "pr": "空",
+      "panel_score": 0.312,
+      "local": "未知",
+      "nearest_event": "关闭",
+      "event_anchor": 2936,
+      "anchor_distance_frames": 4
+    },
+    {
+      "frame": 3026,
+      "time": 50.433,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "占用",
+      "pr": "空",
+      "panel_score": 0.373,
+      "local": "未知",
+      "nearest_event": "打开",
+      "event_anchor": 3032,
+      "anchor_distance_frames": 6
+    },
+    {
+      "frame": 3027,
+      "time": 50.45,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "未知",
+      "pr": "空",
+      "panel_score": 0.374,
+      "local": "未知",
+      "nearest_event": "打开",
+      "event_anchor": 3032,
+      "anchor_distance_frames": 5
+    },
+    {
+      "frame": 3028,
+      "time": 50.467,
+      "title": [
+        "武备箱"
+      ],
+      "safe": [
+        "安全箱"
+      ],
+      "status": [
+        "搜索结果"
+      ],
+      "ready": true,
+      "original": "未知",
+      "pr": "空",
+      "panel_score": 0.344,
+      "local": "空",
+      "nearest_event": "打开",
+      "event_anchor": 3032,
+      "anchor_distance_frames": 4
+    }
+  ],
+  "counts": {
+    "关闭-未知": 4,
+    "关闭-占用": 6,
+    "打开-占用": 11,
+    "打开-未知": 7
+  }
+}
