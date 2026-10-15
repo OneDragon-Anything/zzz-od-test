@@ -42,6 +42,13 @@ class GraphicsTests(unittest.TestCase):
     def test_unicode_roundtrip(self):
         self.assertEqual(gfx.reader.decode_document(self.raw), self.doc)
 
+    def test_competing_writer_refused_until_lock_released(self):
+        lock = self.path.with_name(self.path.name + '.graphics.lock')
+        with gfx.native_lock(lock), self.assertRaises(OSError):
+            self.apply()
+        self.assertEqual(self.path.read_bytes(), self.raw)
+        self.assertTrue(self.apply()['changed'])
+
     def test_only_calibrated_fields_changed(self):
         result = self.apply()
         current = gfx.reader.read_document(self.path)
