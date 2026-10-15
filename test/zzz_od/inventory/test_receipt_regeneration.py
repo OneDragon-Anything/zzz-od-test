@@ -35,6 +35,17 @@ class RegenerationTests(unittest.TestCase):
             self.cycle(proof=False)
         self.assertTrue(self.journal[-1]['pending'])
 
+    def test_exact_cost_without_claim_never_clears_pending_or_retries(self):
+        for gain in (False, True):
+            with self.subTest(gain=gain), self.assertRaises(RuntimeError):
+                self.cycle(proof=False, gain=gain, ticks=0)
+            self.assertEqual(len(self.journal), 1)
+            self.assertTrue(self.journal[-1]['pending'])
+
+    def test_exact_cost_with_claim_finishes(self):
+        self.assertEqual(self.cycle(ticks=0)['state'], 'targets_met')
+        self.assertEqual(self.journal[-1], {})
+
     def test_no_stock_gain_cannot_verify_ambiguous_charge(self):
         with self.assertRaises(RuntimeError):
             self.cycle(gain=False)

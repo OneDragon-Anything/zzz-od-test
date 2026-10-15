@@ -334,7 +334,8 @@ class StockTests(unittest.TestCase):
             transport.assert_not_called()
             self.store.update('pending', {}, expected_pending=self.store.read()['pending'])
             self.store.update('pending', pending)
-            stock.farm_once(op, self.store, route, lambda: None)
+            receipt = stock.farm_once(op, self.store, route, lambda: None)
+            self.assertEqual(receipt, {'state': 'claimed', 'cost': route['cost'], 'claims': 1})
             self.assertEqual(plan.run_times, 1)
             self.assertEqual(len(contexts), 1)
             self.assertEqual(self.store.read()['pending'], pending)
@@ -343,6 +344,46 @@ class StockTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, '战斗胜利'):
                 stock.farm_once(op, self.store, route, lambda: None)
             self.assertEqual(self.store.read()['pending'], pending)
+
+    def test_policy_accepts_real_adapter_receipt_and_rejects_missing_receipt(self):
+        """串联真实单场适配器、计划核验与持久记录；只替换导航和战斗输入。"""
+        route_id = next(iter(stock.ROUTES))
+        route = stock.ROUTES[route_id]
+        material_id = route['materials'][0]
+        rows = [{'id': material_id, 'name': '材料', 'target': 1, 'route': route_id}]
+        transport_module = ModuleType('zzz_od.operation.compendium.tp_by_compendium')
+        transport_module.TransportByCompendium = Mock(return_value=NS(execute=lambda: NS(success=True)))
+        now = datetime.now(timezone.utc)
+        for drop_receipt in (False, True):
+            plan = NS(plan_id='owned', run_times=0, plan_times=1)
+            values = {'quantity': 0, 'stamina': 100, 'runs': 0}
+            op = NS(ctx=NS(current_instance_idx=0, run_context=Mock(), auto_battle_context=NS(last_check_end_result='普通战斗-完成')))
+
+            def report():
+                return {'schema': 'inventory-report/v1', 'game': 'zzz', 'materials': [dict(rows[0], quantity=values['quantity'], status='confirmed', evidence=[{'captured_at': now.isoformat()}] * 2)]}
+
+            def execute():
+                plan.run_times += 1
+                values['runs'] += 1
+                values['stamina'] -= route['cost']
+                values['quantity'] += 1
+                return NS(success=True)
+
+            def farm(target, selected):
+                receipt = stock.farm_once(op, self.store, selected, lambda: None)
+                return None if drop_receipt else receipt
+
+            with self.subTest(drop_receipt=drop_receipt), patch.dict('sys.modules', {transport_module.__name__: transport_module}), patch.object(stock, 'build_plan', return_value=plan), patch.object(stock, 'native_battle', return_value=NS(execute=execute)):
+                def run():
+                    return stock.policy(ROOT).run_cycle(rows, {route_id: route}, game='zzz', inspect=report, read_stamina=lambda: values['stamina'], farm_once=farm, journal=stock.pending_journal(self.store), utcnow=lambda: now)
+                if drop_receipt:
+                    with self.assertRaises(RuntimeError):
+                        run()
+                    self.assertTrue(self.store.read()['pending']['pending'])
+                else:
+                    self.assertEqual(run()['state'], 'targets_met')
+                    self.assertEqual(self.store.read()['pending'], {})
+                self.assertEqual(values['runs'], 1)
 
     def test_fresh_inspect_one_native_battle_and_stamina_shortage(self):
         module = ModuleType('zzz_od.application.inventory_inspection.inventory_inspection')
@@ -367,6 +408,7 @@ class StockTests(unittest.TestCase):
         def farm(*a):
             self.assertTrue(self.store.read()['pending']['pending'])
             self.assertEqual(self.store.read()['pending']['cost'], 20)
+            return {'state': 'claimed', 'cost': 20, 'claims': 1}
         with patch.dict('sys.modules', {module.__name__: module, back.__name__: back, logs.__name__: logs}), patch.object(stock, 'validate_targets', return_value=rows), patch.object(stock, 'build_plan'), patch.object(stock, 'make_guard', return_value=lambda: None), patch.object(stock, 'policy', return_value=stock.policy(ROOT)), patch.object(stock, 'read_natural', side_effect=[40, 20]), patch.object(stock, 'farm_once', side_effect=farm) as farming:
             result = stock.run_maintain(op)
         self.assertEqual(result['state'], 'targets_met')

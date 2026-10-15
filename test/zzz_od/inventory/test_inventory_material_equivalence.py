@@ -165,6 +165,7 @@ class EquivalenceTests(unittest.TestCase):
             runs.append(1)
             stock['low'] += 1
             stamina[0] -= 40
+            return {'state': 'claimed', 'cost': 40, 'claims': 1}
 
         result = policy.run_cycle(
             self.rows,
