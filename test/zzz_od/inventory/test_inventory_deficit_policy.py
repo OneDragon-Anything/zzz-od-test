@@ -45,6 +45,7 @@ class DeficitPolicyTests(unittest.TestCase):
         self.runs.append(target['id'])
         self.stamina -= route['cost']
         self.stock[target['id']] += 1
+        return {'state': 'claimed', 'cost': route['cost'], 'claims': 1}
 
     def run_cycle(self, **overrides):
         kwargs = {
@@ -142,6 +143,7 @@ class DeficitPolicyTests(unittest.TestCase):
         def stagnant(target, route):
             self.stamina -= route['cost']
             self.runs.append(target['id'])
+            return {'state': 'claimed', 'cost': route['cost'], 'claims': 1}
 
         with self.assertRaisesRegex(RuntimeError, '连续3场'):
             self.run_cycle(farm_once=stagnant)
