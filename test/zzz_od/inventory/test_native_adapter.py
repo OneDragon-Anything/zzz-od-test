@@ -13,6 +13,31 @@ from unittest.mock import Mock, patch
 
 class StockTests(unittest.TestCase):
 
+    def test_two_runners_cannot_replace_or_clear_other_pending(self):
+        first = stock.pending_journal(self.store)
+        second = stock.pending_journal(stock.StockStore(0, self.temp.name))
+        first({'pending': True, 'cost': 20})
+        owned = self.store.read()['pending']
+        with self.assertRaises(RuntimeError):
+            second({'pending': True, 'cost': 20})
+        with self.assertRaises(RuntimeError):
+            second({})
+        with self.assertRaises(RuntimeError):
+            self.store.update('pending', {}, expected_pending={'wrong': True})
+        self.assertEqual(self.store.read()['pending'], owned)
+        first({})
+        self.assertEqual(self.store.read()['pending'], {})
+
+    def test_new_journal_cannot_clear_replaced_transaction(self):
+        journal = stock.pending_journal(self.store)
+        journal({'pending': True})
+        saved = self.store.read()
+        saved['pending']['transaction_id'] = 'someone-else'
+        self.store.path.write_text(json.dumps(saved), encoding='utf-8')
+        with self.assertRaises(RuntimeError):
+            journal({})
+        self.assertEqual(self.store.read()['pending']['transaction_id'], 'someone-else')
+
     def test_unavailable_catalog_entries_cannot_become_targets_or_infer_zero(self):
         scope = stock.unavailable_materials()
         self.assertEqual((scope['catalog_items'], scope['available_items']), (98, 97))
@@ -36,7 +61,7 @@ class StockTests(unittest.TestCase):
         lock = self.store.path.with_suffix('.json.lock')
         lock.write_bytes(b'other-owner')
         with self.assertRaises(FileExistsError):
-            self.store.update('pending', {})
+            self.store.update('pending', {}, expected_pending=self.store.read()['pending'])
         self.assertEqual(lock.read_bytes(), b'other-owner')
         self.assertTrue(self.store.read()['pending'])
         before = self.store.path.read_bytes()
@@ -48,7 +73,7 @@ class StockTests(unittest.TestCase):
         self.store.update('pending', {'pending': True})
         before = self.store.path.read_bytes()
         with patch.object(stock.os, 'replace', side_effect=OSError('disk-full')), self.assertRaises(OSError):
-            self.store.update('pending', {})
+            self.store.update('pending', {}, expected_pending=self.store.read()['pending'])
         self.assertEqual(self.store.path.read_bytes(), before)
         self.assertFalse(self.store.path.with_suffix('.json.lock').exists())
         self.assertEqual(list(self.store.path.parent.glob('*.tmp')), [])
@@ -149,7 +174,6 @@ class StockTests(unittest.TestCase):
             transport.assert_called_once()
             self.assertEqual(transport.call_args.args[1:], ('训练', '恶名狩猎', '初生死路屠夫'))
             for field in ('paid_entry_attempted', 'start_attempted'):
-                self.store.update('pending', pending)
                 setattr(battle, field, True)
                 with self.assertRaises(RuntimeError):
                     stock.farm_once(op, self.store, route, Mock())
@@ -303,10 +327,12 @@ class StockTests(unittest.TestCase):
         pending = {'pending': True, 'cost': 20, 'route': route_id, 'material_id': route['materials'][0]}
         with patch.dict('sys.modules', {transport_module.__name__: transport_module, combat_module.__name__: combat_module}), patch.object(stock, 'build_plan', return_value=plan):
             for invalid in ({}, dict(pending, cost=60), dict(pending, route='wrong'), dict(pending, material_id='wrong-quality')):
+                self.store.update('pending', {}, expected_pending=self.store.read()['pending'])
                 self.store.update('pending', invalid)
                 with self.assertRaises(RuntimeError):
                     stock.farm_once(op, self.store, route, lambda: None)
             transport.assert_not_called()
+            self.store.update('pending', {}, expected_pending=self.store.read()['pending'])
             self.store.update('pending', pending)
             stock.farm_once(op, self.store, route, lambda: None)
             self.assertEqual(plan.run_times, 1)
