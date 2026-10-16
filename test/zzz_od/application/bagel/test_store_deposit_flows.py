@@ -63,11 +63,9 @@ class BagelDragController(FixtureController):
         end: Point,
         start: Point | None = None,
         duration: float = 0.5,
-        press_time: float = 0,
     ) -> None:
         """记录拖拽；exit 为 on_drag / on_action 时推进画面。"""
-        # 首次入箱、满箱对换和失败重拖均须先按住，避免拖成滚动列表。
-        assert press_time == 0.1
+        # 首次入箱、满箱对换和失败重拖统一使用控制器的固定等待规则。
         assert duration == 0.8
         self.recorded_drags.append((start, end))
         exit_spec = self._current_exit()

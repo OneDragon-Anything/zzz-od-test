@@ -40,7 +40,7 @@ class SafeDragController(TransferController):
         self.drags: list[Point] = []
 
     def drag_to(
-        self, end: Point, start: Point | None = None, duration: float = 0.5, press_time: float = 0,
+        self, end: Point, start: Point | None = None, duration: float = 0.5,
     ) -> None:
         """只在拖拽阶段推进，额外拖拽会被最终断言捕获。"""
         self.drags.append(end)
