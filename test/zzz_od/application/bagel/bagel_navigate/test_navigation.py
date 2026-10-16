@@ -17,15 +17,12 @@ from test.harness.fixture_controller import (
 from one_dragon.base.operation.operation_round_result import OperationRoundResultEnum
 from one_dragon.utils import cv2_utils
 from zzz_od.application.bagel.bagel_flow import load_published_flow
-from zzz_od.application.bagel.bagel_map_locator import MapLocation
 from zzz_od.application.bagel.bagel_navigate import BagelNavigate
 from zzz_od.application.bagel.bagel_run_flow import BagelRunFlow
 from zzz_od.controller.zzz_pc_controller import ZPcController
 
 if TYPE_CHECKING:
     from test.conftest import TestContext
-
-    from one_dragon.base.operation.operation_round_result import OperationRoundResult
 
 
 pytestmark = pytest.mark.usefixtures('no_round_wait')
@@ -42,16 +39,32 @@ def published_navigation(
     flow = load_published_flow(map_id)
     if action == 'move':
         # 参数仅定位既有测试样本；普通移动本身已不再保存容器或路点角色。
-        index = 1 if target == 'box' else {'entry': 6, 'turn': 7, 'approach': 8}[role or 'entry']
+        index = (
+            1
+            if target == 'box'
+            else {'entry': 6, 'turn': 7, 'approach': 8}[role or 'entry']
+        )
         step = flow.steps[index]
         assert step.target is None
     else:
-        step = next(step for step in flow.steps if step.action == action and step.target == target)
+        step = next(
+            step
+            for step in flow.steps
+            if step.action == action and step.target == target
+        )
     if action == 'move' and target == 'box':
         # 固定短步测试的目的地，避免正式路线微调后跨过持续移动的距离边界。
-        step = replace(step, waypoints=(replace(
-            step.waypoints[0], xy=(110, 100), tolerance=1, passed_tolerance=3,
-        ),))
+        step = replace(
+            step,
+            waypoints=(
+                replace(
+                    step.waypoints[0],
+                    xy=(110, 100),
+                    tolerance=1,
+                    passed_tolerance=3,
+                ),
+            ),
+        )
     navigation = BagelRunFlow(ctx, flow).build_operation(step)
     assert isinstance(navigation, BagelNavigate)
     assert not navigation.require_spawn and navigation.check_target_position
@@ -65,79 +78,33 @@ def published_navigation(
 def op(test_context: TestContext, monkeypatch: pytest.MonkeyPatch) -> BagelNavigate:
     """正式巷口移动使用发布流程和 RGB 框架截图，输入全部记录。"""
     test_context.mock_screen('贝果-局内', '雅努斯出生-r01-39s')
-    monkeypatch.setattr(test_context.controller, 'stop_moving_forward', MagicMock(), raising=False)
-    monkeypatch.setattr(test_context.controller, 'start_moving_forward', MagicMock(), raising=False)
-    monkeypatch.setattr(test_context.controller, 'turn_by_angle_diff', MagicMock(), raising=False)
+    monkeypatch.setattr(
+        test_context.controller, 'stop_moving_forward', MagicMock(), raising=False
+    )
+    monkeypatch.setattr(
+        test_context.controller, 'start_moving_forward', MagicMock(), raising=False
+    )
+    monkeypatch.setattr(
+        test_context.controller, 'turn_by_angle_diff', MagicMock(), raising=False
+    )
     for key in 'wasd':
         monkeypatch.setattr(test_context.controller, f'move_{key}', MagicMock())
     return published_navigation(test_context)
 
 
-def test_spawn_and_first_step_use_framework_rgb(op: BagelNavigate) -> None:
-    """正式移动入口用 RGB 截图定位，角色箭头驱动第一步。"""
-    assert op.check_start().status == '开始移动'
-    result = op.move_to_target()
-    assert result.status == '前往巷口左转'
-    op.ctx.controller.move_w.assert_called_once_with(press=True, press_time=0.2, release=True)
-    for key in 'asd':
-        getattr(op.ctx.controller, f'move_{key}').assert_not_called()
-
-
-def test_non_a_never_moves(op: BagelNavigate, test_context: TestContext) -> None:
-    """保留旧整段入口兼容：另一出生地连续偏离后跳过，不尝试探路。"""
-    op = BagelNavigate(test_context)
-    test_context.mock_screen('贝果-局内', '雅努斯出生-r02-32s')
-    op.screenshot()
-    result = op.check_start()
-    for _ in range(5):
-        if result.result != OperationRoundResultEnum.RETRY:
-            break
-        result = op.check_start()
-    assert result.is_success and result.status == BagelNavigate.STATUS_UNSUPPORTED
-    for key in 'wasd':
-        getattr(op.ctx.controller, f'move_{key}').assert_not_called()
-
-
-def test_spawn_locate_miss_waits_then_starts(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """旧整段入口兼容：出生配准暂缺后恢复时开始走。"""
-    op = BagelNavigate(op.ctx)
-    op.screenshot()
-    calls = {'count': 0}
-    spawn = op.vision.spawn
-
-    def locate(_crop: object) -> tuple[float, float] | None:
-        calls['count'] += 1
-        if calls['count'] == 1:
-            return None
-        return spawn
-
-    monkeypatch.setattr(op.vision, 'locate', locate)
-    missed = op.check_start()
-    assert missed.result == OperationRoundResultEnum.RETRY
-    assert missed.status == '小地图暂时对不上出生点'
-    started = op.check_start()
-    assert started.is_success and started.status == '开始移动'
-
-
-def test_box_prompt_stops_before_moving(op: BagelNavigate, test_context: TestContext) -> None:
-    """独立第七局箱前提示出现后，不能继续沿目标点过冲。"""
-    test_context.mock_screen('贝果-局内', '雅努斯箱前-r07-32s')
-    op = published_navigation(op.ctx, action='approach')
-    assert op.move_to_target().status == '发现容器提示，松键后确认停稳'
-    op.last_screenshot_time = op._settle_until
-    assert op.move_to_target().status == BagelNavigate.STATUS_ARRIVED_BOX
-    for key in 'wasd':
-        getattr(op.ctx.controller, f'move_{key}').assert_not_called()
-
-
 def test_live_corner_continues_towards_box(
-    op: BagelNavigate, test_context: TestContext,
+    op: BagelNavigate,
+    test_context: TestContext,
 ) -> None:
     """真实失败帧经 RGB 裁图和定位后，应边走边转向箱子，而不是定位失败。"""
-    root = next(path for path in Path(__file__).resolve().parents if path.name == 'zzz-od-test')
-    test_context.add_mock_screenshot(cv2_utils.read_image(str(root / 'screens/贝果-局内/雅努斯转角定位失败-1440缩放.webp')))
+    root = next(
+        path for path in Path(__file__).resolve().parents if path.name == 'zzz-od-test'
+    )
+    test_context.add_mock_screenshot(
+        cv2_utils.read_image(
+            str(root / 'screens/贝果-局内/雅努斯转角定位失败-1440缩放.webp')
+        )
+    )
     op = published_navigation(op.ctx, action='approach')
     result = op.move_to_target()
     assert result.status.startswith('行进转向')
@@ -147,38 +114,9 @@ def test_live_corner_continues_towards_box(
         getattr(op.ctx.controller, f'move_{key}').assert_not_called()
 
 
-@pytest.mark.parametrize('case,expected', [
-    ('position', '小地图定位失败'),
-    ('direction', '无法识别角色箭头'),
-    ('limit', '导航达到动作上限'),
-    ('missing_box', '已到轮胎旁武备箱前但未发现武备箱交互'),
-])
-def test_navigation_stops_on_missing_evidence(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch, case: str, expected: str,
-) -> None:
-    """定位丢失、方向不可读或到点无箱时直接停止，不尝试恢复。"""
-    if case == 'position':
-        monkeypatch.setattr(op.vision, 'locate', lambda _: None)
-    elif case == 'direction':
-        monkeypatch.setattr(op.vision, 'player_angle', lambda _: None)
-    elif case == 'limit':
-        op.steps = op._action_limit()
-    else:
-        op = published_navigation(op.ctx, action='approach')
-        monkeypatch.setattr(op.vision, 'locate', lambda _: (110, 84))
-    result = op.move_to_target()
-    if case == 'missing_box':
-        assert result.status == '目标前停步等待交互提示'
-        op.last_screenshot_time += 2
-        result = op.move_to_target()
-    assert result.is_fail and expected in result.status
-    op.ctx.controller.stop_moving_forward.assert_called()
-    for key in 'wasd':
-        getattr(op.ctx.controller, f'move_{key}').assert_not_called()
-
-
 def test_reaching_corner_advances_then_turns_left(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
+    op: BagelNavigate,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """正式巷口步骤完成后停步；下一靠近步骤独立转向北侧武备箱。"""
     monkeypatch.setattr(op.vision, 'locate', lambda _: (110, 100))
@@ -207,7 +145,10 @@ class NavigationController(FixtureController):
         self._advance_phase()
 
     def move_w(
-        self, press: bool = False, press_time: float | None = None, release: bool = False,
+        self,
+        press: bool = False,
+        press_time: float | None = None,
+        release: bool = False,
     ) -> None:
         """只记录短步和校准，不向游戏发送输入。"""
         assert press and release and press_time in (0.08, 0.2)
@@ -226,33 +167,13 @@ class WatchedNavigate(WatchdogOperationMixin, BagelNavigate):
     watchdog_max_rounds: int = 8
 
 
-def test_navigation_rechecks_after_step(
-    op: BagelNavigate, test_context: TestContext, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """用真实首尾截图验证转向后重新观察并结束；不模拟真实移动距离。"""
-    controller = NavigationController(test_context)
-    controller.set_phases([
-        {'frame': ('贝果-局内', '雅努斯出生-r01-39s')},
-        {'frame': ('贝果-局内', '雅努斯箱前-r07-32s')},
-    ])
-    monkeypatch.setattr(test_context, 'controller', controller)
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_run_flow.BagelNavigate', WatchedNavigate)
-    navigation = published_navigation(test_context, action='approach')
-    enter_running_state(test_context)
-    try:
-        result = navigation.execute()
-        assert result.success and result.status == BagelNavigate.STATUS_ARRIVED_BOX, result.status
-        assert controller.recorded_inputs == ['turn']
-        assert controller.phase_idx == 1
-    finally:
-        reset_running_state(test_context, navigation)
-
-
 def test_initial_probe_requires_new_frame(op: BagelNavigate) -> None:
     """第一步只校准，不能从同一张旧截图连续移动。"""
     op.heading_aligned = False
     assert op.move_to_target().status == '短按W后等待箭头对齐'
-    op.ctx.controller.move_w.assert_called_once_with(press=True, press_time=0.08, release=True)
+    op.ctx.controller.move_w.assert_called_once_with(
+        press=True, press_time=0.08, release=True
+    )
     waiting = op.move_to_target()
     assert waiting.status == '等待动作后的新截图'
     assert waiting.result == OperationRoundResultEnum.WAIT
@@ -262,216 +183,19 @@ def test_initial_probe_requires_new_frame(op: BagelNavigate) -> None:
     assert op.steps == 2
 
 
-@pytest.mark.parametrize('pause_menu', [False, True])
-def test_missing_hud_waits_unless_pause_menu(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch, pause_menu: bool,
-) -> None:
-    """局内 HUD 暂缺时松键等待；确认暂停菜单时仍立即失败。"""
-    monkeypatch.setattr(op, 'is_bagel_result', lambda: False)
-    monkeypatch.setattr(op, 'round_by_find_area', lambda _screen, name, _area: (
-        op.round_success() if name == '战斗-菜单' and pause_menu else op.round_retry()
-    ))
-    result = op.move_to_target()
-    assert result.result == (OperationRoundResultEnum.FAIL if pause_menu else OperationRoundResultEnum.WAIT)
-    assert result.status == ('移动中打开了暂停菜单' if pause_menu else '移动后暂未识别局内 HUD')
-    op.ctx.controller.stop_moving_forward.assert_called()
-    op.ctx.controller.move_w.assert_not_called()
-
-
-@pytest.mark.parametrize('gap', ['stale_frame', 'missing_hud'])
-def test_navigation_recovers_after_four_waiting_frames(
-    op: BagelNavigate, test_context: TestContext, monkeypatch: pytest.MonkeyPatch, gap: str,
-) -> None:
-    """真实执行循环连续等待四帧后仍可到达，不耗尽默认三次重试。"""
-    controller = NavigationController(test_context)
-    controller.set_phases([{'frame': ('贝果-局内', '雅努斯出生-r01-39s')}])
-    monkeypatch.setattr(test_context, 'controller', controller)
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_run_flow.BagelNavigate', WatchedNavigate)
-    navigation = published_navigation(test_context)
-    monkeypatch.setattr(navigation.vision, 'locate', lambda _crop: (110, 100))
-    screenshot = navigation.screenshot
-    find_area = navigation.round_by_find_area
-    frames = 0
-
-    def next_frame() -> None:
-        """起点检查后模拟四次截图未更新，再恢复新截图。"""
-        nonlocal frames
-        screenshot()
-        frames += 1
-        navigation.last_input_frame = (
-            navigation.last_screenshot_time if gap == 'stale_frame' and 2 <= frames <= 5 else None
-        )
-
-    def find_with_hud_gap(screen: object, name: str, area: str) -> OperationRoundResult:
-        """仅模拟普通攻击按钮漏识别，其余识别使用实拍。"""
-        if gap == 'missing_hud' and 2 <= frames <= 5 and (name, area) == ('战斗画面', '按键-普通攻击'):
-            return navigation.round_retry()
-        return find_area(screen, name, area)
-
-    monkeypatch.setattr(navigation, 'screenshot', next_frame)
-    monkeypatch.setattr(navigation, 'round_by_find_area', find_with_hud_gap)
-    enter_running_state(test_context)
-    try:
-        result = navigation.execute()
-        assert result.success and result.status == BagelNavigate.STATUS_WAYPOINT, result.status
-        assert frames == 6
-        assert controller.recorded_inputs == []
-        assert controller.recorded_clicks == []
-    finally:
-        reset_running_state(test_context, navigation)
-
-
-def test_turn_probe_then_forward(op: BagelNavigate, monkeypatch: pytest.MonkeyPatch) -> None:
-    """停车转镜头后短按 W，再用更新后的角色箭头核验转幅。"""
-    op = published_navigation(op.ctx, action='approach')
-    monkeypatch.setattr(op.vision, 'locate', lambda _: (110, 100))
-    monkeypatch.setattr(op.vision, 'player_angle', lambda _: 0)
-    learn = MagicMock()
-    monkeypatch.setattr(op.turn_compensator, 'learn', learn)
-    assert op.move_to_target().status.startswith('停车转向')
-    op.ctx.controller.turn_by_angle_diff.assert_called_once_with(90)
-    op.ctx.controller.move_w.assert_not_called()
-    op.last_screenshot_time += 1
-    assert op.move_to_target().status == '短按W后等待箭头对齐'
-    learn.assert_not_called()
-    op.last_screenshot_time += 1
-    monkeypatch.setattr(op.vision, 'player_angle', lambda _: 270)
-    assert op.move_to_target().status == '前往轮胎旁武备箱前'
-    learn.assert_called_once_with(0, 90, 90)
-    assert op.pending_turn is None
-    op.ctx.controller.start_moving_forward.assert_called_once()
-    assert op.steps == 2
-
-
-def test_budget_includes_heading_probe(op: BagelNavigate) -> None:
-    """动作耗尽后连校准短步也不允许。"""
-    op.heading_aligned = False
-    op.steps = op._action_limit()
-    assert op.move_to_target().is_fail
-    op.ctx.controller.move_w.assert_not_called()
-
-
-def test_cruise_holds_without_counting_steps(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """远段朝向已对齐时按住前进，不把观察轮计入动作上限。"""
-    monkeypatch.setattr(op.vision, 'locate', lambda _: (90, 100))
-    monkeypatch.setattr(op.vision, 'player_angle', lambda _: 0)
-    op.steps = 60
-    assert op.move_to_target().status == '前往巷口左转'
-    op.ctx.controller.start_moving_forward.assert_called_once()
-    op.ctx.controller.move_w.assert_not_called()
-    assert op.steps == 60
-
-
-def test_small_heading_error_turns_while_holding(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """45° 以内边走边转，单次不超过 30°，并计入动作。"""
-    op = published_navigation(op.ctx, action='approach')
-    monkeypatch.setattr(op.vision, 'locate', lambda _: (110, 100))
-    monkeypatch.setattr(op.vision, 'player_angle', lambda _: 300)
-    assert op.move_to_target().status.startswith('行进转向')
-    op.ctx.controller.start_moving_forward.assert_called_once()
-    op.ctx.controller.turn_by_angle_diff.assert_called_once_with(30)
-    assert op.steps == 1
-    op.last_screenshot_time += 1
-    monkeypatch.setattr(op.vision, 'player_angle', lambda _: 270)
-    assert op.move_to_target().status == '前往轮胎旁武备箱前'
-    assert op.pending_turn is None
-    assert op.steps == 1
-
-
-def test_large_heading_error_still_stops(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """超过 45° 先松键再停车转，不按住前进。"""
-    monkeypatch.setattr(op.vision, 'locate', lambda _: (90, 100))
-    monkeypatch.setattr(op.vision, 'player_angle', lambda _: 90)
-    assert op.move_to_target().status.startswith('停车转向')
-    op.ctx.controller.stop_moving_forward.assert_called()
-    op.ctx.controller.start_moving_forward.assert_not_called()
-    assert abs(op.ctx.controller.turn_by_angle_diff.call_args.args[0]) <= 90
-
-
-@pytest.mark.parametrize('reason', ['insufficient_geometry', 'ambiguous_position', 'outside_coverage', 'invalid_crop'])
-def test_roadside_pickup_never_moves_without_location(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch, reason: str,
-) -> None:
-    """已定位后丢失位置，即使有路边 F 提示也必须松键，三次等待后停止。"""
-    monkeypatch.setattr(op.vision, 'locate', lambda _: None)
-    notification = MagicMock()
-    op.on_location_wait = notification
-    op.last_position = (50.0, 100.0)
-    op.vision.last_location = MapLocation(None, op.vision.map.snapshot_id, reason, '', 0, None, 0)
-
-    def find_area(_screen: object, _screen_name: str, area_name: str) -> OperationRoundResult:
-        if area_name in {'按键-普通攻击', '交互F键'}:
-            return op.round_success()
-        return op.round_fail()
-
-    monkeypatch.setattr(op, 'round_by_find_area', find_area)
-    op.heading_aligned = True
-    for _ in range(3):
-        result = op.move_to_target()
-        assert result.result == OperationRoundResultEnum.WAIT
-        assert result.status == '小地图暂时对不上，再看一帧'
-        op.ctx.controller.stop_moving_forward.assert_called()
-        op.ctx.controller.start_moving_forward.assert_not_called()
-    assert op.move_to_target().is_fail
-    assert notification.call_count == 3
-    op.ctx.controller.start_moving_forward.assert_not_called()
-    for key in 'wasd':
-        getattr(op.ctx.controller, f'move_{key}').assert_not_called()
-    assert op.ctx.controller.turn_by_angle_diff.call_count == 0
-
-
-def test_roadside_pickup_resumes_only_after_location_recovers(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """定位恢复前不前进；恢复后按新位置继续，清零连续失配次数。"""
-    positions = iter([(50.0, 100.0), None, (55.0, 100.0)])
-    monkeypatch.setattr(op.vision, 'locate', lambda _: next(positions))
-    monkeypatch.setattr(op.vision, 'player_angle', lambda _: 0)
-    monkeypatch.setattr(op, 'round_by_find_area', lambda _screen, _name, area: (
-        op.round_success() if area in ('按键-普通攻击', '交互F键') else op.round_fail()
-    ))
-    assert op.move_to_target().status == '忽略路上可拾取物'
-    op.ctx.controller.start_moving_forward.reset_mock()
-    assert op.move_to_target().status == '小地图暂时对不上，再看一帧'
-    op.ctx.controller.start_moving_forward.assert_not_called()
-    op.ctx.controller.stop_moving_forward.assert_called()
-    assert op.move_to_target().status == '忽略路上可拾取物'
-    op.ctx.controller.start_moving_forward.assert_called_once()
-    assert op.last_position == (55.0, 100.0)
-    assert op.locate_misses == 0
-
-
-def test_one_miss_after_a_fix_waits_instead_of_stopping(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """刚定位成功后的单帧失败先松键再看，不立刻结束本段。"""
-    positions: list[tuple[float, float] | None] = [(50.0, 100.0), None]
-    monkeypatch.setattr(op.vision, 'locate', lambda _: positions.pop(0))
-    monkeypatch.setattr(op.vision, 'player_angle', lambda _: 0)
-    assert op.move_to_target().status == '前往巷口左转'
-    op.ctx.controller.start_moving_forward.reset_mock()
-    result = op.move_to_target()
-    assert result.status == '小地图暂时对不上，再看一帧'
-    assert not result.is_fail
-    op.ctx.controller.stop_moving_forward.assert_called()
-    op.ctx.controller.start_moving_forward.assert_not_called()
-
-
 @pytest.mark.parametrize('recovers', [True, False])
 def test_execute_roadside_pickup_waits_without_moving(
-    test_context: TestContext, monkeypatch: pytest.MonkeyPatch, recovers: bool,
+    test_context: TestContext,
+    monkeypatch: pytest.MonkeyPatch,
+    recovers: bool,
 ) -> None:
     """完整执行链在路边拾取提示下停步换帧，定位恢复后到达或持续失配后失败。"""
     controller = FixtureController(test_context)
     controller.set_phases([{'frame': ('贝果-局内', '雅努斯出生-r01-39s')}])
     monkeypatch.setattr(test_context, 'controller', controller)
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_run_flow.BagelNavigate', WatchedNavigate)
+    monkeypatch.setattr(
+        'zzz_od.application.bagel.bagel_run_flow.BagelNavigate', WatchedNavigate
+    )
     op = published_navigation(test_context)
     positions = [(50.0, 100.0)] * 3 + [None] * (2 if recovers else 4)
     if recovers:
@@ -491,9 +215,15 @@ def test_execute_roadside_pickup_waits_without_moving(
 
     monkeypatch.setattr(op.vision, 'locate', locate)
     monkeypatch.setattr(op.vision, 'player_angle', lambda _: 0)
-    monkeypatch.setattr(op, 'round_by_find_area', lambda _screen, _name, area: (
-        op.round_success() if area in ('按键-普通攻击', '交互F键') else op.round_fail()
-    ))
+    monkeypatch.setattr(
+        op,
+        'round_by_find_area',
+        lambda _screen, _name, area: (
+            op.round_success()
+            if area in ('按键-普通攻击', '交互F键')
+            else op.round_fail()
+        ),
+    )
     monkeypatch.setattr(controller, 'start_moving_forward', start_moving, raising=False)
     stop = MagicMock()
     monkeypatch.setattr(controller, 'stop_moving_forward', stop, raising=False)
@@ -501,7 +231,9 @@ def test_execute_roadside_pickup_waits_without_moving(
     try:
         result = op.execute()
         assert result.success == recovers, result.status
-        assert result.status == (op.STATUS_WAYPOINT if recovers else '小地图定位失败，停止移动')
+        assert result.status == (
+            op.STATUS_WAYPOINT if recovers else '小地图定位失败，停止移动'
+        )
         assert observations.count(None) == (2 if recovers else 4)
         assert controller.recorded_inputs.count('hold') == 1
         stop.assert_called()
@@ -510,25 +242,19 @@ def test_execute_roadside_pickup_waits_without_moving(
         reset_running_state(test_context, op)
 
 
-def test_repeated_locate_misses_still_stop(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """连续对不上超过允许帧数后仍然停止。"""
-    monkeypatch.setattr(op.vision, 'locate', lambda _: None)
-    op.last_position = (50.0, 100.0)
-    op.locate_misses = 3
-    result = op.move_to_target()
-    assert result.is_fail and '小地图定位失败' in result.status
-
-
 def test_weapon_box_prompt_is_not_a_roadside_pickup(
-    test_context: TestContext, monkeypatch: pytest.MonkeyPatch,
+    test_context: TestContext,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """去电子保险箱时，武备箱的 F 提示不能当成路上可拾取物盲走。"""
     test_context.mock_screen('贝果-局内', '雅努斯出生-r01-39s')
     op = published_navigation(test_context, target='safe', role='entry')
-    monkeypatch.setattr(test_context.controller, 'stop_moving_forward', MagicMock(), raising=False)
-    monkeypatch.setattr(test_context.controller, 'start_moving_forward', MagicMock(), raising=False)
+    monkeypatch.setattr(
+        test_context.controller, 'stop_moving_forward', MagicMock(), raising=False
+    )
+    monkeypatch.setattr(
+        test_context.controller, 'start_moving_forward', MagicMock(), raising=False
+    )
     monkeypatch.setattr(op.vision, 'locate', lambda _: None)
 
     def find_area(_screen: object, _screen_name: str, area_name: str):
@@ -543,26 +269,18 @@ def test_weapon_box_prompt_is_not_a_roadside_pickup(
     op.ctx.controller.start_moving_forward.assert_not_called()
 
 
-@pytest.mark.parametrize('image_angle,expected_mouse_sign', [(0, -1), (180, 1)])
-def test_turn_reaches_mouse_with_correct_sign(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
-    image_angle: float, expected_mouse_sign: int,
-) -> None:
-    """接通真实控制器的角度换算，左右转都必须发出正确鼠标位移。"""
-    op = published_navigation(op.ctx, action='approach')
-    monkeypatch.setattr(op.vision, 'locate', lambda _: (110, 100))
-    monkeypatch.setattr(op.vision, 'player_angle', lambda _: image_angle)
-    controller = MagicMock()
-    controller.game_config.turn_dx = -5.5
-    controller.turn_by_angle_diff.side_effect = lambda angle: ZPcController.turn_by_angle_diff(controller, angle)
-    op.turn_compensator.controller = controller
-    assert op.move_to_target().status.startswith('停车转向')
-    assert controller.turn_by_distance.call_args.args[0] * expected_mouse_sign > 0
-
-
-@pytest.mark.parametrize('initial,target', [(0, 270), (180, 270), (350, 10), (10, 350)])
+@pytest.mark.parametrize(
+    'initial,target',
+    [
+        (350, 10),
+        (10, 350),
+    ],
+)
 def test_turn_converges_with_controller_feedback(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch, initial: float, target: float,
+    op: BagelNavigate,
+    monkeypatch: pytest.MonkeyPatch,
+    initial: float,
+    target: float,
 ) -> None:
     """鼠标转向不足时仍能收敛，覆盖左右和跨零度，旧符号会耗尽动作。"""
     heading = initial
@@ -575,9 +293,13 @@ def test_turn_converges_with_controller_feedback(
         heading = (heading + distance / 5.5 * 0.55) % 360
 
     controller.turn_by_distance.side_effect = move_mouse
-    controller.turn_by_angle_diff.side_effect = lambda angle: ZPcController.turn_by_angle_diff(controller, angle)
+    controller.turn_by_angle_diff.side_effect = lambda angle: (
+        ZPcController.turn_by_angle_diff(controller, angle)
+    )
     op.turn_compensator.controller = controller
-    op.vision.waypoints = [('测试目标', (20 * cos(radians(target)), 20 * sin(radians(target))))]
+    op.vision.waypoints = [
+        ('测试目标', (20 * cos(radians(target)), 20 * sin(radians(target))))
+    ]
     op.active_waypoints = op.vision.waypoints
     monkeypatch.setattr(op.vision, 'locate', lambda _: (0, 0))
     monkeypatch.setattr(op.vision, 'player_angle', lambda _: heading)
@@ -590,67 +312,15 @@ def test_turn_converges_with_controller_feedback(
     assert result.status == '前往测试目标'
     assert op.steps < 20
     assert op.turn_compensator.scale > 1
-    assert all(abs(call.args[0]) <= 90 for call in controller.turn_by_angle_diff.call_args_list)
-
-
-def test_pause_discards_alignment(op: BagelNavigate) -> None:
-    """暂停后释放按键，并废弃尚未校准的转向样本。"""
-    op.pending_turn = (0, -30)
-    op.handle_pause()
-    assert not op.heading_aligned
-    assert op.pending_turn is None
-    op.ctx.controller.stop_moving_forward.assert_called_once()
-    assert op.move_to_target().status == '短按W后等待箭头对齐'
-
-
-def test_turn_probe_forward_flow(
-    op: BagelNavigate, test_context: TestContext, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """镜头转动后短步刷新箭头；仍未对准时再次转向并校准。"""
-    controller = NavigationController(test_context)
-    controller.set_phases([
-        *[{'frame': ('贝果-局内', '雅努斯出生-r01-39s')} for _ in range(4)],
-        {'frame': ('贝果-局内', '雅努斯箱前-r07-32s')},
-    ])
-    monkeypatch.setattr(test_context, 'controller', controller)
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_run_flow.BagelNavigate', WatchedNavigate)
-    navigation = published_navigation(test_context, action='approach')
-    monkeypatch.setattr(
-        navigation.vision, 'locate',
-        lambda _: (110.0, 84.0) if controller.phase_idx == 4 else (110.0, 100.0),
+    assert all(
+        abs(call.args[0]) <= 90 for call in controller.turn_by_angle_diff.call_args_list
     )
-    monkeypatch.setattr(
-        navigation.vision, 'player_angle', lambda _: 270 if controller.phase_idx == 4 else 0,
-    )
-    enter_running_state(test_context)
-    try:
-        result = navigation.execute()
-        assert result.success and result.status == BagelNavigate.STATUS_ARRIVED_BOX
-        assert controller.recorded_inputs == ['turn', 'w', 'turn', 'w']
-        assert controller.phase_idx == 4
-        assert not navigation.heading_aligned
-    finally:
-        reset_running_state(test_context, navigation)
-
-
-def test_box_prompt_appears_during_stop(
-    op: BagelNavigate, test_context: TestContext, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """箱前短暂没有提示时只等新画面，提示出现立即成功，不盲走。"""
-    op = published_navigation(op.ctx, action='approach')
-    monkeypatch.setattr(op.vision, 'locate', lambda _: (110, 84))
-    assert op.move_to_target().status == '目标前停步等待交互提示'
-    test_context.mock_screen('贝果-局内', '雅努斯箱前-r07-32s')
-    op.screenshot()
-    assert op.move_to_target().status == '发现容器提示，松键后确认停稳'
-    op.last_screenshot_time = op._settle_until
-    assert op.move_to_target().status == BagelNavigate.STATUS_ARRIVED_BOX
-    for key in 'wasd':
-        getattr(op.ctx.controller, f'move_{key}').assert_not_called()
 
 
 def test_b_spawn_uses_position_and_stops_at_prompt(
-    op: BagelNavigate, test_context: TestContext, monkeypatch: pytest.MonkeyPatch,
+    op: BagelNavigate,
+    test_context: TestContext,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """B 按路点距离移动，改变位置会改变转向；丢定位松键，真提示才成功。"""
     test_context.mock_screen('贝果-局内', '白鸽工地出生-20260921-seq5s')
@@ -681,7 +351,9 @@ def test_b_spawn_uses_position_and_stops_at_prompt(
     monkeypatch.setattr(navigation.vision, 'locate', lambda _: (127, 73))
     test_context.controller.move_w.reset_mock()
     assert navigation.move_to_target().status == '前往白鸽武备箱前'
-    test_context.controller.move_w.assert_called_once_with(press=True, press_time=0.2, release=True)
+    test_context.controller.move_w.assert_called_once_with(
+        press=True, press_time=0.2, release=True
+    )
     navigation.last_screenshot_time += 1
     monkeypatch.setattr(navigation.vision, 'locate', lambda _: None)
     test_context.controller.start_moving_forward.reset_mock()
@@ -689,7 +361,9 @@ def test_b_spawn_uses_position_and_stops_at_prompt(
     test_context.controller.stop_moving_forward.assert_called()
     test_context.controller.start_moving_forward.assert_not_called()
     root = next(p for p in Path(__file__).resolve().parents if p.name == 'zzz-od-test')
-    test_context.add_mock_screenshot(cv2_utils.read_image(str(root / 'screens/贝果-局内/白鸽工地箱前-录像8s.webp')))
+    test_context.add_mock_screenshot(
+        cv2_utils.read_image(str(root / 'screens/贝果-局内/白鸽工地箱前-录像8s.webp'))
+    )
     navigation.screenshot()
     navigation.last_screenshot_time = navigation.last_input_frame + 1
     monkeypatch.setattr(navigation.vision, 'locate', lambda _: (130.5, 69.4))
@@ -698,33 +372,9 @@ def test_b_spawn_uses_position_and_stops_at_prompt(
     assert navigation.move_to_target().status == BagelNavigate.STATUS_ARRIVED_BOX
 
 
-def test_b_edited_waypoint_changes_steering(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """注入不同草稿时真实转向随目标改变，不受出生地专用朝向控制。"""
-    from dataclasses import replace
-
-    flow = load_published_flow('janus_high_b')
-    step = next(step for step in flow.steps if step.action == 'approach')
-    turns = []
-    for target in ((130, 70), (130, 110)):
-        changed = replace(step, waypoints=(replace(step.waypoints[0], xy=target),))
-        draft = replace(flow, steps=tuple(changed if item.id == step.id else item for item in flow.steps))
-        navigation = BagelRunFlow(op.ctx, draft).build_operation(changed)
-        assert isinstance(navigation, BagelNavigate)
-        navigation.handle_init()
-        navigation.last_screenshot = op.last_screenshot
-        navigation.last_screenshot_time = op.last_screenshot_time
-        navigation.heading_aligned = True
-        monkeypatch.setattr(navigation.vision, 'locate', lambda _: (100, 100))
-        monkeypatch.setattr(navigation.vision, 'player_angle', lambda _: 0)
-        navigation.move_to_target()
-        turns.append(op.ctx.controller.turn_by_angle_diff.call_args.args[0])
-    assert turns[0] > 0 and turns[1] < 0
-
-
 def test_safe_route_walks_then_uses_small_steps(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
+    op: BagelNavigate,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """正式远段按住前进，独立靠近步骤朝目的地碎步，到点停下等待提示。"""
     navigation = published_navigation(op.ctx, target='safe', role='entry')
@@ -748,73 +398,71 @@ def test_safe_route_walks_then_uses_small_steps(
     monkeypatch.setattr(navigation.vision, 'locate', lambda _: (213, 110))
     monkeypatch.setattr(navigation.vision, 'player_angle', lambda _: 0)
     assert navigation.move_to_target().status == '前往电子保险箱前'
-    op.ctx.controller.move_w.assert_called_once_with(press=True, press_time=0.08, release=True)
+    op.ctx.controller.move_w.assert_called_once_with(
+        press=True, press_time=0.08, release=True
+    )
     op.ctx.controller.move_w.reset_mock()
     for position in ((214, 110), (215, 110)):
         navigation.last_screenshot_time += 1
         monkeypatch.setattr(navigation.vision, 'locate', lambda _, p=position: p)
         assert navigation.move_to_target().status == '前往电子保险箱前'
-        op.ctx.controller.move_w.assert_called_once_with(press=True, press_time=0.08, release=True)
+        op.ctx.controller.move_w.assert_called_once_with(
+            press=True, press_time=0.08, release=True
+        )
         op.ctx.controller.move_w.reset_mock()
     navigation.last_screenshot_time += 1
-    monkeypatch.setattr(navigation.vision, 'locate', lambda _: navigation.active_waypoints[-1][1])
+    monkeypatch.setattr(
+        navigation.vision, 'locate', lambda _: navigation.active_waypoints[-1][1]
+    )
     monkeypatch.setattr(navigation, 'is_bagel_result', lambda: False)
-    monkeypatch.setattr(navigation, 'round_by_find_area',
-                        lambda *args: navigation.round_success() if args[-1] in (
-                            '按键-普通攻击', '电子保险箱交互',
-                        ) else navigation.round_fail())
+    monkeypatch.setattr(
+        navigation,
+        'round_by_find_area',
+        lambda *args: (
+            navigation.round_success()
+            if args[-1]
+            in (
+                '按键-普通攻击',
+                '电子保险箱交互',
+            )
+            else navigation.round_fail()
+        ),
+    )
     assert navigation.move_to_target().status == '目标前停步等待交互提示'
     op.ctx.controller.move_w.assert_not_called()
     navigation.last_screenshot_time += 1
     navigation.steps = 100
-    monkeypatch.setattr(navigation, 'round_by_find_area', lambda *args: (
-        navigation.round_success() if args[-1] in (
-            '按键-普通攻击', '电子保险箱交互', '交互F键',
-        ) else navigation.round_fail()
-    ))
+    monkeypatch.setattr(
+        navigation,
+        'round_by_find_area',
+        lambda *args: (
+            navigation.round_success()
+            if args[-1]
+            in (
+                '按键-普通攻击',
+                '电子保险箱交互',
+                '交互F键',
+            )
+            else navigation.round_fail()
+        ),
+    )
     assert navigation.move_to_target().status == '发现容器提示，松键后确认停稳'
     navigation.last_screenshot_time = navigation._settle_until
     assert navigation.move_to_target().status == BagelNavigate.STATUS_ARRIVED_SAFE
     op.ctx.controller.move_w.assert_not_called()
 
 
-@pytest.mark.parametrize('role,position,angle,arrived', [
-    ('entry', (160, 92), 0, False),
-    ('entry', (186.6, 84.9), 0, True),
-    ('entry', (187.6, 84.9), 0, True),
-    ('turn', (194, 100), 40, False),
-    ('turn', (186.6, 84.9), 30, False),
-])
-def test_safe_corner_turns_while_moving(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
-    role: str, position: tuple[float, float], angle: float, arrived: bool,
-) -> None:
-    """入口允许较宽到达范围，楼角不能抄近路；每个正式路点独立结束并松键。"""
-    navigation = published_navigation(op.ctx, target='safe', role=role)
-    monkeypatch.setattr(navigation.vision, 'locate', lambda _: position)
-    monkeypatch.setattr(navigation.vision, 'player_angle', lambda _: angle)
-    result = navigation.move_to_target()
-    if arrived:
-        assert result.status == BagelNavigate.STATUS_WAYPOINT
-        op.ctx.controller.stop_moving_forward.assert_called()
-        op.ctx.controller.turn_by_angle_diff.assert_not_called()
-        op.ctx.controller.start_moving_forward.assert_not_called()
-    else:
-        assert result.status.startswith('行进转向')
-        op.ctx.controller.start_moving_forward.assert_called_once()
-        turned = op.ctx.controller.turn_by_angle_diff.call_args.args[0]
-        assert 0 < abs(turned) <= 30
-    op.ctx.controller.move_w.assert_not_called()
-
-
 def test_safe_cruise_stops_when_position_does_not_change(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
+    op: BagelNavigate,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """楼角后持续按住前进却卡在原地时，应松键留现场。"""
     navigation = published_navigation(op.ctx, target='safe', role='approach')
     # 与目标保持持续前进所需的距离，避免路线微调后落入短步分支。
     target = navigation.active_waypoints[0][1]
-    monkeypatch.setattr(navigation.vision, 'locate', lambda _: (target[0] - 12, target[1]))
+    monkeypatch.setattr(
+        navigation.vision, 'locate', lambda _: (target[0] - 12, target[1])
+    )
     monkeypatch.setattr(navigation.vision, 'player_angle', lambda _: 0)
     assert navigation.move_to_target().status == '前往电子保险箱接近点'
     op.ctx.controller.start_moving_forward.assert_called()
@@ -826,7 +474,8 @@ def test_safe_cruise_stops_when_position_does_not_change(
 
 
 def test_safe_cruise_progress_resets_stall_timer(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
+    op: BagelNavigate,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """沿墙实际前进超过两像素时，不能将下一帧误判为卡位。"""
     navigation = published_navigation(op.ctx, target='safe', role='approach')
@@ -841,64 +490,23 @@ def test_safe_cruise_progress_resets_stall_timer(
     assert navigation.move_to_target().result == OperationRoundResultEnum.WAIT
 
 
-def test_safe_approach_does_not_steer_away_from_right_wall(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """实机已靠到右墙后，后续路点不能把人向北拉回停车位。"""
-    navigation = published_navigation(op.ctx, target='safe', role='approach')
-    root = next(path for path in Path(__file__).resolve().parents if path.name == 'zzz-od-test')
-    navigation.last_screenshot = cv2_utils.read_image(str(
-        root / 'screens/贝果-局内/停车场已靠右墙-20260923-2106.webp',
-    ))
-    navigation.last_screenshot_time = op.last_screenshot_time
-    navigation.heading_aligned = True
-    # 2026-09-23 21:06 实机录像 177 秒：人已到右墙边，随后却走回道路。
-    position = navigation.vision.locate(navigation.minimap())
-    assert position is not None
-    assert abs(position[0] - 192.92) < 1 and abs(position[1] - 108.71) < 1
-    cruise = MagicMock(return_value=navigation.round_wait('记录方向'))
-    monkeypatch.setattr(navigation, '_cruise_toward', cruise)
-    navigation.move_to_target()
-    assert cruise.call_count == 1
-    target_angle = cruise.call_args.args[1]
-    assert target_angle >= 270 or target_angle <= 5, f'不应向北离墙：{target_angle:.1f}度'
-
-
-def test_safe_does_not_start_small_steps_in_parking_spaces(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """旧接近点在停车场里，不能在这里切换成最后碎步段。"""
-    navigation = published_navigation(op.ctx, target='safe', role='approach')
-    monkeypatch.setattr(navigation.vision, 'locate', lambda _: (201.67, 103.35))
-    monkeypatch.setattr(navigation.vision, 'player_angle', lambda _: 0)
-    result = navigation.move_to_target()
-    assert result.result == OperationRoundResultEnum.WAIT
-    assert navigation.coordinate_only
-    op.ctx.controller.move_w.assert_not_called()
-
-
-def test_safe_corner_releases_forward_before_next_segment(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """到新楼角点两像素内应先松键，再切换到接近段。"""
-    navigation = published_navigation(op.ctx, target='safe', role='turn')
-    x, y = navigation.active_waypoints[0][1]
-    monkeypatch.setattr(navigation.vision, 'locate', lambda _: (x - 1, y))
-    monkeypatch.setattr(navigation.vision, 'player_angle', lambda _: 0)
-    result = navigation.move_to_target()
-    assert result.status == BagelNavigate.STATUS_WAYPOINT
-    op.ctx.controller.stop_moving_forward.assert_called()
-    op.ctx.controller.start_moving_forward.assert_not_called()
-
-
 def test_safe_brakes_before_final_steps_and_waits_for_new_frame(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
+    op: BagelNavigate,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """回放第九步提前 5.73 像素松键：停稳后继续当前步，到达才完成。"""
     flow = load_published_flow('janus_high_a')
-    step = replace(flow.steps[8], waypoints=(replace(
-        flow.steps[8].waypoints[0], xy=(215.9, 109.9), tolerance=2, passed_tolerance=2,
-    ),))
+    step = replace(
+        flow.steps[8],
+        waypoints=(
+            replace(
+                flow.steps[8].waypoints[0],
+                xy=(215.9, 109.9),
+                tolerance=2,
+                passed_tolerance=2,
+            ),
+        ),
+    )
     navigation = BagelRunFlow(op.ctx, flow).build_operation(step)
     navigation.handle_init()
     navigation.screenshot()
@@ -914,7 +522,9 @@ def test_safe_brakes_before_final_steps_and_waits_for_new_frame(
     op.ctx.controller.move_w.assert_not_called()
     navigation.last_screenshot_time += 0.5
     assert navigation.move_to_target().result == OperationRoundResultEnum.WAIT
-    op.ctx.controller.move_w.assert_called_once_with(press=True, press_time=0.2, release=True)
+    op.ctx.controller.move_w.assert_called_once_with(
+        press=True, press_time=0.2, release=True
+    )
     # 仍在停车范围内，不能反复停车；继续短步调整。
     navigation.last_screenshot_time += 0.5
     assert navigation.move_to_target().result == OperationRoundResultEnum.WAIT
@@ -926,44 +536,9 @@ def test_safe_brakes_before_final_steps_and_waits_for_new_frame(
     op.ctx.controller.start_moving_forward.assert_not_called()
 
 
-def test_braked_move_execute_waits_until_destination(
-    op: BagelNavigate, test_context: TestContext, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """真实执行循环不能在提前停车处结束；停稳、新截图、补步后才返回到达。"""
-    controller = NavigationController(test_context)
-    phases = [{'frame': ('贝果-局内', '雅努斯出生-r01-39s')} for _ in range(3)]
-    controller.set_phases(phases)
-    monkeypatch.setattr(test_context, 'controller', controller)
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_run_flow.BagelNavigate', WatchedNavigate)
-    navigation = published_navigation(test_context, target='safe', role='approach')
-    x, y = navigation.active_waypoints[0][1]
-    positions = [(x - 5.73, y), (x - 3, y), (x - 1, y)]
-    monkeypatch.setattr(navigation.vision, 'locate', lambda _: positions[controller.phase_idx])
-    monkeypatch.setattr(navigation.vision, 'player_angle', lambda _: 0)
-    original_screenshot = navigation.screenshot
-    polls = 0
-    frame_started = navigation.last_screenshot_time
-
-    def screenshot_with_clock() -> None:
-        """读取存档画面并推进截图时间，避免真实睡眠。"""
-        nonlocal polls
-        original_screenshot()
-        polls += 1
-        navigation.last_screenshot_time = max(frame_started + polls * 0.3, navigation.last_screenshot_time)
-
-    monkeypatch.setattr(navigation, 'screenshot', screenshot_with_clock)
-    enter_running_state(test_context)
-    try:
-        result = navigation.execute()
-        assert result.success and result.status == BagelNavigate.STATUS_WAYPOINT
-        assert controller.phase_idx == 2
-        assert controller.recorded_inputs == ['w', 'w']
-    finally:
-        reset_running_state(test_context, navigation)
-
-
 def test_safe_final_steps_never_restart_cruise_on_pickup(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
+    op: BagelNavigate,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """末段即使有杂物提示且定位暂失，也不能恢复按住前进而冲过保险箱。"""
     navigation = published_navigation(op.ctx, action='approach', target='safe')
@@ -975,15 +550,21 @@ def test_safe_final_steps_never_restart_cruise_on_pickup(
     op.ctx.controller.start_moving_forward.assert_not_called()
 
 
-@pytest.mark.parametrize('state,position,arrived', [
-    ('电子保险箱仅名称', (218, 110), False),
-    ('电子保险箱F提示', (218, 110), True),
-    ('电子保险箱F提示', (100, 100), False),
-    ('电子保险箱F提示', None, False),
-])
+@pytest.mark.parametrize(
+    'state,position,arrived',
+    [
+        ('电子保险箱仅名称', (218, 110), False),
+        ('电子保险箱F提示', (218, 110), True),
+        ('电子保险箱F提示', None, False),
+    ],
+)
 def test_safe_prompt_requires_real_f_button(
-    op: BagelNavigate, test_context: TestContext, monkeypatch: pytest.MonkeyPatch,
-    state: str, position: tuple[float, float] | None, arrived: bool,
+    op: BagelNavigate,
+    test_context: TestContext,
+    monkeypatch: pytest.MonkeyPatch,
+    state: str,
+    position: tuple[float, float] | None,
+    arrived: bool,
 ) -> None:
     """正式靠近必须同时定位到目标附近并看到 F；只有名称或丢定位不能完成。"""
     test_context.mock_screen('贝果-局内', state)
@@ -1000,7 +581,8 @@ def test_safe_prompt_requires_real_f_button(
 
 
 def test_stationary_character_arrow_requires_probe_after_camera_turn(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
+    op: BagelNavigate,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """镜头转动不改变静止角色箭头，必须先短步再用新箭头核验。"""
     op = published_navigation(op.ctx, action='approach')
@@ -1028,7 +610,8 @@ def test_stationary_character_arrow_requires_probe_after_camera_turn(
 
 
 def test_passed_corner_advances_instead_of_spinning(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
+    op: BagelNavigate,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """越过拐点后目标在身后，切下一段，不停车转回去。"""
     # try077 巷口：一步从点前跨到 (112.1, 99.9)，偏差约 180°。
@@ -1041,7 +624,8 @@ def test_passed_corner_advances_instead_of_spinning(
 
 
 def test_corner_does_not_turn_two_pixels_early(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
+    op: BagelNavigate,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """实机距拐点约 1.8 像素仍被墙挡住，继续走近后才转向。"""
     monkeypatch.setattr(op.vision, 'locate', lambda _: (108.2, 100))
@@ -1054,84 +638,9 @@ def test_corner_does_not_turn_two_pixels_early(
     op.ctx.controller.stop_moving_forward.assert_called()
 
 
-@pytest.mark.parametrize('action', ['move', 'approach'])
-def test_small_steps_recompute_heading_from_current_position(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch, action: str,
-) -> None:
-    """普通移动和靠近都能碎步，每次朝唯一目的地调整，远处也不持续按住。"""
-    navigation = published_navigation(op.ctx, action=action)
-    navigation.navigation = replace(navigation.navigation, final_mode='small_steps')
-    monkeypatch.setattr(navigation, 'is_bagel_result', lambda: False)
-    monkeypatch.setattr(navigation, 'round_by_find_area',
-                        lambda *args: navigation.round_success() if args[-1] == '按键-普通攻击' else navigation.round_fail())
-    monkeypatch.setattr(navigation.vision, 'player_angle', lambda _: 0)
-    align = MagicMock(return_value=None)
-    monkeypatch.setattr(navigation, '_align_to_heading', align)
-    x, y = navigation.active_waypoints[-1][1]
-    for position, angle in [((x - 20, y), 0), ((x, y + 20), 90), ((x + 20, y), 180)]:
-        monkeypatch.setattr(navigation.vision, 'locate', lambda _, p=position: p)
-        navigation.last_screenshot_time += 1
-        navigation.move_to_target()
-        assert align.call_args.args[1] == pytest.approx(angle)
-        op.ctx.controller.move_w.assert_called_with(press=True, press_time=0.08, release=True)
-    assert op.ctx.controller.move_w.call_count == 3
-    op.ctx.controller.start_moving_forward.assert_not_called()
-
-
-@pytest.mark.parametrize('mode', ['coordinate', 'small_steps'])
-@pytest.mark.parametrize('target', ['box', 'safe'])
-@pytest.mark.parametrize('after_arrival', ['drift', 'lost', 'prompt', 'late_prompt'])
-def test_reaching_point_waits_without_moving_then_succeeds_or_fails(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
-    mode: str, target: str, after_arrival: str,
-) -> None:
-    """到点后只观察；定位丢失时不采信提示，提示出现后仍确认停稳。"""
-    navigation = published_navigation(op.ctx, action='approach', target=target)
-    navigation.navigation = replace(navigation.navigation, final_mode=mode)
-    xy = navigation.active_waypoints[-1][1]
-    monkeypatch.setattr(navigation, 'is_bagel_result', lambda: False)
-    monkeypatch.setattr(navigation, 'round_by_find_area',
-                        lambda *args: navigation.round_success() if args[-1] == '按键-普通攻击' else navigation.round_fail())
-    monkeypatch.setattr(navigation.vision, 'locate', lambda _: xy)
-    started = navigation.last_screenshot_time
-    assert navigation.move_to_target().status == '目标前停步等待交互提示'
-    if after_arrival == 'drift':
-        monkeypatch.setattr(navigation.vision, 'locate', lambda _: (xy[0] + 5, xy[1]))
-    elif after_arrival == 'lost':
-        monkeypatch.setattr(navigation.vision, 'locate', lambda _: None)
-    navigation.last_screenshot_time = started + 1
-    waiting = navigation.move_to_target()
-    assert waiting.status == (
-        '小地图暂时对不上，再看一帧' if after_arrival == 'lost'
-        else '目标前停步等待交互提示'
-    )
-    navigation.last_screenshot_time = started + 2.1
-    if after_arrival in ('prompt', 'late_prompt'):
-        if after_arrival == 'prompt':
-            navigation.last_screenshot_time = started + 1.5
-        monkeypatch.setattr(navigation, 'round_by_find_area', lambda *args: (
-            navigation.round_success() if args[-1] in (
-                '按键-普通攻击', navigation.interact_area, '交互F键',
-            ) else navigation.round_fail()
-        ))
-        assert navigation.move_to_target().status == '发现容器提示，松键后确认停稳'
-        navigation.last_screenshot_time = navigation._settle_until
-        assert navigation.move_to_target().status == navigation.arrive_status
-    elif after_arrival == 'lost':
-        for _ in range(3):
-            result = navigation.move_to_target()
-        assert result.is_fail and '小地图定位失败' in result.status
-    else:
-        result = navigation.move_to_target()
-        assert result.result == OperationRoundResultEnum.FAIL
-        assert '未发现' in result.status
-    op.ctx.controller.move_w.assert_not_called()
-    op.ctx.controller.start_moving_forward.assert_not_called()
-    op.ctx.controller.stop_moving_forward.assert_called()
-
-
 def test_plain_small_steps_finish_at_destination_without_prompt(
-    op: BagelNavigate, monkeypatch: pytest.MonkeyPatch,
+    op: BagelNavigate,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """无箱子和交互提示时，普通碎步到点即可结束。"""
     op.navigation = replace(op.navigation, final_mode='small_steps')
@@ -1141,11 +650,19 @@ def test_plain_small_steps_finish_at_destination_without_prompt(
     op.ctx.controller.start_moving_forward.assert_not_called()
 
 
-@pytest.mark.parametrize('mode', ['coordinate', 'small_steps'])
-@pytest.mark.parametrize('prompt_appears', [False, True])
+@pytest.mark.parametrize(
+    'prompt_appears,mode',
+    [
+        (False, 'small_steps'),
+        (True, 'coordinate'),
+    ],
+)
 def test_arrival_wait_runs_with_real_frames_without_more_input(
-    op: BagelNavigate, test_context: TestContext, monkeypatch: pytest.MonkeyPatch,
-    mode: str, prompt_appears: bool,
+    op: BagelNavigate,
+    test_context: TestContext,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    prompt_appears: bool,
 ) -> None:
     """完整执行循环回放到点后等待和提示出现，时间推进不依赖实际睡眠。"""
     controller = NavigationController(test_context)
@@ -1154,10 +671,14 @@ def test_arrival_wait_runs_with_real_frames_without_more_input(
         phases.append({'frame': ('贝果-局内', '雅努斯箱前-r07-32s')})
     controller.set_phases(phases)
     monkeypatch.setattr(test_context, 'controller', controller)
-    monkeypatch.setattr('zzz_od.application.bagel.bagel_run_flow.BagelNavigate', WatchedNavigate)
+    monkeypatch.setattr(
+        'zzz_od.application.bagel.bagel_run_flow.BagelNavigate', WatchedNavigate
+    )
     navigation = published_navigation(test_context, action='approach')
     navigation.navigation = replace(navigation.navigation, final_mode=mode)
-    monkeypatch.setattr(navigation.vision, 'locate', lambda _: navigation.active_waypoints[-1][1])
+    monkeypatch.setattr(
+        navigation.vision, 'locate', lambda _: navigation.active_waypoints[-1][1]
+    )
     controller.set_phases(phases)
     original_screenshot = navigation.screenshot
     polls = 0

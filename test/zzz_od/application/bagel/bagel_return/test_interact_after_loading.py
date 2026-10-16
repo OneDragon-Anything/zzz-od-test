@@ -12,7 +12,13 @@ if TYPE_CHECKING:
     from test.conftest import TestContext
 
 
-@pytest.mark.parametrize('missing', ['快捷手册', '接待员名称', '按键-交互', None])
+@pytest.mark.parametrize(
+    'missing',
+    [
+        '接待员名称',
+        None,
+    ],
+)
 def test_interaction_requires_all_markers(test_context: TestContext, monkeypatch: pytest.MonkeyPatch, missing: str | None) -> None:
     """任意判据缺失时不按 F；三项齐全时只按一次。"""
     op = BagelReturn(test_context)

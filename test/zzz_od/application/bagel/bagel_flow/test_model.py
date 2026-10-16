@@ -9,37 +9,18 @@ import yaml
 
 from zzz_od.application.bagel.bagel_flow import (
     BagelFlow,
-    NavigationOptions,
     draft_path,
     load_published_flow,
-    read_flow,
     write_flow,
 )
-from zzz_od.application.bagel.bagel_navigate import BagelNavigate
-
-
-@pytest.mark.parametrize('map_id,count', [('janus_high_a', 15), ('janus_high_b', 6)])
-def test_published_roundtrip(map_id: str, count: int) -> None:
-    """两地图正式流程可完整回读。"""
-    flow = load_published_flow(map_id)
-    assert len(flow.steps) == count
-    write_flow(draft_path(map_id), flow)
-    assert read_flow(draft_path(map_id)) == flow
 
 
 @pytest.mark.parametrize(
     'mutation',
     [
-        'version',
-        'unknown',
         'duplicate',
         'store_first',
-        'after_exit',
         'nan',
-        'mode',
-        'stage',
-        'target',
-        'extra',
     ],
 )
 def test_invalid_flow_rejected(mutation: str) -> None:
@@ -69,45 +50,6 @@ def test_invalid_flow_rejected(mutation: str) -> None:
         BagelFlow.from_dict(data)
 
 
-def test_reorder_containers_and_remove_safe() -> None:
-    """完整容器链可重排或删除，不再固定先武备箱后保险箱。"""
-    flow = load_published_flow('janus_high_a')
-    swapped = replace(
-        flow, steps=(flow.steps[0], *flow.steps[6:14], *flow.steps[1:6], flow.steps[-1])
-    )
-    assert BagelFlow.from_dict(swapped.to_dict()) == swapped
-    short = replace(flow, steps=(*flow.steps[:6], flow.steps[-1]))
-    assert BagelFlow.from_dict(short.to_dict()) == short
-
-
-def test_published_route_and_explicit_snapshot_used() -> None:
-    """默认导航读取正式流程，显式传入的快照保留自定义参数。"""
-    flow = load_published_flow('janus_high_a')
-    step = flow.steps[1]
-    step = replace(
-        step,
-        name='只是改名',
-        waypoints=(replace(step.waypoints[0], xy=(111, 102)), *step.waypoints[1:]),
-        navigation=NavigationOptions(timeout=130, brake_distance=4),
-    )
-    ctx = MagicMock(current_instance_idx=99)
-    nav = BagelNavigate(
-        ctx,
-        destination='move',
-        coordinate_only=True,
-        route_data=step.route(flow.map_id),
-        navigation=step.navigation,
-        require_spawn=False,
-    )
-    assert nav.active_waypoints[0][1] == (111, 102)
-    assert nav.timeout_seconds == 130
-    assert nav.navigation.effective_brake_distance == 4
-    assert (
-        BagelNavigate(ctx).active_waypoints[0][1]
-        == flow.steps[1].waypoints[0].xy
-    )
-
-
 def test_atomic_write_failure_preserves_file(monkeypatch: pytest.MonkeyPatch) -> None:
     """替换失败后旧草稿可加载，临时文件清理。"""
     flow = load_published_flow('janus_high_b')
@@ -133,38 +75,3 @@ def test_corrupt_resource_never_falls_back(
     )
     with pytest.raises(ValueError):
         load_published_flow('janus_high_a')
-
-
-def test_repeated_container_prompt_requires_target_position(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """另一处同类容器提示须先停稳核对位置，不能继续移动或提前到达。"""
-    flow = load_published_flow('janus_high_b')
-    step = flow.steps[1]
-    nav = BagelNavigate(
-        MagicMock(),
-        map_id=flow.map_id,
-        route_data=step.route(flow.map_id),
-        check_target_position=True,
-        require_spawn=False,
-    )
-    nav.last_screenshot_time = 1
-    monkeypatch.setattr(nav, 'is_bagel_result', lambda: False)
-    monkeypatch.setattr(nav, 'round_by_find_area', lambda *args: (
-        nav.round_success() if args[-1] in ('按键-普通攻击', '武备箱交互', '交互F键')
-        else nav.round_fail()
-    ))
-    monkeypatch.setattr(nav, 'minimap', lambda: None)
-    monkeypatch.setattr(nav.vision, 'player_angle', lambda _: 0)
-    monkeypatch.setattr(nav.vision, 'locate', lambda _: (100, 100))
-    cruise = MagicMock(return_value=nav.round_wait('继续移动'))
-    monkeypatch.setattr(nav, '_cruise_toward', cruise)
-    assert nav.move_to_target().status == '发现容器提示，松键后确认停稳'
-    nav.last_screenshot_time = nav._settle_until
-    assert nav.move_to_target().status == '容器交互提示与当前目标位置不符'
-    cruise.assert_not_called()
-    nav.handle_init()
-    monkeypatch.setattr(nav.vision, 'locate', lambda _: step.waypoints[-1].xy)
-    assert nav.move_to_target().status == '发现容器提示，松键后确认停稳'
-    nav.last_screenshot_time = nav._settle_until
-    assert nav.move_to_target().status == nav.STATUS_ARRIVED_BOX

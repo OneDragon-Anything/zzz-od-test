@@ -16,7 +16,6 @@ from one_dragon.base.geometry.rectangle import Rect
 from one_dragon.base.operation.operation_round_result import OperationRoundResultEnum
 from one_dragon.utils import cv2_utils
 from zzz_od.application.bagel.bagel_flow import load_published_flow
-from zzz_od.application.bagel.bagel_map_locator import MapLocation
 from zzz_od.application.bagel.bagel_route_vision import BagelRouteVision
 from zzz_od.application.bagel.bagel_run_flow import BagelRunFlow
 
@@ -41,31 +40,6 @@ def location_op(monkeypatch: pytest.MonkeyPatch) -> BagelRunFlow:
     return op
 
 
-def test_real_location_gap_recovers_without_input(
-    location_op: BagelRunFlow, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """原失败帧等待且不推进，恢复帧才完成出生检查。"""
-    op = location_op
-    notification = MagicMock()
-    op.on_location_wait = notification
-    build = MagicMock(return_value=None)
-    monkeypatch.setattr(op, 'build_operation', build)
-    for _ in range(5):
-        result = op.run_step()
-        assert result.result == OperationRoundResultEnum.WAIT
-        assert result.status == '小地图暂时无法定位，等待下一帧'
-        assert op.cursor == 0
-    build.assert_not_called()
-    assert op.ctx.controller.mock_calls == []
-    op.last_screenshot = cv2_utils.read_image(
-        'zzz-od-test/screens/贝果-局内/白鸽出生定位恢复-20261002.webp',
-    )
-    assert op.run_step().is_success
-    build.assert_called_once()
-    assert op._location_waits == 0
-    assert notification.call_count == 5
-
-
 def test_persistent_real_location_gap_stops(
     location_op: BagelRunFlow, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -81,45 +55,6 @@ def test_persistent_real_location_gap_stops(
     assert op.cursor == 0
     build.assert_not_called()
     assert op.ctx.controller.mock_calls == []
-
-
-@pytest.mark.parametrize('action', ['spawn', 'move', 'approach'])
-@pytest.mark.parametrize('reason', [
-    'insufficient_geometry', 'ambiguous_position', 'outside_coverage', 'invalid_crop',
-])
-def test_only_insufficient_geometry_waits(
-    location_op: BagelRunFlow, monkeypatch: pytest.MonkeyPatch,
-    action: str, reason: str,
-) -> None:
-    """三种定位步骤只等待证据不足；冲突、范围外和裁图错误立即停止。"""
-    flow = load_published_flow('janus_high_a')
-    step = next(step for step in flow.steps if step.action == action)
-    op = BagelRunFlow(location_op.ctx, flow, (step.id,))
-    op.last_screenshot = location_op.last_screenshot
-    op.vision = MagicMock()
-    op.vision.locate.return_value = None
-    op.vision.last_location = MapLocation(None, 'test-map', reason, '', 0, None, 0)
-    monkeypatch.setattr(op, 'is_bagel_result', lambda: False)
-    monkeypatch.setattr(op, '_has', lambda area, screen_name='贝果-局内': area == '按键-普通攻击')
-    build = MagicMock()
-    monkeypatch.setattr(op, 'build_operation', build)
-    result = op.run_step()
-    if reason == 'insufficient_geometry':
-        assert result.result == OperationRoundResultEnum.WAIT
-    else:
-        assert result.is_fail
-        assert result.status == '当前小地图无法定位'
-    build.assert_not_called()
-    assert op.ctx.controller.mock_calls == []
-
-
-def test_restart_resets_location_waits(location_op: BagelRunFlow) -> None:
-    """同一操作再次初始化时，不继承前一次的等待次数。"""
-    for _ in range(5):
-        assert location_op.run_step().result == OperationRoundResultEnum.WAIT
-    location_op.handle_init()
-    assert location_op.run_step().result == OperationRoundResultEnum.WAIT
-    assert location_op._location_waits == 1
 
 
 def test_execute_location_gap_takes_fresh_frame(

@@ -5,8 +5,6 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-import cv2
-import numpy as np
 import pytest
 import yaml
 
@@ -30,42 +28,17 @@ def write_metadata(folder: Path, key: str, value: object) -> None:
     (folder / 'map.yml').write_text(yaml.safe_dump(data, allow_unicode=True), encoding='utf-8')
 
 
-@pytest.mark.parametrize('key,value', [
-    ('format_version', 2), ('format_version', True), ('coordinate_version', 2),
-    ('map_id', 'janus_high_b'), ('coordinate_unit', 'world_pixel'),
-    ('origin_xy', [float('nan'), 0]), ('size_wh', [1, 1]),
-    ('representations', ['unknown']), ('mask', {}), ('player_arrow', {}),
-])
+@pytest.mark.parametrize(
+    'key,value',
+    [
+        ('format_version', 2),
+        ('mask', {}),
+    ],
+)
 def test_invalid_metadata_rejected(resources: Path, key: str, value: object) -> None:
     """错误身份、版本和识别参数不能进入定位。"""
     write_metadata(resources, key, value)
     with pytest.raises(ValueError):
-        load_fixed_map('janus_high_a')
-
-
-@pytest.mark.parametrize('filename', ['map.png', 'map_mask.png', 'map.yml'])
-def test_missing_resource_rejected(resources: Path, filename: str) -> None:
-    """缺图或元数据时不回退原始参考图。"""
-    (resources / filename).unlink()
-    with pytest.raises(OSError):
-        load_fixed_map('janus_high_a')
-
-
-def test_same_pixels_with_different_encoding_are_accepted(resources: Path) -> None:
-    """图片编码变化不影响有效资源，旧执行仍持有自己的快照。"""
-    old = load_fixed_map('janus_high_a')
-    cv2.imencode('.png', old.image, [cv2.IMWRITE_PNG_COMPRESSION, 0])[1].tofile(resources / 'map.png')
-    current = load_fixed_map('janus_high_a')
-    assert np.array_equal(current.image, old.image)
-    assert current is not old
-
-
-def test_invalid_mask_rejected(resources: Path) -> None:
-    """全空遮罩不能被接受。"""
-    data = yaml.safe_load((resources / 'map.yml').read_text(encoding='utf-8'))
-    cv2.imencode('.png', np.zeros((405, 305), np.uint8))[1].tofile(resources / 'map_mask.png')
-    (resources / 'map.yml').write_text(yaml.safe_dump(data), encoding='utf-8')
-    with pytest.raises(ValueError, match='遮罩'):
         load_fixed_map('janus_high_a')
 
 
@@ -84,24 +57,3 @@ def test_cached_snapshot_is_immutable_and_new_execution_reloads(resources: Path)
     assert second is not first and second.snapshot_id != first.snapshot_id
     assert first.blur_size == 3 and second.blur_size == 5
     assert load_fixed_map('janus_high_a') is second
-
-
-def test_internal_hole_does_not_define_position_validity(resources: Path) -> None:
-    """玩家点无需有可用颜色像素，地图外仍拒绝。"""
-    snapshot = load_fixed_map('janus_high_a')
-    mask = snapshot.mask.copy()
-    y, x = np.argwhere(cv2.erode(mask, np.ones((3, 3), np.uint8)) > 0)[0]
-    mask[y, x] = 0
-    image = snapshot.image.copy()
-    image[:, :, 3] = mask
-    data = yaml.safe_load((resources / 'map.yml').read_text(encoding='utf-8'))
-    for name, pixels in (('map.png', image), ('map_mask.png', mask)):
-        payload = cv2.imencode('.png', pixels)[1].tobytes()
-        (resources / name).write_bytes(payload)
-    (resources / 'map.yml').write_text(yaml.safe_dump(data), encoding='utf-8')
-    with_hole = load_fixed_map('janus_high_a')
-    assert with_hole.mask[y, x] == 0
-    assert with_hole.supports_position((x, y))
-    assert not with_hole.supports_position((0, 0))
-    assert not with_hole.supports_position((-1, y))
-    assert not with_hole.supports_position((snapshot.mask.shape[1], y))

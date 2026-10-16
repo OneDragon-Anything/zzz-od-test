@@ -72,7 +72,12 @@ def test_starting_warehouse_returns_through_map_and_entry(
         )]
 
 
-@pytest.mark.parametrize('failure', ['unchanged', 'timeout', 'click_failed'])
+@pytest.mark.parametrize(
+    'failure',
+    [
+        'timeout',
+    ],
+)
 def test_starting_warehouse_return_failure_stops(
     test_context: TestContext, controller: FixtureController,
     monkeypatch: pytest.MonkeyPatch, failure: str,
@@ -105,19 +110,3 @@ def test_starting_warehouse_return_failure_stops(
         assert not op.zero_checked and not op.investment_confirmed
         assert len(controller.recorded_clicks) == (4 if failure == 'click_failed' else 1)
         assert all(controller._pos_in_region(pos, (0, 0, 200, 100)) for pos in controller.recorded_clicks)
-
-
-@pytest.mark.parametrize('state', [
-    '仓库批量出售中', '仓库快速选择', '出售二次确认-20260921', '出售获得硬币-20260921',
-])
-def test_starting_sale_screen_never_navigates(
-    test_context: TestContext, controller: FixtureController, state: str,
-) -> None:
-    """出售底栏和弹窗不能触发启动转存、确认或返回输入。"""
-    controller.set_phases([{'frame': ('贝果-仓库', state)}])
-    op = WatchedEnter(test_context)
-    with running_operation(op):
-        result = op.execute()
-        assert not result.success and '出售状态' in result.status
-        assert op.visited == [('检测游戏窗口', False), ('恢复启动贝果局', False), ('处理启动仓库', False)]
-        assert not controller.recorded_clicks

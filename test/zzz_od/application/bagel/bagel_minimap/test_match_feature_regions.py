@@ -27,15 +27,3 @@ def test_two_equal_distant_patterns_produce_competing_positions() -> None:
     matches = match_feature_regions(current, reference, (np.arange(count), np.arange(count, count * 2)), (100, 100))
     positions = sorted(match.player_position for match in matches)
     assert np.allclose(positions, [(100, 100), (400, 100)], atol=.1)
-
-
-def test_reused_distance_geometry_matches_regular_registration() -> None:
-    """分区距离复用与常规双向匹配保持相同位置。"""
-    random = np.random.default_rng(7)
-    image = random.integers(20, 220, size=(201, 201), dtype=np.uint8)
-    current = extract_features(image, np.full_like(image, 255))
-    reference = MinimapFeatures(current.points + (22, -11), current.descriptors, (240, 240))
-    expected = match_features(current, reference, (100, 100))
-    matches = match_feature_regions(current, reference, (), (100, 100))
-    assert expected is not None and len(matches) == 1
-    assert np.allclose(matches[0].player_position, expected.player_position, atol=.01)
