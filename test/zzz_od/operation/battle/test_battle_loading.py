@@ -148,6 +148,46 @@ def test_custom_timeout_and_repeat_run(clock: Clock) -> None:
     assert op.operation_usage_time == 65
 
 
+class ShiyuLoadingSequence(LoadingSequence):
+    """用真实式舆加载节点回放半场和房间连续加载。"""
+
+    @operation_node(
+        name='等待战斗画面加载',
+        is_start_node=True,
+        node_max_retry_times=60,
+        screenshot_before_round=False,
+    )
+    def wait_loading(self) -> OperationRoundResult:
+        """保持式舆节点的原识别目标和每秒轮询。"""
+        return ShiyuDefenseBattle.wait_battle_screen(self)
+
+
+@pytest.mark.parametrize(
+    'hdd_mode, expected',
+    [
+        (False, [False, True, False, True, True]),
+        (True, [True, True, True, True, True]),
+    ],
+)
+def test_observed_shiyu_loads_reset_budget_for_each_phase(
+    clock: Clock, hdd_mode: bool, expected: list[bool]
+) -> None:
+    """回放实测五次加载跨度，短加载不被前一房间或超时消耗额度。"""
+    # 时序来自 2026-10-16 B 机旧等待插件日志：第四防线两段、第五防线三段。
+    durations = [99.444, 28.096, 72.759, 42.945, 44.964]
+    op = ShiyuLoadingSequence(make_context(hdd_mode), 0)
+    for duration, should_succeed in zip(durations, expected, strict=True):
+        op.ready_after = duration
+        result = op.execute()
+        assert result.success is should_succeed
+        assert op.entered_battle is should_succeed
+        assert result.status == (
+            '进入战斗' if should_succeed else '未找到 按键-普通攻击'
+        )
+        if should_succeed:
+            assert duration <= op.operation_usage_time < duration + 1
+
+
 class HalfSecondSequence(LoadingSequence):
     """沿用真·拿命验收每轮半秒的加载节点。"""
 
