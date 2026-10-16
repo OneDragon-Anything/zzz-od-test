@@ -1,0 +1,236 @@
+{
+  "note": "以下素材遮挡 UID 后以无损 WebP 保存。有损来源无法恢复原 PNG 精度；不得作为无损模板裁剪源。",
+  "images": [
+    {
+      "image": "screens/贝果-研究站/出发切换黑屏-20261006.webp",
+      "pixel_source": "1080p H.264 实机录像第 57 秒解码像素，遮挡 UID 后无损 WebP 编码；不是原生无损模板来源"
+    },
+    {
+      "image": "screens/贝果-仓库/入仓后安全箱空-r07-118s.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-仓库/带物资仓库-r07-117s.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-仓库/成功闭环入仓前-4K缩放.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-仓库/成功闭环入仓后-4K缩放.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/保险箱对换失败前-20260924.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/保险箱对换失败后-20260924.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/保险箱材料不可对换-20260924.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/保险箱途中-录像70s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/保险箱途中-录像71s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/保险箱途中-录像72s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/保险箱途中-录像73s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/停车场已靠右墙-20260923-2106.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/成功闭环到箱-4K缩放.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/成功闭环导航起步-4K缩放.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/成功闭环已入安全箱-4K缩放.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/成功闭环巷口转向-4K缩放.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/成功闭环搜索结果-4K缩放.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/提前左转-录像60s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/提前左转完成-录像61s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/武备箱搜查中-r07.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/武备箱搜索结果-r07.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/电子保险箱F提示.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/电子保险箱仅名称.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/电子保险箱搜索完成.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/电子保险箱第1轮反馈.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/电子保险箱第1轮命中.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/电子保险箱第1轮小圈.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/电子保险箱第2轮反馈.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/电子保险箱第2轮命中.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/电子保险箱第2轮小圈.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/电子保险箱第3轮反馈.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/电子保险箱第3轮命中.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/电子保险箱第3轮小圈.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/电子保险箱第4轮反馈.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/电子保险箱第4轮命中.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/电子保险箱第4轮小圈.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/电子保险箱解锁中-录像.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/白鸽工地出生-20260921-seq5s.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/白鸽工地箱前-录像8s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/白鸽武备箱前-20260926.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/白鸽路线中段-20260926.webp",
+      "pixel_source": "有损 WebP 解码像素"
+    },
+    {
+      "image": "screens/贝果-局内/雅努斯出生-r01-39s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/雅努斯出生-r02-32s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/雅努斯出生-r03-33s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/雅努斯出生-r04-27s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/雅努斯出生-r05-28s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/雅努斯出生-r06-30s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/雅努斯出生-r07-30s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/雅努斯出生-r08-36s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/雅努斯出生-r09-34s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/雅努斯箱前-r07-32s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/雅努斯转角-r01-41.80s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/雅努斯转角-r07-31.25s.webp",
+      "pixel_source": "无损 WebP 归档像素"
+    },
+    {
+      "image": "screens/贝果-局内/四格安全箱部分占用-20261004.webp",
+      "pixel_source": "1920x1080 原始 PNG，遮挡 UID 后无损 WebP；逐像素核对一致",
+      "source_url": "https://github.com/user-attachments/assets/43da0417-79df-49af-b631-9ac9bdc8d6f2",
+      "source_comment": "https://github.com/OneDragon-Anything/ZenlessZoneZero-OneDragon/pull/2820#issuecomment-5979819326",
+      "source_sha256": "449182d93703fdd48a095acafc96fc0ede7ea28f8ac083de0f40aac78340a299",
+      "template": "assets/template/bagel/safe_slot_locked",
+      "crop_xyxy_exclusive": [
+        639,
+        858,
+        687,
+        914
+      ],
+      "processing": "TemplateInfo 矩形裁剪，原像素、全白掩码，无缩放或调色"
+    }
+  ]
+}

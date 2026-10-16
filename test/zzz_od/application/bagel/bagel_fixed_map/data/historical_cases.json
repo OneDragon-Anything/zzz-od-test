@@ -1,0 +1,327 @@
+[
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "雅努斯出生-r01-39s.webp",
+    "expected": [
+      100,
+      100
+    ],
+    "tolerance": 1
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "雅努斯出生-r07-30s.webp",
+    "expected": [
+      99,
+      100
+    ],
+    "tolerance": 1
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "雅努斯箱前-r07-32s.webp",
+    "expected": [
+      113,
+      84
+    ],
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "保险箱转向定位失败-20260921.webp",
+    "expected": [
+      115.4,
+      81.7
+    ],
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "保险箱途中定位失败-20260921.webp",
+    "expected": [
+      149.8,
+      83.8
+    ],
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "提前左转-录像60s.webp",
+    "expected": [
+      110,
+      99.4
+    ],
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "提前左转完成-录像61s.webp",
+    "expected": [
+      110.3,
+      97.3
+    ],
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "保险箱途中-录像71s.webp",
+    "expected": [
+      159.8,
+      84.8
+    ],
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "保险箱途中-录像72s.webp",
+    "expected": [
+      182.7,
+      88.6
+    ],
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "雅努斯转角定位失败-1440缩放.webp",
+    "expected": [
+      118.2,
+      93.7
+    ],
+    "tolerance": 1
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "雅努斯转角-r01-41.80s.webp",
+    "expected": [
+      119.4,
+      93.6
+    ],
+    "tolerance": 1
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "雅努斯转角-r07-31.25s.webp",
+    "expected": [
+      113.6,
+      97.0
+    ],
+    "tolerance": 1
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "批次失败-BagelNavigate_1789884125881.webp",
+    "expected": [
+      118,
+      98
+    ],
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "批次失败-BagelNavigate_1789885044619.webp",
+    "expected": [
+      118,
+      98
+    ],
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "批次失败-BagelNavigate_1789886244451.webp",
+    "expected": [
+      118,
+      98
+    ],
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "批次失败-BagelNavigate_1789886664579.webp",
+    "expected": [
+      118,
+      98
+    ],
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "批次失败-BagelNavigate_1789887360086.webp",
+    "expected": [
+      118,
+      98
+    ],
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "雅努斯出生-r02-32s.webp",
+    "expected": null,
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "雅努斯出生-r03-33s.webp",
+    "expected": null,
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "雅努斯出生-r04-27s.webp",
+    "expected": null,
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "雅努斯出生-r05-28s.webp",
+    "expected": null,
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "雅努斯出生-r06-30s.webp",
+    "expected": null,
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "雅努斯出生-r08-36s.webp",
+    "expected": null,
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "雅努斯出生-r09-34s.webp",
+    "expected": null,
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "实机非A-r1.webp",
+    "expected": null,
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "实机非A-r2.webp",
+    "expected": null,
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "实机非A-r3.webp",
+    "expected": null,
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "实机非A-r4.webp",
+    "expected": null,
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_b",
+    "label": "B",
+    "image": "白鸽工地出生-20260921-seq5s.webp",
+    "expected": [
+      100,
+      100
+    ],
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_b",
+    "label": "B",
+    "image": "白鸽工地出生复核失败-20260922.webp",
+    "expected": [
+      100,
+      100
+    ],
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_b",
+    "label": "B",
+    "image": "白鸽出生定位不稳-导航前-20260929.webp",
+    "expected": [
+      100,
+      100
+    ],
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_b",
+    "label": "B",
+    "image": "白鸽出生定位不稳-导航后-20260929.webp",
+    "expected": [
+      100,
+      100
+    ],
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_b",
+    "label": "B",
+    "image": "白鸽导航色调偏紫定位失败-20260929.webp",
+    "expected": [
+      109.3,
+      92.4
+    ],
+    "tolerance": 3
+  },
+  {
+    "map_id": "janus_high_b",
+    "label": "B",
+    "image": "雅努斯出生-r01-39s.webp",
+    "expected": null,
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_b",
+    "label": "B",
+    "image": "雅努斯出生-r02-32s.webp",
+    "expected": null,
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_a",
+    "label": "A",
+    "image": "__blank__",
+    "expected": null,
+    "tolerance": 2
+  },
+  {
+    "map_id": "janus_high_b",
+    "label": "B",
+    "image": "__blank__",
+    "expected": null,
+    "tolerance": 2
+  }
+]

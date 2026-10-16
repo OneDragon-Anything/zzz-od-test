@@ -1,0 +1,38 @@
+map_id: janus_high_a
+waypoints:
+- name: 巷口左转
+  stage: box
+  role: turn
+  xy:
+  - 110
+  - 100
+- name: 轮胎旁武备箱前
+  stage: box
+  role: target
+  xy:
+  - 110
+  - 84
+- name: 电子保险箱巷口转向
+  stage: safe
+  role: entry
+  xy:
+  - 186.6
+  - 84.9
+- name: 电子保险箱楼角
+  stage: safe
+  role: turn
+  xy:
+  - 201.6
+  - 109.5
+- name: 电子保险箱接近点
+  stage: safe
+  role: approach
+  xy:
+  - 213
+  - 110
+- name: 电子保险箱前
+  stage: safe
+  role: target
+  xy:
+  - 218
+  - 110
