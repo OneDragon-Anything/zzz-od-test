@@ -9,8 +9,10 @@
 在 ZZZ 的等价防线 —— 该 bug 在 ZZZ 虽不存在,但有测试守着,将来重构不易改没。
 """
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
 from test.conftest import TestContext
 
 from zzz_od.application.charge_plan.charge_plan_app import ChargePlanApp
@@ -376,3 +378,58 @@ def test_exchange_ether_battery_is_dispatched_in_transport(
 
     assert result.is_success
     assert result.status == '合成电池'
+
+
+def test_legacy_area_patrol_mission_type_name_is_migrated(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """旧的区域巡防副本名在加载时改成当前名称，并写回配置。"""
+    service = CompendiumService()
+    service.reload()
+    assert service.get_mission_type_data('训练', '区域巡防', '迅脊与裂爪') is not None
+    assert service.get_mission_type_data('训练', '区域巡防', '迅雷与裂爪') is None
+
+    config_dir = tmp_path / 'config' / '00' / 'one_dragon'
+    config_dir.mkdir(parents=True)
+    config_path = config_dir / 'charge_plan.yml'
+    config_path.write_text(
+        """
+plan_list:
+- tab_name: 训练
+  category_name: 区域巡防
+  mission_type_name: 迅雷与裂爪
+  mission_name: 谶羽之誓
+- tab_name: 训练
+  category_name: 区域巡防
+  mission_type_name: 迅脊与裂爪
+  mission_name: 荆棘玫瑰
+- tab_name: 训练
+  category_name: 区域巡防
+  mission_type_name: 高塔与巨炮
+  mission_name: 啄木鸟电音
+""".strip(),
+        encoding='utf-8',
+    )
+    monkeypatch.setattr(
+        'one_dragon.base.operation.application.application_config.os_utils.get_path_under_work_dir',
+        lambda *parts: str(tmp_path.joinpath(*parts)),
+    )
+
+    config = ChargePlanConfig(0, 'one_dragon')
+
+    assert [plan.mission_type_name for plan in config.plan_list] == [
+        '迅脊与裂爪',
+        '迅脊与裂爪',
+        '高塔与巨炮',
+    ]
+    saved = config_path.read_text(encoding='utf-8')
+    assert '迅雷与裂爪' not in saved
+    assert saved.count('迅脊与裂爪') == 2
+
+    reloaded = ChargePlanConfig(0, 'one_dragon')
+    assert [plan.mission_type_name for plan in reloaded.plan_list] == [
+        '迅脊与裂爪',
+        '迅脊与裂爪',
+        '高塔与巨炮',
+    ]
