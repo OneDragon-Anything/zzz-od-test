@@ -139,14 +139,22 @@ def test_delete_notorious_hunt():
 
 # === standalone_app ===
 
-def _make_standalone_app_backend(registered_apps: set[str] | None = None):
-    """mock backend for standalone_app(app_id 注册校验)。"""
+def _make_standalone_app_backend(
+    registered_apps: set[str] | None = None,
+    internal_apps: set[str] | None = None,
+) -> tuple[MagicMock, MagicMock]:
+    """mock backend for standalone_app 的注册与固定入口校验。"""
     if registered_apps is None:
         registered_apps = {'coffee', 'charge_plan'}
+    if internal_apps is None:
+        internal_apps = set()
     config = MagicMock()
     config.app_list = ['coffee']
     run_context = MagicMock()
     run_context.is_app_registered = lambda app_id: app_id in registered_apps
+    run_context.is_app_standalone_available = (
+        lambda app_id: app_id in registered_apps and app_id not in internal_apps
+    )
     ctx = MagicMock()
     ctx.standalone_app_config = config
     ctx.run_context = run_context
@@ -172,6 +180,25 @@ def test_add_standalone_app_unregistered():
     result = asyncio.run(tool('standalone_app', 'app_list', {'app_id': 'nonexistent'}))
     assert result['ok'] is False
     assert '未注册' in result['error']
+
+
+def test_add_standalone_app_rejects_internal_app() -> None:
+    """internal 应用不能写入 standalone app_list。"""
+    backend, config = _make_standalone_app_backend(
+        registered_apps={'coffee', 'internal_app'},
+        internal_apps={'internal_app'},
+    )
+    tool = make_add_config_item(backend)
+
+    result = asyncio.run(tool(
+        'standalone_app',
+        'app_list',
+        {'app_id': 'internal_app'},
+    ))
+
+    assert result['ok'] is False
+    assert '只能通过固定入口运行' in result['error']
+    assert config.app_list == ['coffee']
 
 
 def test_delete_standalone_app():
@@ -302,16 +329,41 @@ def test_get_config_standalone_app():
     assert result['value'] == 'coffee'
 
 
-def test_set_config_standalone_app():
+def test_set_config_standalone_app() -> None:
     """standalone_app set 写字段。"""
     backend, config = _make_standalone_app_backend()
     config.data = {}
+    config.app_list = ['coffee', 'charge_plan']
     config.update = MagicMock()
     config.save = MagicMock()
     tool = make_set_config(backend)
     result = asyncio.run(tool('standalone_app', 'active_app_id', 'charge_plan'))
     assert result['ok'] is True
     config.update.assert_called_with('active_app_id', 'charge_plan')
+
+
+def test_set_active_standalone_app_rejects_internal_app() -> None:
+    """internal 应用即使残留在 YAML app_list 中也不能被激活。"""
+    backend, config = _make_standalone_app_backend(
+        registered_apps={'coffee', 'internal_app'},
+        internal_apps={'internal_app'},
+    )
+    config.data = {}
+    config.app_list = ['coffee', 'internal_app']
+    config.update = MagicMock()
+    config.save = MagicMock()
+    tool = make_set_config(backend)
+
+    result = asyncio.run(tool(
+        'standalone_app',
+        'active_app_id',
+        'internal_app',
+    ))
+
+    assert result['ok'] is False
+    assert '只能通过固定入口运行' in result['error']
+    config.update.assert_not_called()
+    config.save.assert_not_called()
 
 
 def test_get_config_group():
