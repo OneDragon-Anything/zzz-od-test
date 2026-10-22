@@ -7,9 +7,28 @@ import pytest
 from PySide6.QtWidgets import QApplication
 
 import one_dragon_qt.view.code_interface as code_interface_module
+from one_dragon.base.config.config_item import ConfigItem
 from one_dragon.envs.git_service import GitSyncStatus
 from one_dragon_qt.widgets.install_card.base_install_card import InstallRunner
 from one_dragon_qt.widgets.install_card.code_install_card import CodeInstallCard
+
+
+def test_branch_options_use_repo_config_order_and_labels() -> None:
+    _app = QApplication.instance() or QApplication([])
+    branch_options = [
+        ConfigItem('预览分支', 'preview', '同步预览版本'),
+        ConfigItem('稳定分支', 'develop', '同步稳定版本'),
+    ]
+    ctx = SimpleNamespace(
+        repo_config=SimpleNamespace(branch_options=branch_options),
+        env_config=SimpleNamespace(git_branch='develop'),
+        git_service=SimpleNamespace(),
+    )
+    card = CodeInstallCard(ctx)
+
+    assert card.git_branches == branch_options
+
+    card.deleteLater()
 
 
 @pytest.mark.parametrize(
@@ -69,14 +88,14 @@ def test_install_runner_receives_success_bool_from_code_card() -> None:
 @pytest.mark.parametrize(
     ('status', 'expected_message'),
     [
-        (GitSyncStatus.SUCCESS, '更新完成，重启后生效'),
+        (GitSyncStatus.SUCCESS, '更新完成, 重启后生效'),
         (GitSyncStatus.UP_TO_DATE, '当前已是最新版本'),
-        (GitSyncStatus.RUNTIME_INCOMPATIBLE, '新版本需要更新启动器才能使用，请先更新启动器'),
-        (GitSyncStatus.BUILTIN_TAG_UNAVAILABLE, '暂时无法获取当前版本所需文件，请稍后重试'),
-        (GitSyncStatus.REMOTE_UNAVAILABLE, '暂时无法获取更新，请稍后重试或切换代码源'),
-        (GitSyncStatus.LOCAL_CHANGES, '检测到程序文件有改动，未自动更新。可开启“强制更新”后重试'),
-        (GitSyncStatus.LOCAL_UPDATE_FAILED, '更新没有完成，请重启后重试；仍然失败时请重新安装'),
-        (GitSyncStatus.FAILED, '更新失败，请稍后重试；仍然失败时请查看日志'),
+        (GitSyncStatus.RUNTIME_INCOMPATIBLE, '新版本需要更新启动器才能使用, 请先更新启动器'),
+        (GitSyncStatus.BUILTIN_TAG_UNAVAILABLE, '暂时无法获取当前版本所需文件, 请稍后重试'),
+        (GitSyncStatus.REMOTE_UNAVAILABLE, '暂时无法获取更新, 请稍后重试或切换代码源'),
+        (GitSyncStatus.LOCAL_CHANGES, '检测到程序文件有改动，未自动更新, 可开启“强制更新”后重试'),
+        (GitSyncStatus.LOCAL_UPDATE_FAILED, '更新没有完成, 请重启后重试；仍然失败时请重新安装'),
+        (GitSyncStatus.FAILED, '更新失败, 请稍后重试；仍然失败时请查看日志'),
     ],
 )
 def test_sync_status_uses_user_facing_message(

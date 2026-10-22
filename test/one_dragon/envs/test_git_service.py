@@ -18,6 +18,7 @@ from one_dragon.envs.git_service import (
     _fetch_remote_worker,
     _FetchProgressRemoteCallbacks,
     _get_repository_objects_path,
+    _is_process_running,
     _remove_temp_repo,
     _sync_shallow_file,
 )
@@ -43,11 +44,12 @@ GITEE_REPOSITORY = RepositoryItem(
 )
 
 
-def create_repo_config() -> SimpleNamespace:
+def create_repo_config(primary_branch: str = 'main') -> SimpleNamespace:
     repositories = (GITHUB_REPOSITORY, CNB_REPOSITORY, GITEE_REPOSITORY)
     return SimpleNamespace(
         repositories=repositories,
         primary_repository=GITHUB_REPOSITORY,
+        primary_branch=primary_branch,
         find_repository=lambda value: next(
             (
                 repository
@@ -96,6 +98,14 @@ def test_env_config_last_repository_url_defaults_to_empty(monkeypatch: pytest.Mo
     assert env_config.last_repository_url == ''
 
 
+def test_env_config_git_branch_defaults_to_primary_branch(monkeypatch: pytest.MonkeyPatch) -> None:
+    env_config = EnvConfig.__new__(EnvConfig)
+    env_config.repo_config = SimpleNamespace(primary_branch='develop')
+    monkeypatch.setattr(env_config, 'get', lambda key, default=None: default)
+
+    assert env_config.git_branch == 'develop'
+
+
 def test_remove_temp_repo_handles_readonly_pack_files(tmp_path: Path) -> None:
     temp_repo_dir = tmp_path / 'fetch_test'
     pack_path = temp_repo_dir / 'objects' / 'pack' / 'test.pack'
@@ -128,6 +138,23 @@ def test_remove_temp_repo_defers_windows_busy_pack(
 
     assert info_messages == ['Git fetch 临时仓库仍被占用，将在下次启动时清理: fetch_busy']
     assert warning_messages == []
+
+
+def test_is_process_running_uses_psutil_pid_exists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checked_process_ids: list[int] = []
+    monkeypatch.setattr(
+        git_service_module.psutil,
+        'pid_exists',
+        lambda process_id: checked_process_ids.append(process_id) or process_id == 456,
+    )
+
+    assert _is_process_running(123) is False
+    assert _is_process_running(456) is True
+    assert _is_process_running(0) is True
+    assert _is_process_running(-1) is True
+    assert checked_process_ids == [123, 456]
 
 
 def test_cleanup_stale_fetch_repositories_removes_dead_and_legacy_directories(
@@ -189,27 +216,27 @@ def test_sync_shallow_file_preserves_lf_and_repository_reopens(tmp_path: Path) -
     target_path = tmp_path / 'target'
     repo = pygit2.init_repository(str(target_path))
 
-    _sync_shallow_file(repo, str(temp_repo_dir))
+    _sync_shallow_file(repo, str(temp_repo_dir), None, True)
 
     target_shallow = Path(repo.path) / 'shallow'
     assert target_shallow.read_bytes() == shallow_bytes
     pygit2.Repository(str(target_path))
 
 
-def test_open_repo_does_not_modify_existing_crlf_shallow(tmp_path: Path) -> None:
+def test_open_repo_reports_existing_crlf_shallow_without_modifying_it(tmp_path: Path) -> None:
     target_path = tmp_path / 'target'
     repo = pygit2.init_repository(str(target_path))
     shallow_path = Path(repo.path) / 'shallow'
     shallow_bytes = b'5d5ef39523c737d7d0b16d00dd91b88a7a0bff4a\r\n'
     shallow_path.write_bytes(shallow_bytes)
+    repo.free()
     git_service = GitService(
-        SimpleNamespace(),
         SimpleNamespace(),
         create_repo_config(),
         repo_dir=str(target_path),
     )
 
-    with pytest.raises(pygit2.GitError):
+    with pytest.raises(git_service_module._LocalGitMetadataError):
         git_service._open_repo()
 
     assert shallow_path.read_bytes() == shallow_bytes
@@ -259,7 +286,12 @@ def test_fetch_worker_uses_alternates_for_depth_zero(tmp_path: Path) -> None:
         abandoned,
     )
 
-    assert messages[-1] == {'type': 'result', 'success': True, 'depth': 0}
+    assert messages[-1] == {
+        'type': 'result',
+        'success': True,
+        'depth': 0,
+        'shallow_authoritative': True,
+    }
     alternates_path = temp_repo_path / 'objects' / 'info' / 'alternates'
     assert alternates_path.read_text(encoding='utf-8') == f'{source_objects_path.resolve()}\n'
     temp_repo = pygit2.Repository(str(temp_repo_path))
@@ -273,7 +305,12 @@ def test_fetch_worker_uses_alternates_for_depth_zero(tmp_path: Path) -> None:
             None,
             [
                 {'type': 'progress', 'progress': 0.0, 'message': '远程消息: Total 4 (delta 1)'},
-                {'type': 'result', 'success': True, 'depth': 1},
+                {
+                    'type': 'result',
+                    'success': True,
+                    'depth': 1,
+                    'shallow_authoritative': True,
+                },
             ],
         ),
         (
@@ -302,8 +339,18 @@ def test_fetch_worker_flushes_sideband_only_after_success(
             if fetch_error is not None:
                 raise fetch_error
 
+    fake_remote = FakeRemote()
+
+    class FakeRemotes:
+        def create(self, name: str, url: str) -> FakeRemote:
+            return fake_remote
+
+        def __getitem__(self, name: str) -> FakeRemote:
+            return fake_remote
+
     fake_repo = SimpleNamespace(
-        remotes=SimpleNamespace(create=lambda name, url: FakeRemote()),
+        config={},
+        remotes=FakeRemotes(),
     )
     monkeypatch.setattr(git_service_module, 'init_repository', lambda path, bare: fake_repo)
     messages: list[dict[str, object]] = []
@@ -339,11 +386,28 @@ def test_fetch_worker_uses_new_callbacks_after_depth_zero_failure(
                 raise KeyError('object not found')
             callbacks.sideband_progress('Counting objects: 100% (2/2), done.\n')
 
+    fake_remote = FakeRemote()
+
+    class FakeRemotes:
+        def create(self, name: str, url: str) -> FakeRemote:
+            return fake_remote
+
+        def __getitem__(self, name: str) -> FakeRemote:
+            return fake_remote
+
     fake_repo = SimpleNamespace(
-        remotes=SimpleNamespace(create=lambda name, url: FakeRemote()),
+        config={},
+        remotes=FakeRemotes(),
+        free=lambda: None,
     )
     monkeypatch.setattr(git_service_module, 'init_repository', lambda path, bare: fake_repo)
+    monkeypatch.setattr(git_service_module, 'Repository', lambda path: fake_repo)
     monkeypatch.setattr(git_service_module, '_configure_alternate_objects', lambda repo, path: True)
+    monkeypatch.setattr(
+        git_service_module,
+        '_restore_temp_fetch_state',
+        lambda repo, path, snapshot, refs: fake_repo,
+    )
     messages: list[dict[str, object]] = []
 
     _fetch_remote_worker(
@@ -363,7 +427,12 @@ def test_fetch_worker_uses_new_callbacks_after_depth_zero_failure(
             'progress': 0.0,
             'message': '远程消息: 统计对象: 100% (2/2), done.',
         },
-        {'type': 'result', 'success': True, 'depth': 1},
+        {
+            'type': 'result',
+            'success': True,
+            'depth': 1,
+            'shallow_authoritative': True,
+        },
     ]
 
 
@@ -535,7 +604,6 @@ class TestFetchProgressRemoteCallbacks:
 
     @pytest.fixture
     def git_service(self) -> GitService:
-        project_config = SimpleNamespace()
         env_config = SimpleNamespace(
             git_branch='main',
             git_remote='origin',
@@ -547,7 +615,7 @@ class TestFetchProgressRemoteCallbacks:
             personal_proxy='',
         )
         repo_config = create_repo_config()
-        return GitService(project_config, env_config, repo_config, repo_dir='.')
+        return GitService(env_config, repo_config, repo_dir='.')
 
     def test_fetch_remote_reports_progress_and_success(
         self,
@@ -555,7 +623,7 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
-        repo = SimpleNamespace(references={})
+        repo = SimpleNamespace(path=str(tmp_path / 'repo.git'), references={})
         events: list[tuple[float, str]] = []
         imported: list[str] = []
 
@@ -574,7 +642,7 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_import_fetch_result',
-            lambda temp_repo_dir, progress_callback, stage_start, stage_end, tag_name: imported.append(temp_repo_dir),
+            lambda temp_repo_dir, *args: imported.append(temp_repo_dir),
         )
 
         git_service._fetch_remote_once(
@@ -635,7 +703,6 @@ class TestFetchProgressRemoteCallbacks:
             personal_proxy='',
         )
         git_service = GitService(
-            SimpleNamespace(),
             env_config,
             create_repo_config(),
             repo_dir=str(target_path),
@@ -687,7 +754,6 @@ class TestFetchProgressRemoteCallbacks:
             personal_proxy='',
         )
         git_service = GitService(
-            SimpleNamespace(),
             env_config,
             create_repo_config(),
             repo_dir=str(target_path),
@@ -745,6 +811,9 @@ class TestFetchProgressRemoteCallbacks:
             stage_start: float,
             stage_end: float,
             tag_name: str | None,
+            import_primary_branch: bool,
+            original_shallow_snapshot: bytes | None,
+            shallow_authoritative: bool,
         ) -> None:
             nonlocal imported
             imported = True
@@ -758,7 +827,11 @@ class TestFetchProgressRemoteCallbacks:
             'get_path_under_work_dir',
             lambda *sub_paths: str(tmp_path.joinpath(*sub_paths)),
         )
-        monkeypatch.setattr(git_service, '_open_repo', lambda: SimpleNamespace(references={}))
+        monkeypatch.setattr(
+            git_service,
+            '_open_repo',
+            lambda: SimpleNamespace(path=str(tmp_path / 'repo.git'), references={}),
+        )
         monkeypatch.setattr(git_service, '_import_fetch_result', fake_import)
 
         started_at = time.monotonic()
@@ -866,7 +939,7 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
-        repo = SimpleNamespace(references={})
+        repo = SimpleNamespace(path=str(tmp_path / 'repo.git'), references={})
         imported: list[str] = []
         abandoned_states: list[Event] = []
         worker_count = 0
@@ -897,7 +970,7 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_import_fetch_result',
-            lambda temp_repo_dir, progress_callback, stage_start, stage_end, tag_name: imported.append(temp_repo_dir),
+            lambda temp_repo_dir, *args: imported.append(temp_repo_dir),
         )
         monkeypatch.setattr(git_service, '_restore_origin', lambda: True)
 
@@ -1112,7 +1185,6 @@ class TestFetchProgressRemoteCallbacks:
         pygit2.init_repository(str(repo_path))
         env_config = SimpleNamespace(git_branch='main')
         git_service = GitService(
-            SimpleNamespace(),
             env_config,
             create_repo_config(),
             repo_dir=str(repo_path),
@@ -1283,18 +1355,19 @@ class TestFetchProgressRemoteCallbacks:
         assert git_service._fetch_remote(tag_name='v1.0.0')[0] is GitSyncStatus.SUCCESS
         assert rebuild_calls == [(None, 'v1.0.0')]
 
-    def test_missing_object_failure_rebuilds_when_origin_restore_fails(
+    def test_missing_object_failure_does_not_restore_damaged_repository_origin(
         self,
         git_service: GitService,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         rebuild_calls: list[object] = []
+        restore_calls: list[bool] = []
         monkeypatch.setattr(
             git_service,
             '_fetch_remote_once',
             lambda *args: (_ for _ in ()).throw(KeyError('object not found - no match for id')),
         )
-        monkeypatch.setattr(git_service, '_restore_origin', lambda: False)
+        monkeypatch.setattr(git_service, '_restore_origin', lambda: restore_calls.append(True) or True)
         monkeypatch.setattr(
             git_service,
             '_rebuild_repository',
@@ -1304,9 +1377,10 @@ class TestFetchProgressRemoteCallbacks:
         )
 
         assert git_service._fetch_remote()[0] is GitSyncStatus.SUCCESS
+        assert restore_calls == []
         assert rebuild_calls == [None]
 
-    def test_missing_object_and_network_failure_trigger_repository_rebuild(
+    def test_missing_object_stops_source_fallback_and_triggers_rebuild(
         self,
         git_service: GitService,
         monkeypatch: pytest.MonkeyPatch,
@@ -1314,14 +1388,12 @@ class TestFetchProgressRemoteCallbacks:
         attempts = 0
         rebuild_calls: list[object] = []
 
-        def mixed_failure(*args: object) -> None:
+        def missing_object(*args: object) -> None:
             nonlocal attempts
             attempts += 1
-            if attempts == 2:
-                raise TimeoutError('模拟超时')
             raise KeyError('object not found - no match for id')
 
-        monkeypatch.setattr(git_service, '_fetch_remote_once', mixed_failure)
+        monkeypatch.setattr(git_service, '_fetch_remote_once', missing_object)
         monkeypatch.setattr(git_service, '_restore_origin', lambda: True)
         monkeypatch.setattr(
             git_service,
@@ -1332,7 +1404,36 @@ class TestFetchProgressRemoteCallbacks:
         )
 
         assert git_service._fetch_remote()[0] is GitSyncStatus.SUCCESS
+        assert attempts == 1
         assert rebuild_calls == [None]
+
+    def test_repository_damage_during_rebuild_does_not_rebuild_again(
+        self,
+        git_service: GitService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        rebuild_calls: list[object] = []
+        restore_calls: list[bool] = []
+        git_service._rebuilding_repository = True
+        monkeypatch.setattr(
+            git_service,
+            '_fetch_remote_once',
+            lambda *args: (_ for _ in ()).throw(
+                git_service_module._LocalGitMetadataError('damaged')
+            ),
+        )
+        monkeypatch.setattr(git_service, '_restore_origin', lambda: restore_calls.append(True) or True)
+        monkeypatch.setattr(
+            git_service,
+            '_rebuild_repository',
+            lambda progress_callback, initial_tag: (
+                rebuild_calls.append(progress_callback) or (GitSyncStatus.SUCCESS, 'ok')
+            ),
+        )
+
+        assert git_service._fetch_remote()[0] is GitSyncStatus.LOCAL_UPDATE_FAILED
+        assert restore_calls == []
+        assert rebuild_calls == []
 
     def test_network_failures_do_not_trigger_repository_rebuild(
         self,
@@ -1357,6 +1458,62 @@ class TestFetchProgressRemoteCallbacks:
         assert git_service._fetch_remote()[0] is GitSyncStatus.REMOTE_UNAVAILABLE
         assert rebuild_calls == []
 
+    def test_rebuild_repository_skips_linked_worktree(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        repo_path = tmp_path / 'repo'
+        git_dir = tmp_path / 'common.git' / 'worktrees' / 'feature'
+        git_dir.mkdir(parents=True)
+        (git_dir / 'commondir').write_text('../..\n', encoding='utf-8')
+        git_service = GitService(
+            SimpleNamespace(),
+            create_repo_config(),
+            repo_dir=str(repo_path),
+        )
+        clone_calls: list[object] = []
+        monkeypatch.setattr(
+            git_service_module,
+            'discover_repository',
+            lambda path: str(git_dir),
+        )
+        monkeypatch.setattr(
+            git_service,
+            '_clone_repository',
+            lambda progress_callback, initial_tag: clone_calls.append(progress_callback),
+        )
+
+        assert git_service._rebuild_repository(None)[0] is GitSyncStatus.LOCAL_UPDATE_FAILED
+        assert clone_calls == []
+        assert git_dir.is_dir()
+
+    def test_rebuild_repository_skips_main_repository_with_linked_worktrees(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        repo_path = tmp_path / 'repo'
+        repo = pygit2.init_repository(str(repo_path))
+        git_dir = Path(repo.path)
+        (git_dir / 'worktrees' / 'feature').mkdir(parents=True)
+        repo.free()
+        git_service = GitService(
+            SimpleNamespace(),
+            create_repo_config(),
+            repo_dir=str(repo_path),
+        )
+        clone_calls: list[object] = []
+        monkeypatch.setattr(
+            git_service,
+            '_clone_repository',
+            lambda progress_callback, initial_tag: clone_calls.append(progress_callback),
+        )
+
+        assert git_service._rebuild_repository(None)[0] is GitSyncStatus.LOCAL_UPDATE_FAILED
+        assert clone_calls == []
+        assert git_dir.is_dir()
+
     def test_rebuild_repository_skips_repository_with_extra_remote(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -1366,8 +1523,8 @@ class TestFetchProgressRemoteCallbacks:
         repo = pygit2.init_repository(str(repo_path))
         repo.remotes.create('origin', 'https://origin.example/repo.git')
         repo.remotes.create('upstream', 'https://upstream.example/repo.git')
+        repo.free()
         git_service = GitService(
-            SimpleNamespace(),
             SimpleNamespace(),
             create_repo_config(),
             repo_dir=str(repo_path),
@@ -1376,7 +1533,7 @@ class TestFetchProgressRemoteCallbacks:
         monkeypatch.setattr(
             git_service,
             '_clone_repository',
-            lambda progress_callback: clone_calls.append(progress_callback),
+            lambda progress_callback, initial_tag: clone_calls.append(progress_callback),
         )
 
         assert git_service._rebuild_repository(None)[0] is GitSyncStatus.LOCAL_UPDATE_FAILED
@@ -1384,15 +1541,52 @@ class TestFetchProgressRemoteCallbacks:
         assert (repo_path / '.git').is_dir()
         assert list(repo_path.glob('.git.corrupted.*')) == []
 
-    def test_rebuild_repository_backs_up_git_directory_and_keeps_initial_tag(
+    def test_rebuild_repository_ignores_internal_fetch_remote(
         self,
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
         repo_path = tmp_path / 'repo'
-        pygit2.init_repository(str(repo_path))
+        repo = pygit2.init_repository(str(repo_path))
+        repo.remotes.create('origin', 'https://origin.example/repo.git')
+        # 内部导入 remote 即使残留（进程被强杀等场景），也不应阻止自动重建
+        repo.remotes.create('one-dragon-fetch-abcdef', 'https://origin.example/repo.git')
+        repo.free()
         git_service = GitService(
             SimpleNamespace(),
+            create_repo_config(),
+            repo_dir=str(repo_path),
+        )
+        clone_calls: list[object] = []
+
+        def fake_clone(
+            progress_callback: object,
+            initial_tag: str | None,
+        ) -> tuple[GitSyncStatus, str]:
+            clone_calls.append(progress_callback)
+            pygit2.init_repository(str(repo_path))
+            return GitSyncStatus.SUCCESS, 'ok'
+
+        monkeypatch.setattr(git_service, '_clone_repository', fake_clone)
+
+        assert git_service._rebuild_repository(None)[0] is GitSyncStatus.SUCCESS
+        assert clone_calls == [None]
+        assert (repo_path / '.git').is_dir()
+        assert len(list(repo_path.glob('.git.corrupted.*'))) == 1
+
+    def test_rebuild_repository_does_not_parse_remotes_when_repository_cannot_open(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        repo_path = tmp_path / 'repo'
+        repo = pygit2.init_repository(str(repo_path))
+        repo.remotes.create('origin', 'https://origin.example/repo.git')
+        repo.remotes.create('upstream', 'https://upstream.example/repo.git')
+        shallow_bytes = b'invalid\r\n'
+        (Path(repo.path) / 'shallow').write_bytes(shallow_bytes)
+        repo.free()
+        git_service = GitService(
             SimpleNamespace(),
             create_repo_config(),
             repo_dir=str(repo_path),
@@ -1413,7 +1607,37 @@ class TestFetchProgressRemoteCallbacks:
         assert git_service._rebuild_repository(None, 'v1.0.0')[0] is GitSyncStatus.SUCCESS
         assert received_tags == ['v1.0.0']
         assert (repo_path / '.git').is_dir()
-        assert len(list(repo_path.glob('.git.corrupted.*'))) == 1
+        backup_dirs = list(repo_path.glob('.git.corrupted.*'))
+        assert len(backup_dirs) == 1
+        assert (backup_dirs[0] / 'shallow').read_bytes() == shallow_bytes
+
+    def test_rebuild_repository_failure_keeps_corrupted_backup(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        repo_path = tmp_path / 'repo'
+        pygit2.init_repository(str(repo_path))
+        git_service = GitService(
+            SimpleNamespace(),
+            create_repo_config(),
+            repo_dir=str(repo_path),
+        )
+        monkeypatch.setattr(
+            git_service,
+            '_clone_repository',
+            lambda progress_callback, initial_tag: (
+                GitSyncStatus.REMOTE_UNAVAILABLE,
+                '暂时无法获取更新',
+            ),
+        )
+
+        status, _ = git_service._rebuild_repository(None)
+
+        assert status is GitSyncStatus.LOCAL_UPDATE_FAILED
+        backup_dirs = list(repo_path.glob('.git.corrupted.*'))
+        assert len(backup_dirs) == 1
+        assert (backup_dirs[0] / 'config').is_file()
 
     def test_fetch_timeout_settings_are_configured_once(
         self,
