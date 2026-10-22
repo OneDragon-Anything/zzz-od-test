@@ -85,6 +85,51 @@ def test_import_directory_rejects_missing_const(
     assert "缺少 *_const.py" in result.message
 
 
+def test_import_directory_returns_failure_when_validation_has_os_error(
+    plugin_import_service: PluginImportService,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_dir = tmp_path / "unreadable"
+    source_dir.mkdir()
+    (source_dir / "unreadable_factory.py").write_text("", encoding="utf-8")
+    (source_dir / "unreadable_const.py").write_text("", encoding="utf-8")
+
+    def fail_validation(path: Path) -> None:
+        raise OSError("模拟目录遍历失败")
+
+    monkeypatch.setattr(
+        plugin_import_service,
+        "_validate_directory_symlinks",
+        fail_validation,
+    )
+
+    result = plugin_import_service.import_directory(source_dir)
+
+    assert not result.success
+    assert result.message == "模拟目录遍历失败"
+
+
+def test_import_plugins_from_directory_returns_failure_when_analysis_has_os_error(
+    plugin_import_service: PluginImportService,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_dir = tmp_path / "unreadable_collection"
+    source_dir.mkdir()
+
+    def fail_analysis(path: Path) -> None:
+        raise OSError("模拟集合目录遍历失败")
+
+    monkeypatch.setattr(plugin_import_service, "_analyze_directory", fail_analysis)
+
+    results = plugin_import_service.import_plugins_from_directory(source_dir)
+
+    assert len(results) == 1
+    assert not results[0].success
+    assert results[0].message == "模拟集合目录遍历失败"
+
+
 def test_import_directory_keeps_old_version_when_copy_fails(
     plugin_import_service: PluginImportService,
     monkeypatch: pytest.MonkeyPatch,
@@ -267,6 +312,36 @@ def test_import_plugins_from_directory_rejects_symlink_factory_inside_plugin_roo
     assert len(results) == 1
     assert not results[0].success
     assert "插件根第一层 Python 文件不能是符号链接" in results[0].message
+    assert not plugin_import_service.plugins_dir.exists()
+
+
+def test_import_plugins_from_directory_rejects_directory_resolved_outside_plugin_root(
+    plugin_import_service: PluginImportService,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_dir = tmp_path / "collection"
+    plugin_dir = source_dir / "linked"
+    linked_dir = plugin_dir / "linked_assets"
+    outside_dir = tmp_path / "outside"
+    linked_dir.mkdir(parents=True)
+    outside_dir.mkdir()
+    (plugin_dir / "linked_factory.py").write_text("", encoding="utf-8")
+    (plugin_dir / "linked_const.py").write_text("", encoding="utf-8")
+    original_resolve = Path.resolve
+
+    def redirect_linked_dir(path: Path, strict: bool = False) -> Path:
+        if path == linked_dir:
+            return outside_dir
+        return original_resolve(path, strict=strict)
+
+    monkeypatch.setattr(Path, "resolve", redirect_linked_dir)
+
+    results = plugin_import_service.import_plugins_from_directory(source_dir)
+
+    assert len(results) == 1
+    assert not results[0].success
+    assert "越界目录链接" in results[0].message
     assert not plugin_import_service.plugins_dir.exists()
 
 

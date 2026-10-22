@@ -12,16 +12,38 @@ class StubPluginImportService:
 class StubFactoryManager:
     def __init__(self, plugins: list[PluginInfo]) -> None:
         self.third_party_plugins: list[PluginInfo] = plugins
+        self._plugins_by_app_id: dict[str, PluginInfo] = {
+            plugin.app_id: plugin for plugin in plugins
+        }
+
+    def get_plugin_info(self, app_id: str) -> PluginInfo | None:
+        return self._plugins_by_app_id.get(app_id)
+
+
+class StubRunContext:
+    def __init__(self, current_app_id: str | None, is_stopped: bool) -> None:
+        self.current_app_id: str | None = current_app_id
+        self.is_context_stop: bool = is_stopped
 
 
 class StubContext:
-    def __init__(self, plugins: list[PluginInfo]) -> None:
+    def __init__(
+        self,
+        plugins: list[PluginInfo],
+        current_app_id: str | None = None,
+        is_stopped: bool = True,
+    ) -> None:
         self.factory_manager: StubFactoryManager = StubFactoryManager(plugins)
+        self.run_context: StubRunContext = StubRunContext(
+            current_app_id,
+            is_stopped,
+        )
 
 
 class InterfaceMethods:
     _get_source_plugin_key = staticmethod(SettingPluginInterface._get_source_plugin_key)
     _get_plugin_package_dir = SettingPluginInterface._get_plugin_package_dir
+    _is_plugin_running = SettingPluginInterface._is_plugin_running
     _get_installed_plugins_by_package = SettingPluginInterface._get_installed_plugins_by_package
     _is_version_lower = SettingPluginInterface._is_version_lower
 

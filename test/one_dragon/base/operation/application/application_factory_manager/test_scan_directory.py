@@ -55,6 +55,65 @@ def test_third_party_scan_only_loads_factory_from_plugin_root(
     assert manager.scan_failures == []
 
 
+def test_third_party_scan_returns_failure_when_root_resolve_has_os_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    plugins_dir = tmp_path / "plugins"
+    plugins_dir.mkdir()
+    original_resolve = Path.resolve
+
+    def fail_plugins_resolve(path: Path, strict: bool = False) -> Path:
+        if path == plugins_dir:
+            raise OSError("模拟插件根解析失败")
+        return original_resolve(path, strict=strict)
+
+    monkeypatch.setattr(Path, "resolve", fail_plugins_resolve)
+    manager = ApplicationFactoryManager(cast("OneDragonContext", object()), [])
+
+    loaded = manager._scan_directory(plugins_dir, source=PluginSource.THIRD_PARTY)
+
+    assert loaded == ([], [])
+    assert manager.scan_failures == [
+        (plugins_dir, "OSError: 模拟插件根解析失败")
+    ]
+
+
+def test_third_party_scan_isolates_plugin_glob_error_and_keeps_stable_order(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    plugins_dir = tmp_path / "plugins"
+    zoo_dir = plugins_dir / "Zoo"
+    bad_dir = plugins_dir / "bad"
+    alpha_dir = plugins_dir / "alpha"
+    for plugin_dir in [zoo_dir, bad_dir, alpha_dir]:
+        plugin_dir.mkdir(parents=True)
+    zoo_factory = zoo_dir / "zoo_factory.py"
+    zoo_factory.write_text("", encoding="utf-8")
+    (zoo_dir / "zoo_const.py").write_text("", encoding="utf-8")
+    alpha_factory = alpha_dir / "alpha_factory.py"
+    alpha_factory.write_text("", encoding="utf-8")
+    (alpha_dir / "alpha_const.py").write_text("", encoding="utf-8")
+    original_glob = Path.glob
+
+    def fail_bad_glob(path: Path, pattern: str) -> list[Path]:
+        if path == bad_dir:
+            raise OSError("模拟单个插件枚举失败")
+        return list(original_glob(path, pattern))
+
+    monkeypatch.setattr(Path, "glob", fail_bad_glob)
+    manager = ApplicationFactoryManager(cast("OneDragonContext", object()), [])
+    loaded_files = _record_factory_files(manager, monkeypatch)
+
+    manager._scan_directory(plugins_dir, source=PluginSource.THIRD_PARTY)
+
+    assert loaded_files == [alpha_factory, zoo_factory]
+    assert manager.scan_failures == [
+        (bad_dir, "OSError: 模拟单个插件枚举失败")
+    ]
+
+
 def test_third_party_scan_skips_symlink_plugin_directory(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

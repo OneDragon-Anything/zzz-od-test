@@ -284,9 +284,12 @@ def test_import_plugin_restores_old_version_when_swap_fails(
     )
 
     original_replace = Path.replace
+    replace_triggered = False
 
     def fail_staging_replace(path: Path, target: Path) -> Path:
+        nonlocal replace_triggered
         if path.name.startswith(".keep.tmp-"):
+            replace_triggered = True
             raise OSError("模拟替换失败")
         return original_replace(path, target)
 
@@ -294,6 +297,7 @@ def test_import_plugin_restores_old_version_when_swap_fails(
 
     result = plugin_import_service.import_plugin(zip_path, overwrite=True)
 
+    assert replace_triggered
     assert not result.success
     assert old_file.read_text(encoding="utf-8") == "old"
 
@@ -467,16 +471,23 @@ def test_import_plugins_from_zip_keeps_results_independent_when_one_extract_fail
     )
     original_extract = plugin_import_service._extract_plugin
     original_remove = plugin_import_service._remove_path
+    extract_triggered = False
+    cleanup_triggered = False
 
     def fail_broken(*args: object, **kwargs: object) -> None:
+        nonlocal extract_triggered
         target_dir = args[1]
         assert isinstance(target_dir, Path)
         if target_dir.name.startswith(".broken.tmp-"):
+            extract_triggered = True
+            original_extract(*args, **kwargs)
             raise OSError("模拟单个插件解压失败")
         original_extract(*args, **kwargs)
 
     def fail_broken_cleanup(path: Path) -> None:
+        nonlocal cleanup_triggered
         if path.name.startswith(".broken.tmp-"):
+            cleanup_triggered = True
             raise OSError("模拟单个插件临时目录清理失败")
         original_remove(path)
 
@@ -485,6 +496,8 @@ def test_import_plugins_from_zip_keeps_results_independent_when_one_extract_fail
 
     results = plugin_import_service.import_plugins_from_zip(zip_path, overwrite=True)
 
+    assert extract_triggered
+    assert cleanup_triggered
     assert [result.success for result in results] == [False, True]
     assert old_file.read_text(encoding="utf-8") == "old"
     assert (plugin_import_service.plugins_dir / "good" / "good_factory.py").exists()
