@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import os
+import stat
+
 from one_dragon.base.operation.application.plugin_import_service import (
     PluginImportService,
 )
@@ -39,6 +42,21 @@ def test_delete_plugin_removes_top_level_plugin_directory(
 ) -> None:
     plugin_dir = plugin_import_service.plugins_dir / "plugin"
     plugin_dir.mkdir(parents=True)
+
+    result = plugin_import_service.delete_plugin(plugin_dir)
+
+    assert result.success
+    assert not plugin_dir.exists()
+
+
+def test_delete_plugin_retries_readonly_file(
+    plugin_import_service: PluginImportService,
+) -> None:
+    plugin_dir = plugin_import_service.plugins_dir / "plugin"
+    readonly_file = plugin_dir / "readonly.txt"
+    readonly_file.parent.mkdir(parents=True)
+    readonly_file.write_text("locked", encoding="utf-8")
+    os.chmod(readonly_file, stat.S_IREAD)
 
     result = plugin_import_service.delete_plugin(plugin_dir)
 

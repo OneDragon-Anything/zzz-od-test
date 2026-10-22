@@ -2,6 +2,7 @@
 import os
 import threading
 import time
+from pathlib import Path
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
@@ -9,6 +10,7 @@ from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QApplication
 
 from one_dragon.base.operation.application.plugin_import_service import ImportResult
+from one_dragon.base.operation.application.plugin_info import PluginInfo, PluginSource
 from zzz_od.gui.view.setting import setting_plugin_interface as plugin_interface_module
 from zzz_od.gui.view.setting.setting_plugin_interface import (
     PluginImportRunner,
@@ -235,6 +237,53 @@ def test_start_plugin_import_disables_refresh_and_delete_until_finished() -> Non
 
     assert host.refresh_btn.enabled
     assert host._plugin_cards[0].delete_btn.enabled
+
+
+def test_delete_plugin_runs_in_background_and_finishes_on_main_thread() -> None:
+    """插件目录删除应在后台线程执行，结果回到界面线程处理。"""
+    app = _ensure_app()
+    main_thread = threading.main_thread()
+    delete_threads: list[threading.Thread] = []
+    finish_threads: list[threading.Thread] = []
+
+    class DeleteService:
+        def delete_plugin(self, plugin_dir: Path) -> ImportResult:
+            delete_threads.append(threading.current_thread())
+            return ImportResult(success=True, plugin_name=plugin_dir.name, message="删除成功")
+
+    class DeleteHost(StubHost):
+        _finish_delete_plugin = SettingPluginInterface._finish_delete_plugin
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.plugin_import_service = DeleteService()
+
+    host = DeleteHost()
+    plugin_info = PluginInfo(
+        app_id="demo_app",
+        app_name="Demo",
+        default_group=False,
+        source=PluginSource.THIRD_PARTY,
+        plugin_dir=Path("plugins/demo"),
+    )
+
+    def on_finished(result: ImportResult) -> None:
+        finish_threads.append(threading.current_thread())
+        host._finish_delete_plugin(plugin_info, result)
+
+    host._start_plugin_import(
+        lambda: host.plugin_import_service.delete_plugin(plugin_info.plugin_dir),
+        on_finished,
+    )
+    _wait_for_import(host, app)
+    app.processEvents()
+
+    assert delete_threads
+    assert delete_threads[0] is not main_thread
+    assert finish_threads
+    assert finish_threads[0] is main_thread
+    assert host.ctx.refresh_count == 1
+    assert host.refresh_calls == 1
 
 
 def test_wait_for_plugin_import_waits_until_runner_finishes() -> None:
