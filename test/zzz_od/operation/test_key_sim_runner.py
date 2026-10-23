@@ -1,5 +1,6 @@
 """测试键鼠脚本的插件化读取（key_sim_runner.py / key_sim_yaml_config.py）。"""
 
+import os
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -119,6 +120,22 @@ class TestKeySimYamlConfig:
 
         with pytest.raises(ValueError, match='重名'):
             KeySimYamlConfig('脚本', plugin_dir=plugin_dir / 'scripts')
+
+    def test_symlink_outside_registered_dir_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from one_dragon.utils import os_utils
+
+        # 脚本是指向注册目录外的符号链接时，不能跟随到目录外读取
+        monkeypatch.setattr(os_utils, 'get_work_dir', lambda: str(tmp_path))
+        plugin_dir = tmp_path / 'plugins' / 'my_plugin' / 'scripts'
+        outside_dir = tmp_path / 'outside'
+        plugin_dir.mkdir(parents=True)
+        _write_yml(outside_dir / '脚本.yml', [{'op_name': 'outside'}])
+        os.symlink(outside_dir / '脚本.yml', plugin_dir / '脚本.yml')
+
+        with pytest.raises(ValueError, match='超出注册目录'):
+            KeySimYamlConfig('脚本', plugin_dir=plugin_dir)
 
 
 class TestKeySimRunnerLoadConfig:
