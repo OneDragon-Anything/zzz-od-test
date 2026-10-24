@@ -1,0 +1,42 @@
+{
+  "intervals": [
+    [
+      0,
+      204
+    ],
+    [
+      342,
+      435
+    ],
+    [
+      793,
+      964
+    ],
+    [
+      1108,
+      1234
+    ],
+    [
+      1807,
+      2253
+    ],
+    [
+      2594,
+      2697
+    ],
+    [
+      2798,
+      2936
+    ],
+    [
+      3032,
+      3057
+    ]
+  ],
+  "sampling_seconds": 0.3,
+  "phase_offsets": 18,
+  "maximum_consecutive_waits": 3,
+  "budget_exhausted_frames": [],
+  "accepted": 1093,
+  "scope": "仅检查位置与静态区门槛，不模拟OCR或游戏输入；每段重新建立基线"
+}
