@@ -9,27 +9,19 @@ from one_dragon.base.operation.application.application_group_manager import (
 )
 
 
-def test_configured_non_default_app_remains_in_one_dragon_list() -> None:
-    """已开启的非默认应用继续显示，已禁用或未配置的应用不显示。"""
-    ctx = MagicMock()
-    registered_app_ids = {
-        'default_app',
-        'configured_app',
-        'disabled_app',
-        'unconfigured_app',
-    }
-    ctx.run_context.is_app_registered.side_effect = registered_app_ids.__contains__
-
-    manager = ApplicationGroupManager(ctx)
+def test_one_dragon_runtime_list_only_uses_default_apps() -> None:
+    """一条龙运行时只加载默认应用，同时保留 YAML 中其他原始项。"""
+    manager = ApplicationGroupManager(MagicMock())
     manager.set_default_apps(['default_app'])
 
-    config = MagicMock()
-    config.is_file_exists = True
-    config._all_apps = [
-        ApplicationGroupConfigItem(app_id='configured_app', enabled=True),
-        ApplicationGroupConfigItem(app_id='disabled_app', enabled=False),
+    original_items = [
+        ApplicationGroupConfigItem(app_id='standalone_app', enabled=True),
+        ApplicationGroupConfigItem(app_id='internal_app', enabled=True),
         ApplicationGroupConfigItem(app_id='unregistered_app', enabled=True),
     ]
+    config = MagicMock()
+    config.is_file_exists = True
+    config._all_apps = original_items.copy()
 
     with patch(
         'one_dragon.base.operation.application.application_group_manager.ApplicationGroupConfig',
@@ -38,12 +30,26 @@ def test_configured_non_default_app_remains_in_one_dragon_list() -> None:
         result = manager._init_one_dragon_group_config(instance_idx=1)
 
     assert result is config
-    assert [item.app_id for item in config._all_apps] == [
-        'configured_app',
-        'unregistered_app',
-    ]
-    config.save_app_list.assert_called_once_with()
-    config.update_full_app_list.assert_called_once_with(['default_app', 'configured_app'])
+    assert config._all_apps == original_items
+    config.save_app_list.assert_not_called()
+    config.update_full_app_list.assert_called_once_with(['default_app'])
+
+
+def test_update_full_app_list_preserves_non_default_saved_items() -> None:
+    """运行时过滤不应删除 YAML 中保存的其他应用 ID。"""
+    config = ApplicationGroupConfig.__new__(ApplicationGroupConfig)
+    standalone = ApplicationGroupConfigItem(app_id='standalone_app', enabled=True)
+    internal = ApplicationGroupConfigItem(app_id='internal_app', enabled=True)
+    missing = ApplicationGroupConfigItem(app_id='missing_app', enabled=True)
+    original_items = [standalone, internal, missing]
+    config._all_apps = original_items.copy()
+    config.app_list = original_items.copy()
+
+    config.update_full_app_list(['default_app'])
+
+    assert config._all_apps == original_items
+    assert [item.app_id for item in config.app_list] == ['default_app']
+    assert config.app_list[0].is_persisted is False
 
 
 def test_remove_app_deletes_it_from_all_lists_and_saves() -> None:
@@ -62,19 +68,13 @@ def test_remove_app_deletes_it_from_all_lists_and_saves() -> None:
     config.save_app_list.assert_called_once_with()
 
 
-def test_disabling_migrated_app_removes_it_from_config() -> None:
-    """非默认组迁移应用被禁用后应永久移除，默认组应用只切换状态。"""
+def test_set_one_dragon_app_enable_only_updates_status() -> None:
+    """切换一条龙应用状态时不删除 YAML 中的应用 ID。"""
     manager = ApplicationGroupManager(MagicMock())
-    manager.set_default_apps(['default_app'])
     config = MagicMock()
 
-    removed = manager.set_one_dragon_app_enable(config, 'migrated_app', False)
+    result = manager.set_one_dragon_app_enable(config, 'default_app', False)
 
-    assert removed is True
-    config.remove_app.assert_called_once_with('migrated_app')
-    config.set_app_enable.assert_not_called()
-
-    removed = manager.set_one_dragon_app_enable(config, 'default_app', False)
-
-    assert removed is False
+    assert result is None
     config.set_app_enable.assert_called_once_with('default_app', False)
+    config.remove_app.assert_not_called()
