@@ -1,4 +1,7 @@
+from types import SimpleNamespace
 from unittest.mock import MagicMock
+
+import pytest
 
 from one_dragon.base.operation.application.application_run_context import (
     ApplicationRunContext,
@@ -93,3 +96,79 @@ def test_stop_running_is_idempotent() -> None:
     assert second is first
     assert second.finish_reason == RunFinishReason.STOPPED
     assert rc.is_context_stop
+
+
+def test_registry_derives_default_and_standalone_lists() -> None:
+    """三个合法入口组合应派生出不同的通用列表。"""
+    rc = ApplicationRunContext(MagicMock())
+    default_factory = SimpleNamespace(
+        app_id='default_app',
+        default_group=True,
+        internal_app=False,
+    )
+    standalone_factory = SimpleNamespace(
+        app_id='standalone_app',
+        default_group=False,
+        internal_app=False,
+    )
+    internal_factory = SimpleNamespace(
+        app_id='internal_app',
+        default_group=False,
+        internal_app=True,
+    )
+
+    rc.registry_application([
+        default_factory,
+        standalone_factory,
+        internal_factory,
+    ])
+
+    assert rc.default_group_apps == ['default_app']
+    assert rc.standalone_apps == ['default_app', 'standalone_app']
+    assert rc.is_app_registered('internal_app')
+    assert rc.is_app_internal('internal_app')
+    assert not rc.is_app_standalone_available('internal_app')
+    assert rc.is_app_standalone_available('standalone_app')
+    assert not rc.is_app_internal('missing_app')
+
+    rc.clear_applications()
+    rc.registry_application(standalone_factory)
+
+    assert rc.default_group_apps == []
+    assert rc.standalone_apps == ['standalone_app']
+    assert not rc.is_app_registered('internal_app')
+
+
+def test_run_application_still_allows_internal_app() -> None:
+    """internal 只限制通用入口，底层运行接口仍能执行。"""
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    ctx.controller.init_before_context_run.return_value = True
+    rc = ApplicationRunContext(ctx)
+    app = MagicMock()
+    app.execute.return_value = OperationResult(success=True, status='完成')
+    internal_factory = SimpleNamespace(
+        app_id='internal_app',
+        app_name='内部应用',
+        default_group=False,
+        internal_app=True,
+        need_notify=False,
+        create_application=MagicMock(return_value=app),
+    )
+    rc.registry_application(internal_factory)
+
+    result = rc.run_application('internal_app', 0, 'default')
+
+    assert result.finish_reason == RunFinishReason.COMPLETED
+    app.execute.assert_called_once_with()
+
+
+def test_check_all_run_records_propagates_creation_error() -> None:
+    """运行记录刷新错误不能再被当成“无记录”静默跳过。"""
+    rc = ApplicationRunContext(MagicMock())
+    factory = MagicMock()
+    factory.get_run_record.side_effect = RuntimeError('record broken')
+    rc._application_factory_map = {'broken_app': factory}
+
+    with pytest.raises(RuntimeError, match='record broken'):
+        rc.check_and_update_all_run_record(instance_idx=1)

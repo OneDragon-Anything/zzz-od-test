@@ -233,6 +233,67 @@ def test_stop_delegates_to_run_slot() -> None:
     backend.run_slot._stop.assert_called_once()
 
 
+def test_run_standalone_app_rejects_unregistered_app() -> None:
+    backend = _backend(ready=True)
+    backend.ctx.standalone_app_config.active_app_id = ''
+    backend.ctx.run_context.is_app_registered.return_value = False
+    backend._start_app = MagicMock()
+
+    with pytest.raises(BackendNotReadyError, match='未注册'):
+        backend.run_standalone_app('mcp', app_id='missing_app')
+
+    backend._start_app.assert_not_called()
+
+
+def test_run_standalone_app_rejects_internal_app() -> None:
+    backend = _backend(ready=True)
+    backend.ctx.standalone_app_config.active_app_id = ''
+    backend.ctx.run_context.is_app_registered.return_value = True
+    backend.ctx.run_context.is_app_standalone_available.return_value = False
+    backend._start_app = MagicMock()
+
+    with pytest.raises(BackendNotReadyError, match='只能通过固定入口运行'):
+        backend.run_standalone_app('http', app_id='internal_app')
+
+    backend._start_app.assert_not_called()
+
+
+def test_list_applications_filters_internal_and_saved_invalid_apps() -> None:
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    ctx.current_instance_idx = 0
+    ctx.standalone_app_config.active_app_id = 'internal_app'
+    ctx.standalone_app_config.app_list = [
+        'standalone_app',
+        'internal_app',
+        'missing_app',
+    ]
+    ctx.run_context.standalone_apps = ['default_app', 'standalone_app']
+    ctx.run_context.is_app_standalone_available.side_effect = (
+        lambda app_id: app_id in {'default_app', 'standalone_app'}
+    )
+    ctx.run_context.get_application_name.side_effect = {
+        'default_app': '默认应用',
+        'standalone_app': '独立应用',
+    }.get
+    ctx.run_context._application_factory_map = {}
+    default_item = MagicMock(app_id='default_app', enabled=True)
+    group_config = MagicMock(app_list=[default_item])
+    ctx.app_group_manager.get_one_dragon_group_config.return_value = group_config
+    backend = ZzzBackendContext(ctx)
+
+    result = backend.list_applications()
+
+    assert result.active_standalone_app_id is None
+    assert [app.app_id for app in result.applications] == [
+        'default_app',
+        'standalone_app',
+    ]
+    assert result.applications[0].enabled_in_one_dragon is True
+    assert result.applications[0].in_standalone_list is False
+    assert result.applications[1].in_standalone_list is True
+
+
 def test_list_applications_no_refresh(monkeypatch) -> None:
     """list_applications 是只读路径,不应调用 _refresh_runtime_config。"""
     ctx = MagicMock()
@@ -242,8 +303,7 @@ def test_list_applications_no_refresh(monkeypatch) -> None:
     group_config = MagicMock()
     group_config.app_list = []
     ctx.app_group_manager.get_one_dragon_group_config.return_value = group_config
-    ctx.run_context.is_app_registered.return_value = False
-    ctx.run_context.default_group_apps = []
+    ctx.run_context.standalone_apps = []
     ctx.current_instance_idx = 0
     backend = ZzzBackendContext(ctx)
 
@@ -282,7 +342,9 @@ def test_list_predefined_teams_filters_placeholder() -> None:
 
 def test_weakness_defense_priority() -> None:
     """_weakness_of_team:防卫战配了 weakness → 用它(中文),不走角色属性。"""
-    from zzz_od.application.shiyu_defense.shiyu_defense_config import ShiyuDefenseTeamConfig
+    from zzz_od.application.shiyu_defense.shiyu_defense_config import (
+        ShiyuDefenseTeamConfig,
+    )
     from zzz_od.config.team_config import PredefinedTeamInfo
     from zzz_od.game_data.agent import DmgTypeEnum
     ctx = MagicMock()
@@ -299,7 +361,9 @@ def test_weakness_defense_priority() -> None:
 
 def test_weakness_defense_all_unknown_falls_back() -> None:
     """_weakness_of_team:防卫战配了但全是 UNKNOWN(过滤后空)→ 回退角色属性。"""
-    from zzz_od.application.shiyu_defense.shiyu_defense_config import ShiyuDefenseTeamConfig
+    from zzz_od.application.shiyu_defense.shiyu_defense_config import (
+        ShiyuDefenseTeamConfig,
+    )
     from zzz_od.config.team_config import PredefinedTeamInfo
     from zzz_od.game_data.agent import DmgTypeEnum
     ctx = MagicMock()
@@ -395,6 +459,7 @@ def test_close_game_delegates() -> None:
 def test_analyze_save_image_persists_and_returns_path(monkeypatch) -> None:
     """analyze(save_image=True) 实时模式:存盘 + screenshot_path 回传路径。"""
     import numpy as np
+
     import zzz_od.backend.backend_context as bc
 
     saved_args: list = []
@@ -442,6 +507,7 @@ def test_analyze_offline_ignores_save_image(monkeypatch, tmp_path) -> None:
     """analyze(screenshot=path) 离线模式:save_image 被忽略,screenshot_path=None。"""
     import cv2
     import numpy as np
+
     import zzz_od.backend.backend_context as bc
 
     called: list = []
@@ -472,6 +538,7 @@ def test_analyze_save_image_capture_fails_no_path() -> None:
 def test_analyze_save_image_then_ocr_fail_returns_path(monkeypatch) -> None:
     """存盘成功但后续 OCR 异常 → success=False, screenshot_path 仍回传(排障)。"""
     import numpy as np
+
     import zzz_od.backend.backend_context as bc
 
     monkeypatch.setattr(bc, '_save_screenshot', lambda img: '/tmp/fake.png')
