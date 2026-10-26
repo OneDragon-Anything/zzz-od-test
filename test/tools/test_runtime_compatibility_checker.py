@@ -1,4 +1,5 @@
 import importlib.util
+import marshal
 import struct
 import zlib
 from pathlib import Path
@@ -58,6 +59,27 @@ def test_archive_entries_reads_compressed_entry(tmp_path: Path) -> None:
 
     assert entries[0][0] == 'pyimod01_archive'
     assert destination.read_bytes() == b'archive-code'
+
+
+def _pyz(table: object) -> bytes:
+    payload = marshal.dumps(table)
+    return MODULE.PYZ_MAGIC + b'\0\0\0\0' + struct.pack('!i', 12) + payload
+
+
+def test_extract_pyz_accepts_nonempty_toc_list(tmp_path: Path) -> None:
+    destination = tmp_path / 'PYZ.pyz'
+    executable = _executable([('PYZ.pyz', 'z', _pyz([('one_dragon', (0, 12, 0))]))])
+
+    assert MODULE._extract_pyz(executable, destination) == 1
+    assert destination.is_file()
+
+
+@pytest.mark.parametrize('table', [[], {}])
+def test_extract_pyz_rejects_invalid_toc(tmp_path: Path, table: object) -> None:
+    executable = _executable([('PYZ.pyz', 'z', _pyz(table))])
+
+    with pytest.raises(RuntimeError, match='PYZ 目录无效'):
+        MODULE._extract_pyz(executable, tmp_path / 'PYZ.pyz')
 
 
 def test_extract_pyz_rejects_invalid_archive(tmp_path: Path) -> None:
