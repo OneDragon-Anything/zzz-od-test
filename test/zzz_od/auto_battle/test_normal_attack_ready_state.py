@@ -27,7 +27,11 @@ def _make_auto_battle_context() -> AutoBattleContext:
     # 屏蔽提交到线程池的子任务(依赖完整 ctx/模型),使测试聚焦状态写入
     abc.dodge_context = MagicMock()
     abc.agent_context = MagicMock()
+    abc.agent_context.get_front_agent_info.return_value = None
     abc.target_context = MagicMock()
+    # check_battle_state 会读取三个按键的识别区域,这里只验证状态写入,用占位区域
+    for area_name in ['area_btn_normal', 'area_btn_special', 'area_btn_ultimate']:
+        setattr(abc, area_name, MagicMock())
     return abc
 
 
@@ -37,6 +41,7 @@ def _patch_sub_checks(abc: AutoBattleContext):
         patch.object(abc, 'check_quick_assist'),
         patch.object(abc, 'check_switch_backup'),
         patch.object(abc, 'check_chain_attack'),
+        patch.object(abc, 'check_btn_ban', return_value={}),
     ]
 
 
@@ -79,3 +84,62 @@ def test_normal_attack_ready_state_cleared_when_button_missing() -> None:
         BattleStateEnum.STATUS_NORMAL_ATTACK_READY.value)
     assert recorder is not None
     assert recorder.last_record_time == 0  # False@200 is_clear 清成 0
+
+
+def _run_battle_state(abc: AutoBattleContext, screen, frames: list[tuple[float, bool, dict[str, bool]]]):
+    """按帧序列驱动 check_battle_state: (截图时间, 普攻是否可用, 禁用识别结果)。"""
+    ban_mock = MagicMock()
+    ban_mock.side_effect = [f[2] for f in frames]
+    with patch.object(abc, 'is_normal_attack_btn_available', side_effect=[f[1] for f in frames]), \
+            patch.object(abc, 'check_btn_ban', ban_mock), \
+            patch.object(abc, 'check_quick_assist'), \
+            patch.object(abc, 'check_switch_backup'), \
+            patch.object(abc, 'check_chain_attack') as chain_mock:
+        in_battle_list = [abc.check_battle_state(screen, screenshot_time=f[0]) for f in frames]
+    return in_battle_list, chain_mock
+
+
+def test_btn_ban_state_recorded_once() -> None:
+    """禁用命中写入一次时间 禁用期间不刷新。"""
+    abc = _make_auto_battle_context()
+    screen = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    ban_name = BattleStateEnum.STATUS_NORMAL_ATTACK_BAN.value
+    frames = [
+        (100.0, False, {ban_name: True}),
+        (100.5, False, {ban_name: True}),
+        (101.0, False, {ban_name: True}),
+    ]
+    _run_battle_state(abc, screen, frames)
+
+    recorder = abc.state_record_service.get_state_recorder(ban_name)
+    assert recorder is not None
+    assert recorder.last_record_time == 100.0  # 首次命中的时间 后续不刷新
+
+
+def test_btn_ban_state_cleared_when_available() -> None:
+    """恢复可用清除禁用状态。"""
+    abc = _make_auto_battle_context()
+    screen = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    ban_name = BattleStateEnum.STATUS_NORMAL_ATTACK_BAN.value
+    frames = [
+        (100.0, False, {ban_name: True}),
+        (100.5, True, {}),
+    ]
+    _run_battle_state(abc, screen, frames)
+
+    recorder = abc.state_record_service.get_state_recorder(ban_name)
+    assert recorder is not None
+    assert recorder.last_record_time == 0  # is_clear 清成 0
+    assert ban_name not in abc._btn_ban_first_time
+
+
+def test_ban_keeps_in_battle() -> None:
+    """普攻按钮被禁用时仍算在战斗画面 不进入离开战斗分支。"""
+    abc = _make_auto_battle_context()
+    screen = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    ban_name = BattleStateEnum.STATUS_NORMAL_ATTACK_BAN.value
+    frames = [(100.0, False, {ban_name: True})]
+    in_battle_list, chain_mock = _run_battle_state(abc, screen, frames)
+
+    assert in_battle_list == [True]
+    chain_mock.assert_not_called()
