@@ -49,6 +49,106 @@ def _new_combat_operation(
     return operation
 
 
+def _run_battle_round(operation: Operation) -> OperationRoundResult:
+    """通过真实框架调度节点，保留框架超时与节点方法的执行顺序。"""
+    operation._current_node = type(operation).auto_battle.operation_node_annotation
+    operation.screenshot = Mock()
+    return operation._execute_one_round()
+
+
+@pytest.mark.parametrize('operation_type', COMBAT_OPERATION_TYPES)
+@pytest.mark.parametrize('elapsed_seconds', [600, 602, 650])
+def test_maximum_timeout_switches_even_after_delayed_round(
+    operation_type: type, elapsed_seconds: float,
+) -> None:
+    """最大配置时限也必须换队，不能被框架的先行超时截断。"""
+    operation = _new_combat_operation(operation_type, 600, elapsed_seconds, True)
+
+    result = _run_battle_round(operation)
+
+    assert result.is_fail
+    assert result.status == Operation.STATUS_TIMEOUT
+    assert operation._switch_team_requested is True
+    operation.ctx.auto_battle_context.check_battle_state.assert_called_once()
+    operation.ctx.auto_battle_context.stop_auto_battle.assert_called_once()
+
+
+@pytest.mark.parametrize('operation_type', COMBAT_OPERATION_TYPES)
+def test_unknown_screen_still_has_hard_timeout(operation_type: type) -> None:
+    """离开可识别战斗画面后仍有兜底时限，但不能因此换队。"""
+    operation = _new_combat_operation(operation_type, 600, 602, False)
+
+    result = _run_battle_round(operation)
+
+    assert result.is_fail
+    assert result.status == Operation.STATUS_TIMEOUT
+    assert operation._switch_team_requested is False
+    operation.ctx.auto_battle_context.stop_auto_battle.assert_called_once()
+
+
+@pytest.mark.parametrize('operation_type', COMBAT_OPERATION_TYPES)
+@pytest.mark.parametrize('detected_this_round', [False, True])
+def test_settlement_wins_over_delayed_timeout(
+    operation_type: type, detected_this_round: bool,
+) -> None:
+    """已有或本轮得到的结算结果都优先于超时退出。"""
+    status = '普通战斗-完成'
+    operation = _new_combat_operation(
+        operation_type, 600, 602, True,
+        last_result=None if detected_this_round else status,
+    )
+    if detected_this_round:
+        def detect_result(*args: object, **kwargs: object) -> bool:
+            """模拟当前帧识别完成后可读取的结算结果。"""
+            operation.ctx.auto_battle_context.last_check_end_result = status
+            return False
+
+        operation.ctx.auto_battle_context.check_battle_state.side_effect = detect_result
+
+    result = _run_battle_round(operation)
+
+    assert result.is_success
+    assert result.status == status
+    assert operation._switch_team_requested is False
+
+
+def test_non_charge_hunt_never_switches_at_maximum_timeout() -> None:
+    """非体力模式恶名狩猎不应用体力计划的换队配置。"""
+    operation = _new_combat_operation(NotoriousHunt, 600, 602, True)
+    operation.use_charge_power = False
+
+    result = _run_battle_round(operation)
+
+    assert result.is_fail
+    assert result.status == Operation.STATUS_TIMEOUT
+    assert operation._switch_team_requested is False
+
+
+@pytest.mark.parametrize('operation_type', COMBAT_OPERATION_TYPES)
+def test_pause_is_excluded_from_timeout(
+    operation_type: type, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """框架暂停恢复补偿后的耗时仍未达到换队阈值。"""
+    now = [1000.0]
+    monkeypatch.setattr('one_dragon.base.operation.operation.time.time', lambda: now[0])
+    operation = _new_combat_operation(operation_type, 60, 50, True)
+    operation._current_node = operation_type.auto_battle.operation_node_annotation
+    operation.pause_total_time = 0
+    operation.ctx.run_context = SimpleNamespace(is_context_running=False)
+    operation.ctx.auto_battle_context.resume_auto_battle = Mock()
+    operation._on_pause()
+    now[0] += 120
+    operation.ctx.run_context.is_context_running = True
+    operation._on_resume()
+
+    result = _run_battle_round(operation)
+
+    assert result.result == OperationRoundResultEnum.WAIT
+    assert operation._switch_team_requested is False
+    assert operation.pause_total_time == 120
+    operation.ctx.auto_battle_context.resume_auto_battle.assert_called_once()
+
+
 @pytest.mark.parametrize('operation_type', COMBAT_OPERATION_TYPES)
 def test_timeout_disabled_keeps_battling(operation_type: type) -> None:
     operation = _new_combat_operation(operation_type, 0, 100, True)
