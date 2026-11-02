@@ -15,6 +15,7 @@ from zzz_od.application.charge_plan.charge_plan_config import (
     ChargePlanConfig,
     ChargePlanItem,
 )
+from zzz_od.config.team_config import TeamConfig
 
 
 @pytest.fixture
@@ -34,9 +35,12 @@ def new_app(config: ChargePlanConfig, temporary: bool) -> ChargePlanApp:
     """只初始化本组测试使用的应用状态，不启动游戏服务。"""
     app = object.__new__(ChargePlanApp)
     app.config = config
-    app.ctx = SimpleNamespace(team_config=SimpleNamespace(team_list=[
-        SimpleNamespace(name=f'编队{i + 1}') for i in range(3)
-    ]))
+    team_config = TeamConfig(99)
+    team_config.update('team_list', [
+        {'name': f'编队{i + 1}', 'agent_id_list': ['anby', 'unknown', 'unknown']}
+        for i in range(3)
+    ])
+    app.ctx = SimpleNamespace(team_config=team_config)
     app.temp_plan = config.combat_simulation_double_reward_config if temporary else None
     app.current_plan = app.temp_plan if temporary else config.plan_list[0]
     app.last_tried_plan = None
@@ -56,6 +60,7 @@ def test_sequential_switch_survives_reload_without_persisting_runtime_fields(
     before_regular = config.plan_list[0].to_dict()
     before_double = config.combat_simulation_double_reward_config.to_dict()
     app = new_app(config, temporary)
+    assert len(app.ctx.team_config.team_list) == 20
     if temporary:
         app.current_plan.card_num = '5'
         app.current_plan.run_times = 1
@@ -79,6 +84,53 @@ def test_sequential_switch_survives_reload_without_persisting_runtime_fields(
     assert Path(config.file_path).read_bytes() == saved
     assert app.current_plan.run_times == (1 if temporary else 2)
     assert len(config.plan_list) == 1
+
+
+@pytest.mark.parametrize('temporary', [False, True])
+def test_skips_unknown_slots_without_renumbering(
+    config: ChargePlanConfig, temporary: bool,
+) -> None:
+    """中间空槽位不参与换队，保存的仍是原始槽位下标。"""
+    app = new_app(config, temporary)
+    app.ctx.team_config.update('team_list', [
+        {'name': '空槽', 'agent_id_list': ['unknown'] * 3},
+        {'name': '第一支有效队', 'agent_id_list': ['unknown', 'anby', 'unknown']},
+        {'name': '只有队名'},
+        {'name': '空值队伍', 'agent_id_list': ['', 'unknown', '']},
+        {'name': '第二支有效队', 'agent_id_list': ['ellen']},
+    ])
+    app.current_plan.predefined_team_idx = -1
+
+    for expected_idx in (1, 4):
+        assert app.switch_team('战斗超时') is True
+        reloaded = ChargePlanConfig(99, 'one_dragon')
+        saved = reloaded.combat_simulation_double_reward_config if temporary else reloaded.plan_list[0]
+        assert app.current_plan.predefined_team_idx == expected_idx
+        assert saved.predefined_team_idx == expected_idx
+
+    before = Path(config.file_path).read_bytes()
+    assert app.switch_team('战斗失败') is False
+    assert app.current_plan.predefined_team_idx == 4
+    assert Path(config.file_path).read_bytes() == before
+
+
+@pytest.mark.parametrize('temporary', [False, True])
+def test_no_recognized_teams_does_not_write_or_change_plan(
+    config: ChargePlanConfig, temporary: bool,
+) -> None:
+    """尚未识别任何代理人时，不把默认补齐的空队伍写入计划。"""
+    app = new_app(config, temporary)
+    app.ctx.team_config.update('team_list', [{'name': '仅设置名称'}])
+    app.current_plan.predefined_team_idx = -1
+    app.current_plan.skipped = True
+    app.last_tried_plan = app.current_plan
+    before = Path(config.file_path).read_bytes()
+
+    assert app.switch_team('战斗超时') is False
+    assert app.current_plan.predefined_team_idx == -1
+    assert app.current_plan.skipped is True
+    assert app.last_tried_plan is app.current_plan
+    assert Path(config.file_path).read_bytes() == before
 
 
 @pytest.mark.parametrize('skip', [False, True])

@@ -35,6 +35,7 @@ from zzz_od.application.charge_plan.charge_plan_config import (
     ChargePlanConfig,
     ChargePlanItem,
 )
+from zzz_od.config.team_config import TeamConfig
 from zzz_od.operation.challenge_mission.exit_in_battle import ExitInBattle
 from zzz_od.operation.compendium.area_patrol import AreaPatrol
 from zzz_od.operation.compendium.combat_simulation import CombatSimulation
@@ -95,7 +96,12 @@ def test_exit_then_retry_or_exhaust(
     ctx.controller = _PhaseController(ctx)
     ctx.controller.mouse_move = Mock()
     ctx.battle_assistant_config = SimpleNamespace(screenshot_interval=0)
-    ctx.team_config = SimpleNamespace(team_list=[SimpleNamespace(name='队伍1'), SimpleNamespace(name='队伍2')])
+    ctx.team_config = TeamConfig(99)
+    ctx.team_config.update('team_list', [
+        {'name': '队伍1', 'agent_id_list': ['anby']},
+        {'name': '队伍2', 'agent_id_list': ['ellen']},
+    ])
+    assert len(ctx.team_config.team_list) == 20
     ctx.auto_battle_context = SimpleNamespace(
         last_check_end_result='普通战斗-撤退' if trigger == 'failure' else None,
         check_battle_state=Mock(return_value=True), stop_auto_battle=Mock(),

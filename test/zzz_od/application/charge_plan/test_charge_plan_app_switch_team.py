@@ -39,7 +39,10 @@ def _new_app(
     temp_plan: ChargePlanItem | None = None,
 ) -> ChargePlanApp:
     app = object.__new__(ChargePlanApp)
-    team_list = [SimpleNamespace(idx=i, name=f'编队{i + 1}') for i in range(team_count)]
+    team_list = [
+        SimpleNamespace(idx=i, name=f'编队{i + 1}', agent_id_list=['anby', 'unknown', 'unknown'])
+        for i in range(team_count)
+    ]
     app.ctx = SimpleNamespace(team_config=SimpleNamespace(team_list=team_list))
     app.config = config
     app.current_plan = plan
