@@ -84,6 +84,24 @@ def test_timeout_outside_range_is_invalid() -> None:
         assert '0..600' in error
 
 
+@pytest.mark.parametrize(
+    'value',
+    [None, '10', 10.5, True, False, [], {}],
+    ids=['null', 'string', 'float', 'true', 'false', 'list', 'object'],
+)
+def test_timeout_with_invalid_type_returns_field_error(value: object) -> None:
+    """拒绝外部配置中的非整数时限，并返回包含字段名的错误。"""
+    ctx = SimpleNamespace(compendium_service=_CompendiumService())
+    item = ChargePlanItem.from_dict({'battle_timeout_seconds': value})
+
+    error = ChargePlanConfig.validate_item(ctx, item)
+
+    assert error is not None
+    assert 'battle_timeout_seconds' in error
+    assert '0..600' in error
+    assert '整数' in error
+
+
 def test_normal_and_double_reward_configs_save_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(YamlConfig, 'save', _skip_yaml_save)
     config = _new_config()
