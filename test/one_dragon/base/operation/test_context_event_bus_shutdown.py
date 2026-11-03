@@ -9,7 +9,7 @@ def test_dispatch_event_normal():
     called = []
     bus = ContextEventBus()
     bus.listen_event('TEST_EVENT', lambda item: called.append(item.data))
-    bus.dispatch_event('TEST_EVENT', 'hello')
+    assert bus.dispatch_event('TEST_EVENT', 'hello') is True
 
     import time
     for _ in range(50):
@@ -20,8 +20,14 @@ def test_dispatch_event_normal():
     assert called == ['hello']
 
 
+def test_dispatch_event_no_listener_returns_false():
+    """无监听者时返回 False。"""
+    bus = ContextEventBus()
+    assert bus.dispatch_event('NO_LISTENER_EVENT', None) is False
+
+
 def test_dispatch_event_after_executor_shutdown(monkeypatch):
-    """事件总线线程池关闭后 派发事件降级为日志 不抛 RuntimeError。
+    """事件总线线程池关闭后 派发事件降级为日志 不抛 RuntimeError 且返回 False。
 
     对应 issue #2844：运行中关闭应用时 run_context 清理向已关闭的
     事件总线派发停止事件，修复前会抛 cannot schedule new futures after shutdown。
@@ -36,7 +42,8 @@ def test_dispatch_event_after_executor_shutdown(monkeypatch):
     test_executor.shutdown(wait=False, cancel_futures=True)
 
     # 修复前这里抛 RuntimeError
-    bus.dispatch_event('TEST_EVENT', 'after-shutdown')
+    dispatched = bus.dispatch_event('TEST_EVENT', 'after-shutdown')
 
+    assert dispatched is False
     assert bus.has_event_listener('TEST_EVENT')
     assert called == []
