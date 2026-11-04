@@ -218,3 +218,44 @@ class TestDownloadAndExtractFallback:
         assert ok is True
         assert calls == [f'{GITHUB}/ZZZ-Test/env.zip', f'{CNB}/ZZZ-Test/env.zip']
         assert env_config.last_env_source == CNB
+
+
+class _UnwritableEnvConfig(_FakeEnvConfig):
+    """`last_env_source` 写入抛 OSError，模拟配置文件所在目录不可写。"""
+
+    def __init__(self, current: str, candidates: list[str]):
+        self.env_source: str = current
+        self._candidates: list[str] = candidates
+        self._last_env_source: str = ''
+        self.write_attempts: int = 0
+
+    @property
+    def last_env_source(self) -> str:
+        return self._last_env_source
+
+    @last_env_source.setter
+    def last_env_source(self, value: str) -> None:
+        self.write_attempts += 1
+        raise OSError('config/env.yml 不可写')
+
+
+class TestRecordSourceFailure:
+    """配置文件写不进去时，已经下载好的文件不能跟着判成失败。"""
+
+    def test_download_succeeds_when_recording_source_fails(self):
+        env_config = _UnwritableEnvConfig(GITHUB, [GITHUB, CNB])
+        service, calls = _make_service(env_config, [True])
+
+        assert service.download_env_file('env.zip', 'tmp/env.zip') is True
+        assert calls == [f'{GITHUB}/ZZZ-Test/env.zip']
+        assert env_config.write_attempts == 1
+
+    def test_extract_succeeds_when_recording_source_fails(self, monkeypatch, tmp_path):
+        env_config = _UnwritableEnvConfig(GITHUB, [GITHUB, CNB])
+        service, _ = _make_service(env_config, [True])
+        monkeypatch.setattr(download_service_module.file_utils, 'unzip_file', lambda *args: True)
+
+        ok = service.download_and_extract_env_file('env.zip', str(tmp_path / 'tmp'), str(tmp_path / 'out'))
+
+        assert ok is True
+        assert env_config.write_attempts == 1
