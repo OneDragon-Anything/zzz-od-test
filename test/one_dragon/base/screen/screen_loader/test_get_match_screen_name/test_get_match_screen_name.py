@@ -62,6 +62,35 @@ class TestGetMatchScreenName:
             screen_name='快捷手册-战术',
         )
 
+    def test_compendium_pages_use_content_mark(
+        self,
+        test_context: TestContext,
+    ) -> None:
+        """训练/日常按页面内容锚定，选中标签换成浅青底后互不误判（#2957）。"""
+        train = test_context.get_test_image('compendium_train_3.webp')
+        daily = test_context.get_test_image('compendium_daily_4.webp')
+
+        assert screen_utils.is_target_screen(
+            test_context,
+            train,
+            screen_name='快捷手册-训练',
+        )
+        assert not screen_utils.is_target_screen(
+            test_context,
+            train,
+            screen_name='快捷手册-日常',
+        )
+        assert screen_utils.is_target_screen(
+            test_context,
+            daily,
+            screen_name='快捷手册-日常',
+        )
+        assert not screen_utils.is_target_screen(
+            test_context,
+            daily,
+            screen_name='快捷手册-训练',
+        )
+
     def test(self, test_context: TestContext):
         screen_map = {
             'normal_world_basic.webp': '大世界-普通',
@@ -74,9 +103,11 @@ class TestGetMatchScreenName:
             'drive_disc_dismantle.webp': '仓库-驱动仓库-驱动盘拆解',
             'compendium_train.webp': '快捷手册-训练',
             'compendium_train_2.webp': '快捷手册-训练',
+            'compendium_train_3.webp': '快捷手册-训练',
             'compendium_daily.webp': '快捷手册-日常',
             'compendium_daily_2.webp': '快捷手册-日常',
             'compendium_daily_3.webp': '快捷手册-日常',
+            'compendium_daily_4.webp': '快捷手册-日常',
             'compendium_combat.webp': '快捷手册-作战',
             'battle_menu.webp': '战斗-菜单',
             'lost_void_entry_periodic.webp': '迷失之地-入口-周期',
