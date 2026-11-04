@@ -107,6 +107,59 @@ class TestScreenMatchFailureLog:
         assert result == '快捷手册-训练'
         assert not captured
 
+    def test_match_failure_log_lists_at_most_three(
+        self,
+        test_context: TestContext,
+        monkeypatch,
+    ):
+        """全局搜索会把所有接近匹配的画面都收集进来，日志最多列 3 个，其余只报数量。
+
+        传 4 个带 id_mark 的画面 + 1 个没有 id_mark 的画面（快捷手册），用菜单截图必然全部不命中：
+        日志应写明接近匹配总数、只列 3 个画面、其余用数量概括，并单独报出无可用标识的画面数。
+        """
+        captured: list[tuple] = []
+        monkeypatch.setattr(log, 'warning', lambda *args, **kwargs: captured.append(args))
+
+        near_miss_names = ['3D地图', '快捷手册-训练', '快捷手册-日常', '菜单-更多功能']
+        screen = test_context.get_test_image('menu.webp')
+        result = screen_utils.get_match_screen_name(
+            test_context,
+            screen,
+            screen_name_list=[*near_miss_names, '快捷手册'],
+        )
+
+        assert result is None
+        assert captured, '识别失败时应输出一条诊断 warning 日志'
+        message = captured[0][0] % captured[0][1:]
+
+        assert '限定候选 5 个' in message
+        assert '4 个画面接近匹配' in message
+        assert sum(1 for name in near_miss_names if name in message) == 3, '只应列出前 3 个画面'
+        assert '其余 1 个画面未命中' in message
+        assert '另有 1 个画面没有可用的画面标识(id_mark)' in message
+
+    def test_match_failure_without_id_mark_reports_count(
+        self,
+        test_context: TestContext,
+        monkeypatch,
+    ):
+        """没有可用画面标识时，日志要报出候选数与跳过数，而不是只说一句「没有接近匹配」。"""
+        captured: list[tuple] = []
+        monkeypatch.setattr(log, 'warning', lambda *args, **kwargs: captured.append(args))
+
+        screen = test_context.get_test_image('menu.webp')
+        result = screen_utils.get_match_screen_name(
+            test_context,
+            screen,
+            screen_name_list=['快捷手册'],
+        )
+
+        assert result is None
+        assert captured, '识别失败时应输出诊断日志'
+        message = captured[0][0] % captured[0][1:]
+        assert '候选 1 个' in message
+        assert '1 个没有可用的画面标识(id_mark)' in message
+
     def test_match_failure_log_throttled(
         self,
         test_context: TestContext,
