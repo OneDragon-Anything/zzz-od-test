@@ -55,12 +55,15 @@ def _create_service(
     env_config = SimpleNamespace(
         git_branch=branch_name,
         git_remote='origin',
+        is_gh_proxy=False,
+        gh_proxy_url='',
+        last_gh_proxy_url='',
         is_personal_proxy=False,
         personal_proxy='',
     )
     return GitService(
         env_config,
-        SimpleNamespace(primary_branch=primary_branch),
+        SimpleNamespace(primary_branch=primary_branch, gh_proxy_urls=()),
         repo_dir=str(repo_path),
     )
 
@@ -236,15 +239,15 @@ def test_fetch_remote_rebuilds_malformed_shallow_without_source_fallback(
     repo.free()
     git_service = _create_service(repo_path, 'main')
     candidates = [
-        (SimpleNamespace(config_item=SimpleNamespace(ui_text='first'), url='first'), 'first'),
-        (SimpleNamespace(config_item=SimpleNamespace(ui_text='second'), url='second'), 'second'),
+        (SimpleNamespace(config_item=SimpleNamespace(ui_text='first'), url='first', use_proxy=False), 'first'),
+        (SimpleNamespace(config_item=SimpleNamespace(ui_text='second'), url='second', use_proxy=False), 'second'),
     ]
     attempted_urls: list[str] = []
     rebuild_calls: list[tuple[object, str | None]] = []
     restore_calls: list[bool] = []
     original_fetch_once = git_service._fetch_remote_once
 
-    monkeypatch.setattr(git_service, '_get_repository_candidates', lambda: candidates)
+    monkeypatch.setattr(git_service, '_get_fetch_candidates', lambda: candidates)
     monkeypatch.setattr(
         git_service,
         '_get_repository_item',
@@ -290,12 +293,12 @@ def test_existing_target_with_undeclared_gap_triggers_rebuild(
     root_object.unlink()
     git_service = _create_service(repo_path, 'feature')
     candidate = (
-        SimpleNamespace(config_item=SimpleNamespace(ui_text='first'), url='first'),
+        SimpleNamespace(config_item=SimpleNamespace(ui_text='first'), url='first', use_proxy=False),
         'first',
     )
     rebuild_calls: list[tuple[object, str | None]] = []
 
-    monkeypatch.setattr(git_service, '_get_repository_candidates', lambda: [candidate])
+    monkeypatch.setattr(git_service, '_get_fetch_candidates', lambda: [candidate])
     monkeypatch.setattr(
         git_service,
         '_get_repository_item',
@@ -1109,6 +1112,7 @@ def test_git_daemon_rebuilds_malformed_repository_as_shallow_branch(
         candidate = SimpleNamespace(
             config_item=SimpleNamespace(ui_text='daemon'),
             url=remote_url,
+            use_proxy=False,
         )
         monkeypatch.setattr(
             git_service,

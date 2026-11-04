@@ -48,6 +48,7 @@ def create_repo_config(primary_branch: str = 'main') -> SimpleNamespace:
     repositories = (GITHUB_REPOSITORY, CNB_REPOSITORY, GITEE_REPOSITORY)
     return SimpleNamespace(
         repositories=repositories,
+        gh_proxy_urls=(),
         primary_repository=GITHUB_REPOSITORY,
         primary_branch=primary_branch,
         find_repository=lambda value: next(
@@ -611,6 +612,7 @@ class TestFetchProgressRemoteCallbacks:
             last_repository_url='',
             is_gh_proxy=False,
             gh_proxy_url='',
+            last_gh_proxy_url='',
             is_personal_proxy=False,
             personal_proxy='',
         )
@@ -699,6 +701,7 @@ class TestFetchProgressRemoteCallbacks:
             last_repository_url='',
             is_gh_proxy=False,
             gh_proxy_url='',
+            last_gh_proxy_url='',
             is_personal_proxy=False,
             personal_proxy='',
         )
@@ -750,6 +753,7 @@ class TestFetchProgressRemoteCallbacks:
             last_repository_url='',
             is_gh_proxy=False,
             gh_proxy_url='',
+            last_gh_proxy_url='',
             is_personal_proxy=False,
             personal_proxy='',
         )
@@ -1307,6 +1311,71 @@ class TestFetchProgressRemoteCallbacks:
         assert git_service._fetch_remote()[0] is GitSyncStatus.SUCCESS
         assert attempted_urls == ['https://proxy.example/https://github.example/repo.git']
         assert git_service.env_config.last_repository_url == GITHUB_REPOSITORY.url
+
+    def test_fetch_candidates_expand_each_proxy_line(self, git_service: GitService) -> None:
+        git_service.env_config.is_gh_proxy = True
+        git_service.env_config.gh_proxy_url = 'https://a.example'
+        git_service.env_config.last_gh_proxy_url = ''
+        git_service.repo_config.gh_proxy_urls = ('https://a.example', 'https://b.example')
+
+        candidates = git_service._get_fetch_candidates()
+
+        assert candidates == [
+            (GITHUB_REPOSITORY, 'https://a.example/https://github.example/repo.git'),
+            (GITHUB_REPOSITORY, 'https://b.example/https://github.example/repo.git'),
+            (CNB_REPOSITORY, 'https://cnb.example/repo.git'),
+            (GITEE_REPOSITORY, 'https://gitee.example/repo.git'),
+        ]
+
+    def test_fetch_falls_back_to_next_proxy_line(
+        self,
+        git_service: GitService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        attempted_urls: list[str] = []
+        git_service.env_config.repository_url = RepoConfig.AUTO_REPOSITORY_VALUE
+        git_service.env_config.is_gh_proxy = True
+        git_service.env_config.gh_proxy_url = 'https://a.example'
+        git_service.env_config.last_gh_proxy_url = ''
+        git_service.repo_config.gh_proxy_urls = ('https://a.example', 'https://b.example')
+
+        def fetch(url: str, *args: object) -> None:
+            attempted_urls.append(url)
+            if url.startswith('https://a.example/'):
+                raise ConnectionError('proxy unavailable')
+
+        monkeypatch.setattr(git_service, '_fetch_remote_once', fetch)
+        monkeypatch.setattr(git_service, '_restore_origin', lambda: True)
+
+        assert git_service._fetch_remote()[0] is GitSyncStatus.SUCCESS
+        assert attempted_urls == [
+            'https://a.example/https://github.example/repo.git',
+            'https://b.example/https://github.example/repo.git',
+        ]
+        assert git_service.env_config.last_gh_proxy_url == 'https://b.example'
+        assert git_service.env_config.gh_proxy_url == 'https://b.example'
+
+    def test_fetch_keeps_proxy_line_when_it_works(
+        self,
+        git_service: GitService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        attempted_urls: list[str] = []
+        git_service.env_config.repository_url = RepoConfig.AUTO_REPOSITORY_VALUE
+        git_service.env_config.is_gh_proxy = True
+        git_service.env_config.gh_proxy_url = 'https://a.example'
+        git_service.env_config.last_gh_proxy_url = ''
+        git_service.repo_config.gh_proxy_urls = ('https://a.example', 'https://b.example')
+        monkeypatch.setattr(
+            git_service,
+            '_fetch_remote_once',
+            lambda url, *args: attempted_urls.append(url),
+        )
+        monkeypatch.setattr(git_service, '_restore_origin', lambda: True)
+
+        assert git_service._fetch_remote()[0] is GitSyncStatus.SUCCESS
+        assert attempted_urls == ['https://a.example/https://github.example/repo.git']
+        assert git_service.env_config.last_gh_proxy_url == 'https://a.example'
 
     def test_all_missing_object_failures_trigger_repository_rebuild(
         self,
