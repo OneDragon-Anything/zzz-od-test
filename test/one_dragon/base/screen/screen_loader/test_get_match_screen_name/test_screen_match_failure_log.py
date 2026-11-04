@@ -2,6 +2,7 @@ import pytest
 from test.conftest import TestContext
 
 from one_dragon.base.screen import screen_utils
+from one_dragon.base.screen.screen_area import ScreenArea
 from one_dragon.utils.log_utils import log
 
 
@@ -134,7 +135,9 @@ class TestScreenMatchFailureLog:
 
         assert '限定候选 5 个' in message
         assert '4 个画面接近匹配' in message
-        assert sum(1 for name in near_miss_names if name in message) == 3, '只应列出前 3 个画面'
+        # 只看"接近匹配"后面列出的部分：候选范围里也会出现画面名，不能算进列出数量
+        shown_part = message.split('个画面接近匹配，')[1].split('；…')[0]
+        assert sum(1 for name in near_miss_names if name in shown_part) == 3, '只应列出前 3 个画面'
         assert '其余 1 个画面未命中' in message
         assert '另有 1 个画面没有可用于匹配的画面标识' in message
 
@@ -159,6 +162,69 @@ class TestScreenMatchFailureLog:
         message = captured[0][0] % captured[0][1:]
         assert '候选 1 个' in message
         assert '1 个没有可用于匹配的画面标识' in message
+
+    def test_match_failure_log_distinguishes_same_size_scope(
+        self,
+        test_context: TestContext,
+        monkeypatch,
+    ):
+        """候选数相同但画面不同的两次失败要能分别输出，不能被节流当成同一条日志。
+
+        快捷手册 / 电玩店 都没有 id_mark，日志正文只差候选范围，所以范围里要带画面名。
+        """
+        captured: list[tuple] = []
+        monkeypatch.setattr(log, 'warning', lambda *args, **kwargs: captured.append(args))
+
+        screen = test_context.get_test_image('menu.webp')
+        screen_utils.get_match_screen_name(test_context, screen, screen_name_list=['快捷手册'])
+        screen_utils.get_match_screen_name(test_context, screen, screen_name_list=['电玩店'])
+
+        messages = [args[0] % args[1:] for args in captured]
+        assert len(messages) == 2, '候选范围不同的两次失败都应输出日志'
+        assert '限定候选 1 个：快捷手册' in messages[0]
+        assert '限定候选 1 个：电玩店' in messages[1]
+
+    def test_near_miss_sorted_by_passed_marks(
+        self,
+        test_context: TestContext,
+        monkeypatch,
+    ):
+        """接近匹配画面按「未命中前已通过的标识数」排序，通过得多的排在前面，其余只报数量。"""
+        captured: list[tuple] = []
+        monkeypatch.setattr(log, 'warning', lambda *args, **kwargs: captured.append(args))
+
+        diag = screen_utils._ScreenMatchDiag()
+        diag.near_miss = [
+            screen_utils._NearMiss('画面A', 0, '标识a'),
+            screen_utils._NearMiss('画面B', 2, '标识b'),
+            screen_utils._NearMiss('画面C', 1, '标识c'),
+            screen_utils._NearMiss('画面D', 0, '标识d'),
+        ]
+        screen_utils._log_screen_match_failure(test_context, diag)
+
+        assert captured, '应输出诊断日志'
+        message = captured[0][0] % captured[0][1:]
+        assert message.index('画面B') < message.index('画面C') < message.index('画面A')
+        assert '画面D' not in message, '超过 3 个的画面只报数量'
+        assert '其余 1 个画面未命中' in message
+
+    def test_color_filter_annotated_only_for_text_area(self):
+        """模板区域不使用 color_range，即使配了也不该标「颜色过滤」，避免把排查方向带偏。"""
+        template_area = ScreenArea(
+            area_name='图标',
+            id_mark=True,
+            template_id='icon',
+            color_range=[[0, 0, 0], [255, 255, 255]],
+        )
+        text_area = ScreenArea(
+            area_name='文字',
+            id_mark=True,
+            text='训练',
+            color_range=[[0, 0, 0], [255, 255, 255]],
+        )
+
+        assert screen_utils._describe_failed_id_mark(template_area) == '图标'
+        assert screen_utils._describe_failed_id_mark(text_area) == '文字(颜色过滤)'
 
     def test_match_failure_log_throttled(
         self,
