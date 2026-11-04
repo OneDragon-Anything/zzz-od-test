@@ -99,7 +99,7 @@ class TestOpenGameWaitGame:
         assert op.activate_fail_times == 0, '窗口未就绪不算连续激活失败'
 
     def test_activation_failure_mentions_manual_hdr_when_restore_fails(self, monkeypatch):
-        """HDR 恢复失败要在失败文案里让用户手动确认，不能静默丢掉原始设置。"""
+        """HDR 恢复失败要在失败文案里给出恢复入口，不能静默丢掉原始设置。"""
         executed = _patch_enable_hdr(monkeypatch, success=False)
         controller = _FakeController(ready=True, activated=False)
         op = _make_op(controller)
@@ -108,7 +108,8 @@ class TestOpenGameWaitGame:
 
         assert results[-1][0] == 'fail'
         assert '激活失败' in results[-1][1][0]
-        assert '手动确认游戏内的 HDR 设置' in results[-1][1][0]
+        # 恢复的是 HKCU\...\UserGpuPreferences 里按应用存的值，设置页的「切换 HDR 状态」写的也是它
+        assert '切换 HDR 状态' in results[-1][1][0]
         assert executed == [True], 'HDR 恢复失败也只调用一次，不反复重试'
 
     def test_activation_success_ignores_hdr_restore_failure(self, monkeypatch):
