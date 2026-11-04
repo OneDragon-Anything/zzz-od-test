@@ -11,9 +11,9 @@ class TestScreenMatchFailureLog:
     @pytest.fixture(autouse=True)
     def _reset_failure_throttle(self, test_context: TestContext):
         """重置失败日志节流状态，避免测试间相互干扰（screen_loader 是 session 级共享的）。"""
-        test_context.screen_loader.last_screen_match_failure_detail = None
+        test_context.screen_loader.last_screen_match_failure_key = None
         yield
-        test_context.screen_loader.last_screen_match_failure_detail = None
+        test_context.screen_loader.last_screen_match_failure_key = None
 
     def test_match_failure_logs_color_filter_detail(
         self,
@@ -183,6 +183,27 @@ class TestScreenMatchFailureLog:
         assert len(messages) == 2, '候选范围不同的两次失败都应输出日志'
         assert '限定候选 1 个：快捷手册' in messages[0]
         assert '限定候选 1 个：电玩店' in messages[1]
+
+    def test_scope_truncation_still_keeps_distinct_candidates(
+        self,
+        test_context: TestContext,
+        monkeypatch,
+    ):
+        """候选范围超过 5 个时展示会截断，但节流要区分完整候选集合。
+
+        两组候选数量、前 5 个画面名都相同，只有第 6 个不同，且都没有 id_mark，
+        两次失败应各自输出日志，不能被截断后的相同文本节流掉。
+        """
+        captured: list[tuple] = []
+        monkeypatch.setattr(log, 'warning', lambda *args, **kwargs: captured.append(args))
+
+        screen = test_context.get_test_image('menu.webp')
+        scope_a = ['电玩店', '区域巡防', '战斗画面', '咖啡店', '委托助手', '快捷手册']
+        scope_b = ['电玩店', '区域巡防', '战斗画面', '咖啡店', '委托助手', '地图']
+        screen_utils.get_match_screen_name(test_context, screen, screen_name_list=scope_a)
+        screen_utils.get_match_screen_name(test_context, screen, screen_name_list=scope_b)
+
+        assert len(captured) == 2, '仅第 6 个候选不同的两组失败都应输出日志'
 
     def test_near_miss_sorted_by_passed_marks(
         self,
