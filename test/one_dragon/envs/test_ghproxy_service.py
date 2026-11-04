@@ -113,7 +113,7 @@ class TestCheckUrl:
             status_code = 200
 
             def iter_content(self, chunk_size: int):
-                yield b'content'
+                yield b'[project]\nname = "ZenlessZoneZero-OneDragon"\n'
 
             def close(self) -> None:
                 pass
@@ -124,6 +124,25 @@ class TestCheckUrl:
         )
 
         assert service.check_url('https://first.example') is True
+
+    def test_html_challenge_page_is_unavailable(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        service, _ = _create_service()
+
+        class _Response:
+            status_code = 200
+
+            def iter_content(self, chunk_size: int):
+                yield b'<!DOCTYPE html><html><body>checking your browser</body></html>'
+
+            def close(self) -> None:
+                pass
+
+        monkeypatch.setattr(
+            'one_dragon.envs.ghproxy_service.requests.get',
+            lambda url, timeout, stream: _Response(),
+        )
+
+        assert service.check_url('https://first.example') is False
 
     def test_error_status_is_unavailable(self, monkeypatch: pytest.MonkeyPatch) -> None:
         service, _ = _create_service()
