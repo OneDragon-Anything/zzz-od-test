@@ -1,6 +1,7 @@
 """环境下载源回退：当前源失败后按候选顺序换源，并记住成功的源。"""
 
 from copy import deepcopy
+from types import SimpleNamespace
 
 import pytest
 
@@ -8,6 +9,7 @@ import one_dragon.envs.download_service as download_service_module
 import one_dragon.envs.repo_config as repo_config_module
 from one_dragon.envs.download_service import DownloadService
 from one_dragon.envs.env_config import EnvConfig
+from one_dragon.envs.ghproxy_service import GhProxyService
 from one_dragon.envs.repo_config import RepoConfig
 
 GITHUB = 'https://github.example/env'
@@ -25,7 +27,16 @@ class _FakeEnvConfig:
     def __init__(self, current: str, candidates: list[str]):
         self.env_source: str = current
         self.last_env_source: str = ''
+        self.personal_proxy: str = ''
         self._candidates: list[str] = candidates
+
+    @property
+    def is_gh_proxy(self) -> bool:
+        return False
+
+    @property
+    def is_personal_proxy(self) -> bool:
+        return False
 
     def get_env_source_candidates(self) -> list[str]:
         return list(self._candidates)
@@ -35,13 +46,20 @@ def _make_service(
         env_config: _FakeEnvConfig,
         results: list[bool],
 ) -> tuple[DownloadService, list[str]]:
-    service = DownloadService(_FakeProjectConfig(), env_config)  # type: ignore[arg-type]
+    repo_config = SimpleNamespace(gh_proxy_urls=())
+    service = DownloadService(  # type: ignore[arg-type]
+        _FakeProjectConfig(),
+        env_config,
+        repo_config,  # type: ignore[arg-type]
+        GhProxyService(env_config, repo_config),  # type: ignore[arg-type]
+    )
     calls: list[str] = []
 
     def fake_download(
             download_url: str,
             save_file_path: str,
             progress_callback=None,
+            exclude_proxy_urls=None,
     ) -> bool:
         calls.append(download_url)
         return results[len(calls) - 1]
@@ -171,10 +189,21 @@ class TestDownloadAndExtractFallback:
             download_results: list[bool],
             broken_sources: set[str],
     ) -> tuple[DownloadService, list[str]]:
-        service = DownloadService(_FakeProjectConfig(), env_config)  # type: ignore[arg-type]
+        repo_config = SimpleNamespace(gh_proxy_urls=())
+        service = DownloadService(  # type: ignore[arg-type]
+            _FakeProjectConfig(),
+            env_config,
+            repo_config,  # type: ignore[arg-type]
+            GhProxyService(env_config, repo_config),  # type: ignore[arg-type]
+        )
         calls: list[str] = []
 
-        def fake_download(download_url: str, save_file_path: str, progress_callback=None) -> bool:
+        def fake_download(
+                download_url: str,
+                save_file_path: str,
+                progress_callback=None,
+                exclude_proxy_urls=None,
+        ) -> bool:
             calls.append(download_url)
             return download_results[len(calls) - 1]
 
@@ -209,14 +238,18 @@ class TestDownloadAndExtractFallback:
         assert len(calls) == 4, '两个源各重试 2 次'
         assert env_config.last_env_source == CNB, '解压没成功不许写 last_env_source'
 
-    def test_download_failure_switches_source_without_retrying(self, monkeypatch, tmp_path):
+    def test_download_failure_retries_same_source_then_switches(self, monkeypatch, tmp_path):
         env_config = _FakeEnvConfig(GITHUB, [GITHUB, CNB])
-        service, calls = self._patch(monkeypatch, env_config, [False, True], set())
+        service, calls = self._patch(monkeypatch, env_config, [False, False, True], set())
 
         ok = service.download_and_extract_env_file('env.zip', str(tmp_path / 'tmp'), str(tmp_path / 'out'))
 
         assert ok is True
-        assert calls == [f'{GITHUB}/ZZZ-Test/env.zip', f'{CNB}/ZZZ-Test/env.zip']
+        assert calls == [
+            f'{GITHUB}/ZZZ-Test/env.zip',
+            f'{GITHUB}/ZZZ-Test/env.zip',
+            f'{CNB}/ZZZ-Test/env.zip',
+        ], '同源重试用完才换源'
         assert env_config.last_env_source == CNB
 
 
@@ -225,9 +258,18 @@ class _UnwritableEnvConfig(_FakeEnvConfig):
 
     def __init__(self, current: str, candidates: list[str]):
         self.env_source: str = current
+        self.personal_proxy: str = ''
         self._candidates: list[str] = candidates
         self._last_env_source: str = ''
         self.write_attempts: int = 0
+
+    @property
+    def is_gh_proxy(self) -> bool:
+        return False
+
+    @property
+    def is_personal_proxy(self) -> bool:
+        return False
 
     @property
     def last_env_source(self) -> str:

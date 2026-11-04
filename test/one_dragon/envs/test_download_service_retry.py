@@ -12,7 +12,11 @@ class _FakeEnvConfig:
 
     def __init__(self) -> None:
         self.env_source: str = 'https://github.com/OneDragon-Anything'
+        self.last_env_source: str = ''
         self.personal_proxy: str = ''
+
+    def get_env_source_candidates(self) -> list[str]:
+        return [self.env_source]
 
     @property
     def is_gh_proxy(self) -> bool:
@@ -28,6 +32,11 @@ def _create_service() -> DownloadService:
     service = DownloadService.__new__(DownloadService)
     service.project_config = SimpleNamespace(project_name='ZenlessZoneZero-OneDragon')
     service.env_config = _FakeEnvConfig()
+    service.gh_proxy_service = SimpleNamespace(
+        get_candidate_urls=lambda: (),
+        remember_success=lambda url: None,
+        mark_failed=lambda url: None,
+    )
     service._last_gh_proxy_url = None
     return service
 
