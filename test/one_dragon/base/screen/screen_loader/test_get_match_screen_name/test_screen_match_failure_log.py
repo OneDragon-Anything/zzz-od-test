@@ -136,14 +136,14 @@ class TestScreenMatchFailureLog:
         assert '4 个画面接近匹配' in message
         assert sum(1 for name in near_miss_names if name in message) == 3, '只应列出前 3 个画面'
         assert '其余 1 个画面未命中' in message
-        assert '另有 1 个画面没有可用的画面标识(id_mark)' in message
+        assert '另有 1 个画面没有可用于匹配的画面标识' in message
 
     def test_match_failure_without_id_mark_reports_count(
         self,
         test_context: TestContext,
         monkeypatch,
     ):
-        """没有可用画面标识时，日志要报出候选数与跳过数，而不是只说一句「没有接近匹配」。"""
+        """没有可用于匹配的画面标识时，日志要报出候选数与跳过数，而不是只说一句「没有接近匹配」。"""
         captured: list[tuple] = []
         monkeypatch.setattr(log, 'warning', lambda *args, **kwargs: captured.append(args))
 
@@ -158,7 +158,7 @@ class TestScreenMatchFailureLog:
         assert captured, '识别失败时应输出诊断日志'
         message = captured[0][0] % captured[0][1:]
         assert '候选 1 个' in message
-        assert '1 个没有可用的画面标识(id_mark)' in message
+        assert '1 个没有可用于匹配的画面标识' in message
 
     def test_match_failure_log_throttled(
         self,
