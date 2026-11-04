@@ -180,3 +180,49 @@ class TestRememberSuccess:
 
         assert service.remember_success_by_url('https://github.com/a/b.git') is None
         assert env_config.last_gh_proxy_url == ''
+
+
+class TestFailedLines:
+
+    def test_mark_failed_puts_line_behind(self) -> None:
+        service, _ = _create_service()
+
+        service.mark_failed('https://first.example/')
+
+        assert service.get_candidate_urls() == [
+            'https://second.example',
+            'https://third.example',
+        ]
+
+    def test_all_lines_marked_failed_falls_back_to_full_list(self) -> None:
+        service, _ = _create_service()
+
+        for url in ('https://first.example', 'https://second.example', 'https://third.example'):
+            service.mark_failed(url)
+
+        assert service.get_candidate_urls() == [
+            'https://first.example',
+            'https://second.example',
+            'https://third.example',
+        ]
+
+    def test_remember_success_clears_failed_mark(self) -> None:
+        service, _ = _create_service()
+        service.mark_failed('https://second.example')
+
+        service.remember_success('https://second.example')
+
+        assert service.get_candidate_urls()[0] == 'https://second.example'
+
+    def test_remember_success_by_url_prefers_longest_prefix(self) -> None:
+        service, env_config = _create_service(
+            current='https://proxy.example',
+            builtin=('https://proxy.example', 'https://proxy.example/working'),
+        )
+
+        matched = service.remember_success_by_url(
+            'https://proxy.example/working/https://github.com/OneDragon-Anything/ZenlessZoneZero-OneDragon.git'
+        )
+
+        assert matched == 'https://proxy.example/working'
+        assert env_config.last_gh_proxy_url == 'https://proxy.example/working'

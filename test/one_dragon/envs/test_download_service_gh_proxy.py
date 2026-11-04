@@ -1,4 +1,5 @@
 """DownloadService 的 GitHub 代理线路回退。"""
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -11,6 +12,7 @@ class _FakeEnvConfig:
     """只带代理相关字段的 EnvConfig 替身。"""
 
     def __init__(self, is_gh_proxy: bool = True, is_personal_proxy: bool = False) -> None:
+        self.env_source: str = 'https://github.com/OneDragon-Anything'
         self.gh_proxy_url: str = 'https://first.example'
         self.last_gh_proxy_url: str = ''
         self.personal_proxy: str = 'http://127.0.0.1:7890'
@@ -117,3 +119,26 @@ class TestProxyFallback:
 
         assert service.download_file_from_url(GITHUB_FILE_URL, 'x.zip') is True
         assert received_proxy == ['http://127.0.0.1:7890']
+
+    def test_broken_content_switches_line_on_retry(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        service, _ = _create_service()
+        attempted: list[str] = []
+
+        def fake_download(url: str, save_file_path: str, proxy=None, progress_callback=None) -> bool:
+            attempted.append(url)
+            Path(save_file_path).write_bytes(b'not a zip')
+            return True
+
+        monkeypatch.setattr('one_dragon.envs.download_service.http_utils.download_file', fake_download)
+        monkeypatch.setattr('one_dragon.envs.download_service.file_utils.unzip_file', lambda *args: False)
+
+        assert service.download_and_extract_env_file('env.zip', str(tmp_path), str(tmp_path / 'out')) is False
+        env_url = 'https://github.com/OneDragon-Anything/ZenlessZoneZero-OneDragon/env.zip'
+        assert attempted == [
+            f'https://first.example/{env_url}',
+            f'https://second.example/{env_url}',
+        ]
