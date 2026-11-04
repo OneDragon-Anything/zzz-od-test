@@ -26,6 +26,16 @@ class _FakeController:
         return self.activated
 
 
+def _patch_enable_hdr(monkeypatch) -> list[bool]:
+    """把 EnableAutoHDR 换成只记录调用的假实现。"""
+    executed: list[bool] = []
+    monkeypatch.setattr(
+        open_game_module, 'EnableAutoHDR',
+        lambda ctx: SimpleNamespace(execute=lambda: executed.append(True)),
+    )
+    return executed
+
+
 def _make_op(controller: _FakeController) -> OpenGame:
     op = object.__new__(OpenGame)
     op.ctx = SimpleNamespace(controller=controller)
@@ -47,11 +57,7 @@ class TestOpenGameWaitGame:
         assert controller.active_calls == 0
 
     def test_activation_success_runs_hdr_and_succeeds(self, monkeypatch):
-        executed: list[bool] = []
-        monkeypatch.setattr(
-            open_game_module, 'EnableAutoHDR',
-            lambda ctx: SimpleNamespace(execute=lambda: executed.append(True)),
-        )
+        executed = _patch_enable_hdr(monkeypatch)
         controller = _FakeController(ready=True, activated=True)
 
         result = OpenGame.wait_game(_make_op(controller))
@@ -59,7 +65,8 @@ class TestOpenGameWaitGame:
         assert result[0] == 'success'
         assert executed == [True]
 
-    def test_activation_failure_retries_then_fails(self):
+    def test_activation_failure_retries_then_fails(self, monkeypatch):
+        executed = _patch_enable_hdr(monkeypatch)
         controller = _FakeController(ready=True, activated=False)
         op = _make_op(controller)
 
@@ -69,3 +76,14 @@ class TestOpenGameWaitGame:
         assert results[-1][0] == 'fail'
         assert '激活失败' in results[-1][1][0]
         assert controller.active_calls == OpenGame.ACTIVE_WINDOW_MAX_FAIL_TIMES
+        assert executed == [True], '启动失败也要恢复 HDR，否则原始设置会被覆盖'
+
+    def test_window_not_ready_resets_activation_fail_count(self):
+        controller = _FakeController(ready=False, activated=False)
+        op = _make_op(controller)
+        op.activate_fail_times = 3
+
+        result = OpenGame.wait_game(op)
+
+        assert result[0] == 'retry'
+        assert op.activate_fail_times == 0, '窗口未就绪不算连续激活失败'
