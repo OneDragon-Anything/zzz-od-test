@@ -91,11 +91,11 @@ def test_unavailable_runtime_manifest_skips_target_lookup(
     'project_config',
     [None, b'{}\n', b'manifest_path: deploy/module_manifest.py\n'],
 )
-def test_missing_target_config_or_manifest_keeps_skipping_check(
+def test_missing_target_config_or_manifest_blocks_update(
     monkeypatch: pytest.MonkeyPatch,
     project_config: bytes | None,
 ) -> None:
-    """目标配置、清单路径或清单文件缺失时保持原有跳过行为。"""
+    """本地清单可用时，目标配置、清单路径或清单文件缺失都阻止更新。"""
     service = GitService.__new__(GitService)
     read_file = Mock(side_effect=[project_config, None])
     checker = Mock(side_effect=AssertionError('缺少目标清单时不应检查'))
@@ -103,8 +103,45 @@ def test_missing_target_config_or_manifest_keeps_skipping_check(
     monkeypatch.setattr('one_dragon.envs.git_service.check_manifest_compatible', checker)
     monkeypatch.setattr(service, '_get_file_at_commit', read_file)
 
-    assert service._check_manifest_compatible(TARGET_OID) == (True, '')
+    compatible, message = service._check_manifest_compatible(TARGET_OID)
+    assert compatible is False
+    assert message
     checker.assert_not_called()
+
+
+def test_manifest_check_exception_blocks_update(monkeypatch: pytest.MonkeyPatch) -> None:
+    """本地清单可用且清单检查抛异常时阻止更新。"""
+    service = GitService.__new__(GitService)
+    monkeypatch.setattr('one_dragon.envs.git_service.load_runtime_manifest', Mock(return_value=b'import sys\n'))
+    monkeypatch.setattr(
+        'one_dragon.envs.git_service.check_manifest_compatible',
+        Mock(side_effect=RuntimeError('检查失败')),
+    )
+    monkeypatch.setattr(
+        service,
+        '_get_file_at_commit',
+        lambda _oid, path: b'manifest_path: deploy/module_manifest.py\n' if path.endswith('project.yml') else b'import sys\n',
+    )
+
+    compatible, message = service._check_manifest_compatible(TARGET_OID)
+    assert compatible is False
+    assert message
+
+
+@pytest.mark.parametrize('local_manifest', [b'import sys\n', None])
+def test_remote_manifest_exception_uses_local_manifest_availability(
+    monkeypatch: pytest.MonkeyPatch,
+    local_manifest: bytes | None,
+) -> None:
+    """远程检查异常仅在本地冻结清单不可用时跳过。"""
+    service = GitService.__new__(GitService)
+    service.env_config = SimpleNamespace(git_remote='origin', git_branch='main')
+    monkeypatch.setattr('one_dragon.envs.git_service.load_runtime_manifest', Mock(return_value=local_manifest))
+    monkeypatch.setattr(service, '_open_repo', Mock(side_effect=RuntimeError('仓库不可用')))
+
+    compatible, message = service._check_remote_manifest_compatible()
+    assert compatible is (local_manifest is None)
+    assert bool(message) is (local_manifest is not None)
 
 
 @pytest.mark.parametrize('operation', ['update', 'clone', 'reset'])
