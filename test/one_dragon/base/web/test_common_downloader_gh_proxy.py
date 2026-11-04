@@ -171,3 +171,42 @@ class TestGithubSourceProxyFallback:
 def tried_single_line(attempted: list[str]) -> bool:
     """取消后只应该尝试第一条线路。"""
     return attempted == [f'https://first.example/{GITHUB_URL}']
+
+class TestZipRetryAfterBrokenContent:
+
+    def test_broken_zip_retry_uses_next_line(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from one_dragon.base.web.zip_downloader import ZipDownloader
+
+        env_config = _FakeEnvConfig()
+        repo_config = SimpleNamespace(gh_proxy_urls=('https://first.example', 'https://second.example'))
+        service = GhProxyService(env_config, repo_config)
+        param = CommonDownloaderParam(
+            save_file_path='.',
+            save_file_name='model.zip',
+            download_urls={'github': GITHUB_URL},
+            check_existed_list=['model.onnx'],
+        )
+        downloader = ZipDownloader(param)
+        attempted: list[str] = []
+
+        monkeypatch.setattr(
+            'one_dragon.base.web.common_downloader.http_utils.download_file',
+            lambda download_url, **kwargs: attempted.append(download_url) or True,
+        )
+        monkeypatch.setattr(downloader, 'unzip', lambda: len(attempted) > 1)
+        monkeypatch.setattr(
+            'one_dragon.base.web.common_downloader.CommonDownloader.is_file_existed',
+            lambda _self: len(attempted) > 1,
+        )
+
+        assert downloader.download(
+            source_order=['github'],
+            gh_proxy_service=service,
+        ) is True
+        assert attempted == [
+            f'https://first.example/{GITHUB_URL}',
+            f'https://second.example/{GITHUB_URL}',
+        ]

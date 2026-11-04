@@ -211,6 +211,7 @@ class TestFailedLines:
         assert service.get_candidate_urls() == [
             'https://second.example',
             'https://third.example',
+            'https://first.example',
         ]
 
     def test_all_lines_marked_failed_falls_back_to_full_list(self) -> None:
