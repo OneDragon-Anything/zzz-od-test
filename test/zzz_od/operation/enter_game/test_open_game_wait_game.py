@@ -2,6 +2,10 @@
 
 from types import SimpleNamespace
 
+from one_dragon.base.operation.operation_round_result import (
+    OperationRoundResult,
+    OperationRoundResultEnum,
+)
 from zzz_od.operation.enter_game import open_game as open_game_module
 from zzz_od.operation.enter_game.open_game import OpenGame
 
@@ -26,12 +30,18 @@ class _FakeController:
         return self.activated
 
 
-def _patch_enable_hdr(monkeypatch) -> list[bool]:
-    """把 EnableAutoHDR 换成只记录调用的假实现。"""
+def _patch_enable_hdr(monkeypatch, success: bool = True) -> list[bool]:
+    """把 EnableAutoHDR 换成假实现，记录调用次数并返回指定结果。"""
     executed: list[bool] = []
+
+    def fake_execute() -> OperationRoundResult:
+        executed.append(True)
+        result = OperationRoundResultEnum.SUCCESS if success else OperationRoundResultEnum.FAIL
+        return OperationRoundResult(result)
+
     monkeypatch.setattr(
         open_game_module, 'EnableAutoHDR',
-        lambda ctx: SimpleNamespace(execute=lambda: executed.append(True)),
+        lambda ctx: SimpleNamespace(execute=fake_execute),
     )
     return executed
 
@@ -87,3 +97,26 @@ class TestOpenGameWaitGame:
 
         assert result[0] == 'retry'
         assert op.activate_fail_times == 0, '窗口未就绪不算连续激活失败'
+
+    def test_activation_failure_mentions_manual_hdr_when_restore_fails(self, monkeypatch):
+        """HDR 恢复失败要在失败文案里让用户手动确认，不能静默丢掉原始设置。"""
+        executed = _patch_enable_hdr(monkeypatch, success=False)
+        controller = _FakeController(ready=True, activated=False)
+        op = _make_op(controller)
+
+        results = [OpenGame.wait_game(op) for _ in range(OpenGame.ACTIVE_WINDOW_MAX_FAIL_TIMES)]
+
+        assert results[-1][0] == 'fail'
+        assert '激活失败' in results[-1][1][0]
+        assert '手动确认游戏内的 HDR 设置' in results[-1][1][0]
+        assert executed == [True], 'HDR 恢复失败也只调用一次，不反复重试'
+
+    def test_activation_success_ignores_hdr_restore_failure(self, monkeypatch):
+        """窗口已经激活：HDR 恢复失败只记日志，不影响本次启动成功。"""
+        _patch_enable_hdr(monkeypatch, success=False)
+        controller = _FakeController(ready=True, activated=True)
+
+        result = OpenGame.wait_game(_make_op(controller))
+
+        assert result[0] == 'success'
+        assert controller.active_calls == 1
