@@ -2,10 +2,7 @@
 
 from types import SimpleNamespace
 
-from one_dragon.base.operation.operation_round_result import (
-    OperationRoundResult,
-    OperationRoundResultEnum,
-)
+from one_dragon.base.operation.operation_base import OperationResult
 from zzz_od.operation.enter_game import open_game as open_game_module
 from zzz_od.operation.enter_game.open_game import OpenGame
 
@@ -34,10 +31,9 @@ def _patch_enable_hdr(monkeypatch, success: bool = True) -> list[bool]:
     """把 EnableAutoHDR 换成假实现，记录调用次数并返回指定结果。"""
     executed: list[bool] = []
 
-    def fake_execute() -> OperationRoundResult:
+    def fake_execute() -> OperationResult:
         executed.append(True)
-        result = OperationRoundResultEnum.SUCCESS if success else OperationRoundResultEnum.FAIL
-        return OperationRoundResult(result)
+        return OperationResult(success)
 
     monkeypatch.setattr(
         open_game_module, 'EnableAutoHDR',
@@ -50,6 +46,7 @@ def _make_op(controller: _FakeController) -> OpenGame:
     op = object.__new__(OpenGame)
     op.ctx = SimpleNamespace(controller=controller)
     op.activate_fail_times = 0
+    op.hdr_restored = False
     op.round_success = lambda *args, **kwargs: ('success', kwargs)
     op.round_retry = lambda *args, **kwargs: ('retry', kwargs)
     op.round_fail = lambda *args, **kwargs: ('fail', args)
@@ -87,6 +84,7 @@ class TestOpenGameWaitGame:
         assert '激活失败' in results[-1][1][0]
         assert controller.active_calls == OpenGame.ACTIVE_WINDOW_MAX_FAIL_TIMES
         assert executed == [True], '启动失败也要恢复 HDR，否则原始设置会被覆盖'
+        assert op.hdr_restored is True, '已经恢复过就不要再兜底恢复一次'
 
     def test_window_not_ready_resets_activation_fail_count(self):
         controller = _FakeController(ready=False, activated=False)
@@ -121,3 +119,41 @@ class TestOpenGameWaitGame:
 
         assert result[0] == 'success'
         assert controller.active_calls == 1
+
+
+class TestOpenGameRestoreHdrOnExit:
+    """重试耗尽等失败退出路径也要恢复 HDR。"""
+
+    def _patch_super(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            open_game_module.Operation, 'after_operation_done', lambda *args, **kwargs: None,
+        )
+
+    def test_failed_operation_restores_hdr(self, monkeypatch):
+        executed = _patch_enable_hdr(monkeypatch)
+        self._patch_super(monkeypatch)
+        op = _make_op(_FakeController(ready=True, activated=False))
+
+        OpenGame.after_operation_done(op, OperationResult(False, '超过最大重试次数'))
+
+        assert executed == [True]
+        assert op.hdr_restored is False, '恢复结果由 after_operation_done 自己判断，不改状态'
+
+    def test_failed_operation_skips_hdr_when_already_restored(self, monkeypatch):
+        executed = _patch_enable_hdr(monkeypatch)
+        self._patch_super(monkeypatch)
+        op = _make_op(_FakeController(ready=True, activated=False))
+        op.hdr_restored = True
+
+        OpenGame.after_operation_done(op, OperationResult(False, '连续激活失败'))
+
+        assert executed == []
+
+    def test_successful_operation_skips_hdr(self, monkeypatch):
+        executed = _patch_enable_hdr(monkeypatch)
+        self._patch_super(monkeypatch)
+        op = _make_op(_FakeController(ready=True, activated=True))
+
+        OpenGame.after_operation_done(op, OperationResult(True))
+
+        assert executed == []
