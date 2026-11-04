@@ -4,6 +4,7 @@ from copy import deepcopy
 
 import pytest
 
+import one_dragon.envs.download_service as download_service_module
 import one_dragon.envs.repo_config as repo_config_module
 from one_dragon.envs.download_service import DownloadService
 from one_dragon.envs.env_config import EnvConfig
@@ -158,3 +159,62 @@ class TestSourceOrder:
 
         assert env_config.get_env_source_candidates() == [GITHUB, CNB, GITEE]
         assert env_config.repo_config.calls == [('env_source', GITHUB, CNB)]
+
+
+class TestDownloadAndExtractFallback:
+    """下载成功但解压失败（源上的包损坏）时换源，而不是反复下载同一个坏包。"""
+
+    def _patch(
+            self,
+            monkeypatch: pytest.MonkeyPatch,
+            env_config: _FakeEnvConfig,
+            download_results: list[bool],
+            broken_sources: set[str],
+    ) -> tuple[DownloadService, list[str]]:
+        service = DownloadService(_FakeProjectConfig(), env_config)  # type: ignore[arg-type]
+        calls: list[str] = []
+
+        def fake_download(download_url: str, save_file_path: str, progress_callback=None) -> bool:
+            calls.append(download_url)
+            return download_results[len(calls) - 1]
+
+        def fake_unzip(zip_path: str, extract_dir: str) -> bool:
+            assert calls, '必须先下载再解压'
+            return not any(source in calls[-1] for source in broken_sources)
+
+        service.download_file_from_url = fake_download  # type: ignore[method-assign]
+        monkeypatch.setattr(download_service_module.file_utils, 'unzip_file', fake_unzip)
+        return service, calls
+
+    def test_corrupt_zip_retries_then_switches_source(self, monkeypatch, tmp_path):
+        env_config = _FakeEnvConfig(GITHUB, [GITHUB, CNB])
+        service, calls = self._patch(monkeypatch, env_config, [True] * 4, {GITHUB})
+
+        ok = service.download_and_extract_env_file('env.zip', str(tmp_path / 'tmp'), str(tmp_path / 'out'))
+
+        assert ok is True
+        assert sum(1 for url in calls if GITHUB in url) == 2, '同源解压失败先重试满 retry_count'
+        assert calls[-1].startswith(CNB)
+        assert env_config.last_env_source == CNB, '损坏的源不能记成上次成功源'
+        assert env_config.env_source == GITHUB, '不覆盖用户选择的源'
+
+    def test_all_sources_corrupt_keeps_last_success_unchanged(self, monkeypatch, tmp_path):
+        env_config = _FakeEnvConfig(GITHUB, [GITHUB, CNB])
+        env_config.last_env_source = CNB
+        service, calls = self._patch(monkeypatch, env_config, [True] * 4, {GITHUB, CNB})
+
+        ok = service.download_and_extract_env_file('env.zip', str(tmp_path / 'tmp'), str(tmp_path / 'out'))
+
+        assert ok is False
+        assert len(calls) == 4, '两个源各重试 2 次'
+        assert env_config.last_env_source == CNB, '解压没成功不许写 last_env_source'
+
+    def test_download_failure_switches_source_without_retrying(self, monkeypatch, tmp_path):
+        env_config = _FakeEnvConfig(GITHUB, [GITHUB, CNB])
+        service, calls = self._patch(monkeypatch, env_config, [False, True], set())
+
+        ok = service.download_and_extract_env_file('env.zip', str(tmp_path / 'tmp'), str(tmp_path / 'out'))
+
+        assert ok is True
+        assert calls == [f'{GITHUB}/ZZZ-Test/env.zip', f'{CNB}/ZZZ-Test/env.zip']
+        assert env_config.last_env_source == CNB
