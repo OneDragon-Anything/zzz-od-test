@@ -354,6 +354,15 @@ def test_exchange_ether_battery_is_charge_plan_category() -> None:
     assert service.get_charge_plan_mission_type_list('合成电池') == []
 
 
+def test_expert_challenge_burnout_doubles_charge_estimate() -> None:
+    """燃竭模式双倍奖励也双倍消耗，进本前按 80 预估。"""
+    plan = ChargePlanItem(category_name='专业挑战室', expert_challenge_burnout_on=True)
+    assert plan.estimated_charge_power == 80
+
+    plan = ChargePlanItem(category_name='专业挑战室', expert_challenge_burnout_on=False)
+    assert plan.estimated_charge_power == 40
+
+
 def test_exchange_ether_battery_consumes_60_charge_power() -> None:
     plan = ChargePlanItem(
         category_name='合成电池',
