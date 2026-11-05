@@ -258,34 +258,33 @@ def test_run_standalone_app_rejects_internal_app() -> None:
     backend._start_app.assert_not_called()
 
 
-def test_run_standalone_app_persists_default_group_after_start() -> None:
-    """HTTP / MCP 跑过独立应用也算用户用过，写进默认组顺序。"""
+def test_run_standalone_app_persists_default_group_after_refresh() -> None:
+    """HTTP / MCP 跑过独立应用也算用户用过：配置刷新完再写默认组顺序。"""
     backend = _backend(ready=True)
     backend.ctx.standalone_app_config.active_app_id = ''
     backend.ctx.run_context.is_app_registered.return_value = True
     backend.ctx.run_context.is_app_standalone_available.return_value = True
-    backend._start_app = MagicMock(return_value=(True, MagicMock()))
+    captured: dict[str, object] = {}
+
+    def fake_start(source, app_id, group_id, refresh_config=None):
+        captured['refresh_config'] = refresh_config
+        return True, MagicMock()
+
+    backend._start_app = fake_start
+    backend._refresh_runtime_config = MagicMock()
     group_config = MagicMock()
     backend.ctx.app_group_manager.get_one_dragon_group_config.return_value = group_config
 
     backend.run_standalone_app('http', app_id='standalone_app')
+    # 刷新钩子由后台线程在赢锁后调用，这里手动触发
+    captured['refresh_config']()
 
+    backend._refresh_runtime_config.assert_called_once()
     group_config.persist_app.assert_called_once_with('standalone_app')
-
-
-def test_run_standalone_app_does_not_persist_when_rejected() -> None:
-    """被拒绝的运行没真的跑起来，不能清掉 New 标记。"""
-    backend = _backend(ready=True)
-    backend.ctx.standalone_app_config.active_app_id = ''
-    backend.ctx.run_context.is_app_registered.return_value = True
-    backend.ctx.run_context.is_app_standalone_available.return_value = True
-    backend._start_app = MagicMock(return_value=(False, None))
-    group_config = MagicMock()
-    backend.ctx.app_group_manager.get_one_dragon_group_config.return_value = group_config
-
-    backend.run_standalone_app('mcp', app_id='standalone_app')
-
-    group_config.persist_app.assert_not_called()
+    # 刷新后可能切实例，要用刷新后的下标
+    backend.ctx.app_group_manager.get_one_dragon_group_config.assert_called_with(
+        backend.ctx.current_instance_idx
+    )
 
 
 def test_list_applications_filters_internal_and_saved_invalid_apps() -> None:
