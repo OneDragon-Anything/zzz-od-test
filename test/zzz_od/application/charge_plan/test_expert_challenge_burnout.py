@@ -80,6 +80,33 @@ class TestAdjustBurnoutMode:
         op.round_retry.assert_called_once()
         op.round_wait.assert_not_called()
 
+    def test_last_retry_does_not_click_and_checks_state(self) -> None:
+        """重试快用完时不再点开关，最后机会先看画面是否已生效。"""
+        from zzz_od.application.charge_plan.charge_plan_config import ChargePlanItem
+
+        plan = ChargePlanItem(expert_challenge_burnout_on=True)
+        op = self._make_op(plan, confirm_success=False, is_on=False)
+        op.node_retry_times = 5
+        op.node_max_retry_times = 5
+
+        op.adjust_burnout_mode()
+
+        op.round_by_click_area.assert_not_called()
+        op.round_retry.assert_called_once()
+
+    def test_last_retry_succeeds_when_state_matches(self) -> None:
+        """最后一次机会里状态已经对上，就直接继续计划。"""
+        from zzz_od.application.charge_plan.charge_plan_config import ChargePlanItem
+
+        plan = ChargePlanItem(expert_challenge_burnout_on=True)
+        op = self._make_op(plan, confirm_success=False, is_on=True)
+        op.node_retry_times = 5
+        op.node_max_retry_times = 5
+
+        op.adjust_burnout_mode()
+
+        op.round_success.assert_called_once()
+
     def test_matching_state_succeeds(self) -> None:
         from zzz_od.application.charge_plan.charge_plan_config import ChargePlanItem
 
