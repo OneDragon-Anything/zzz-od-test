@@ -23,6 +23,18 @@ def _make_dir(root: Path, files: dict[str, bytes]) -> Path:
     return root
 
 
+@pytest.fixture(autouse=True)
+def popen_calls(monkeypatch) -> list[list[str]]:
+    """拦掉后台替换脚本，测试里只记录调用。"""
+    calls: list[list[str]] = []
+
+    def fake_popen(args, **kwargs):
+        calls.append(list(args))
+
+    monkeypatch.setattr(runtime_paths.subprocess, 'Popen', fake_popen)
+    return calls
+
+
 @pytest.fixture()
 def work_dir(tmp_path: Path, monkeypatch) -> Path:
     """把工作目录指向临时目录。"""
@@ -35,7 +47,7 @@ def work_dir(tmp_path: Path, monkeypatch) -> Path:
 class TestApplyStagedLauncherUpdate:
 
     def test_stages_new_runtime_without_touching_current(
-        self, work_dir: Path
+        self, work_dir: Path, popen_calls: list[list[str]]
     ) -> None:
         _make_dir(work_dir / '.runtime', {'python.exe': b'old'})
         (work_dir / 'OneDragon-RuntimeLauncher.exe').write_bytes(b'old exe')
@@ -53,9 +65,14 @@ class TestApplyStagedLauncherUpdate:
         # 当前进程还在用的运行时目录保持原样，等下次启动替换
         assert (work_dir / '.runtime' / 'python.exe').read_bytes() == b'old'
         assert (work_dir / runtime_paths.RUNTIME_DIR_NEW / 'python.exe').read_bytes() == b'new'
+        # 启动后台脚本，等本进程退出后再换目录
+        assert len(popen_calls) == 1
+        assert popen_calls[0][0].endswith('.bat')
         assert not staging.exists()
 
-    def test_identical_runtime_is_not_staged(self, work_dir: Path) -> None:
+    def test_identical_runtime_is_not_staged(
+        self, work_dir: Path, popen_calls: list[list[str]]
+    ) -> None:
         """版本号变了但运行时文件一致时不做整目录替换。"""
         _make_dir(work_dir / '.runtime', {'python.exe': b'same'})
         (work_dir / 'OneDragon-RuntimeLauncher.exe').write_bytes(b'old exe')
@@ -71,6 +88,7 @@ class TestApplyStagedLauncherUpdate:
 
         assert (work_dir / 'OneDragon-RuntimeLauncher.exe').read_bytes() == b'new exe'
         assert not (work_dir / runtime_paths.RUNTIME_DIR_NEW).exists()
+        assert popen_calls == []
 
     def test_missing_staged_runtime_rejects_package(self, work_dir: Path) -> None:
         (work_dir / 'OneDragon-RuntimeLauncher.exe').write_bytes(b'old exe')

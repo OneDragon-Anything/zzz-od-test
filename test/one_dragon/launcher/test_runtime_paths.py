@@ -15,58 +15,90 @@ def _make_dir(root: Path, files: dict[str, bytes]) -> Path:
     return root
 
 
-class TestApplyStagedRuntimeDir:
+class TestSwapScript:
 
-    def test_no_staged_dir_returns_false(self, tmp_path: Path) -> None:
+    def test_script_waits_for_pid_then_swaps(self, tmp_path: Path) -> None:
+        """脚本必须等进程退出，再换目录，避免进程占用时改名失败。"""
+        script = runtime_paths.write_swap_script(tmp_path)
+
+        text = script.read_text(encoding='utf-8')
+        assert 'tasklist /FI "PID eq %TARGET_PID%"' in text
+        assert text.index('%TARGET_PID%') < text.index('ren ".runtime" ".runtime.bak"')
+        assert 'ren ".runtime.new" ".runtime"' in text
+        assert script.read_bytes().count(bytes([13, 10])) > 5
+
+
+class TestScheduleRuntimeSwap:
+
+    def test_no_staged_dir_does_not_start(self, tmp_path: Path, monkeypatch) -> None:
         _make_dir(tmp_path / '.runtime', {'python.exe': b'old'})
+        started: list[object] = []
 
-        assert runtime_paths.apply_staged_runtime_dir(tmp_path) is False
-        assert (tmp_path / '.runtime' / 'python.exe').read_bytes() == b'old'
+        def fake_popen(*args, **kwargs):
+            started.append(args)
 
-    def test_swaps_staged_runtime_and_keeps_backup(self, tmp_path: Path) -> None:
-        _make_dir(tmp_path / '.runtime', {'python.exe': b'old'})
+        monkeypatch.setattr(runtime_paths.subprocess, 'Popen', fake_popen)
+
+        assert runtime_paths.schedule_runtime_swap(tmp_path, 1234) is False
+        assert started == []
+
+    def test_staged_dir_starts_script_with_pid(self, tmp_path: Path, monkeypatch) -> None:
+        _make_dir(tmp_path / runtime_paths.RUNTIME_DIR_NEW, {'python.exe': b'new'})
+        calls: list[list[str]] = []
+
+        def fake_popen(args, **kwargs):
+            calls.append(list(args))
+
+        monkeypatch.setattr(runtime_paths.subprocess, 'Popen', fake_popen)
+
+        assert runtime_paths.schedule_runtime_swap(tmp_path, 4321) is True
+
+        assert len(calls) == 1
+        assert calls[0][1] == '4321'
+        assert calls[0][0].endswith('.bat')
+
+    def test_popen_failure_returns_false(self, tmp_path: Path, monkeypatch) -> None:
         _make_dir(tmp_path / runtime_paths.RUNTIME_DIR_NEW, {'python.exe': b'new'})
 
-        assert runtime_paths.apply_staged_runtime_dir(tmp_path) is True
+        def fake_popen(*args, **kwargs):
+            raise OSError('无法启动')
 
-        assert (tmp_path / '.runtime' / 'python.exe').read_bytes() == b'new'
-        assert (tmp_path / '.runtime.bak' / 'python.exe').read_bytes() == b'old'
-        assert not (tmp_path / runtime_paths.RUNTIME_DIR_NEW).exists()
+        monkeypatch.setattr(runtime_paths.subprocess, 'Popen', fake_popen)
 
-    def test_first_install_without_old_runtime(self, tmp_path: Path) -> None:
-        _make_dir(tmp_path / runtime_paths.RUNTIME_DIR_NEW, {'python.exe': b'new'})
+        assert runtime_paths.schedule_runtime_swap(tmp_path, 1) is False
 
-        assert runtime_paths.apply_staged_runtime_dir(tmp_path) is True
-        assert (tmp_path / '.runtime' / 'python.exe').read_bytes() == b'new'
-        assert not (tmp_path / '.runtime.bak').exists()
 
-    def test_replaces_existing_backup(self, tmp_path: Path) -> None:
-        """上次留下的备份要被本次替换覆盖，不能挡住切换。"""
-        _make_dir(tmp_path / '.runtime', {'python.exe': b'old'})
-        _make_dir(tmp_path / '.runtime.bak', {'python.exe': b'older'})
-        _make_dir(tmp_path / runtime_paths.RUNTIME_DIR_NEW, {'python.exe': b'new'})
+class TestStagedRuntimeDir:
 
-        assert runtime_paths.apply_staged_runtime_dir(tmp_path) is True
-        assert (tmp_path / '.runtime' / 'python.exe').read_bytes() == b'new'
-        assert (tmp_path / '.runtime.bak' / 'python.exe').read_bytes() == b'old'
+    def test_stage_moves_dir(self, tmp_path: Path) -> None:
+        staged = _make_dir(tmp_path / 'download' / '.runtime', {'python.exe': b'new'})
+        work_dir = tmp_path / 'work'
+        work_dir.mkdir()
 
-    def test_rename_failure_keeps_old_runtime(self, tmp_path: Path, monkeypatch) -> None:
-        """旧目录改不了名时报错返回，不能把运行时弄丢。"""
-        _make_dir(tmp_path / '.runtime', {'python.exe': b'old'})
-        _make_dir(tmp_path / runtime_paths.RUNTIME_DIR_NEW, {'python.exe': b'new'})
+        runtime_paths.stage_runtime_dir(staged, work_dir)
 
-        original_rename = Path.rename
+        assert (work_dir / '.runtime.new' / 'python.exe').read_bytes() == b'new'
+        assert not staged.exists()
 
-        def fake_rename(self: Path, target: Path) -> Path:
-            if self.name == '.runtime':
-                raise OSError('WinError 5 拒绝访问')
-            return original_rename(self, target)
+    def test_stage_replaces_previous_leftover(self, tmp_path: Path) -> None:
+        _make_dir(tmp_path / 'work' / '.runtime.new', {'python.exe': b'older'})
+        staged = _make_dir(tmp_path / 'download' / '.runtime', {'python.exe': b'new'})
 
-        monkeypatch.setattr(Path, 'rename', fake_rename)
+        runtime_paths.stage_runtime_dir(staged, tmp_path / 'work')
 
-        assert runtime_paths.apply_staged_runtime_dir(tmp_path) is False
-        assert (tmp_path / '.runtime' / 'python.exe').read_bytes() == b'old'
-        assert (tmp_path / runtime_paths.RUNTIME_DIR_NEW / 'python.exe').exists()
+        assert (tmp_path / 'work' / '.runtime.new' / 'python.exe').read_bytes() == b'new'
+
+    def test_clear_removes_staged(self, tmp_path: Path) -> None:
+        _make_dir(tmp_path / '.runtime.new', {'python.exe': b'new'})
+
+        runtime_paths.clear_staged_runtime_dir(tmp_path)
+
+        assert not (tmp_path / '.runtime.new').exists()
+
+    def test_has_staged(self, tmp_path: Path) -> None:
+        assert runtime_paths.has_staged_runtime(tmp_path) is False
+        _make_dir(tmp_path / '.runtime.new', {'python.exe': b'new'})
+        assert runtime_paths.has_staged_runtime(tmp_path) is True
 
 
 class TestRuntimeDirsEqual:
