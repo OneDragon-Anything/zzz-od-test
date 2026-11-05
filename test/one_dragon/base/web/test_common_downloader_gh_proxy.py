@@ -247,3 +247,42 @@ class TestZipRetryAfterBrokenContent:
         unzip_results.extend([False, True])
         assert downloader.download(source_order=['github'], gh_proxy_service=service) is True
         assert env_config.last_gh_proxy_url == 'https://second.example', '坏包那条线路不能被记成首选'
+
+    def test_source_success_callback_waits_for_unzip(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from one_dragon.base.web.zip_downloader import ZipDownloader
+
+        env_config = _FakeEnvConfig()
+        repo_config = SimpleNamespace(gh_proxy_urls=('https://first.example', 'https://second.example'))
+        service = GhProxyService(env_config, repo_config)
+        param = CommonDownloaderParam(
+            save_file_path='.',
+            save_file_name='model.zip',
+            download_urls={'github': GITHUB_URL},
+            check_existed_list=['model.onnx'],
+        )
+        downloader = ZipDownloader(param)
+        events: list[tuple[str, str]] = []
+        unzip_results: list[bool] = []
+
+        monkeypatch.setattr(
+            'one_dragon.base.web.common_downloader.http_utils.download_file',
+            lambda download_url, **kwargs: True,
+        )
+        monkeypatch.setattr(downloader, 'unzip', lambda: unzip_results.pop(0))
+        monkeypatch.setattr(
+            'one_dragon.base.web.common_downloader.CommonDownloader.is_file_existed',
+            lambda _self: not unzip_results,
+        )
+
+        unzip_results.extend([False, True])
+        assert downloader.download(
+            source_order=['github'],
+            gh_proxy_service=service,
+            on_source_success=lambda source_id: events.append(('success', source_id)),
+            on_source_failure=lambda source_id: events.append(('failure', source_id)),
+        ) is True
+        # 第一次压缩包坏了要回调失败 第二次解压成功才回调成功
+        assert events == [('failure', 'github'), ('success', 'github')]

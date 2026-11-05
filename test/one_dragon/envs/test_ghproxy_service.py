@@ -24,6 +24,43 @@ def _create_service(
     return GhProxyService(env_config, repo_config), env_config
 
 
+class TestLazyProbe:
+
+    def test_probe_runs_once_on_first_download(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        env_config = _FakeEnvConfig(current='https://custom.example')
+        env_config.auto_fetch_gh_proxy_url = True
+        service = GhProxyService(env_config, SimpleNamespace(gh_proxy_urls=()))
+        probes: list[int] = []
+        monkeypatch.setattr(service, 'update_proxy_url', lambda: probes.append(1) or True)
+
+        service.ensure_probed()
+        service.ensure_probed()
+
+        assert len(probes) == 1
+
+    def test_probe_skipped_when_auto_fetch_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        env_config = _FakeEnvConfig(current='https://custom.example')
+        env_config.auto_fetch_gh_proxy_url = False
+        service = GhProxyService(env_config, SimpleNamespace(gh_proxy_urls=()))
+        probes: list[int] = []
+        monkeypatch.setattr(service, 'update_proxy_url', lambda: probes.append(1) or True)
+
+        service.ensure_probed()
+
+        assert probes == []
+
+    def test_probe_failure_does_not_raise(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        env_config = _FakeEnvConfig(current='https://custom.example')
+        env_config.auto_fetch_gh_proxy_url = True
+        service = GhProxyService(env_config, SimpleNamespace(gh_proxy_urls=()))
+
+        def raise_error() -> bool:
+            raise RuntimeError('probe boom')
+
+        monkeypatch.setattr(service, 'update_proxy_url', raise_error)
+        service.ensure_probed()
+
+
 class TestCandidateOrder:
 
     def test_current_then_last_success_then_builtin(self) -> None:
