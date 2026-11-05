@@ -37,9 +37,19 @@ class TestSwapScript:
         """.new exe 复制失败要保留并返回非零，下次启动还能重试。"""
         text = runtime_paths.write_swap_script(tmp_path).read_text(encoding='utf-8')
         copy_pos = text.index('copy /y "%EXE_NAME%.new"')
-        assert text.index('if errorlevel 1 exit /b 1', copy_pos) < text.index(
+        assert text.index('if errorlevel 1', copy_pos) < text.index(
             'del "%EXE_NAME%.new"', copy_pos
         )
+
+    def test_exe_copy_failure_rolls_back_swapped_runtime(self, tmp_path: Path) -> None:
+        """运行时已经换好但 exe 复制失败时，要回滚运行时，别留下不匹配的组合。"""
+        text = runtime_paths.write_swap_script(tmp_path).read_text(encoding='utf-8')
+        assert 'set "RUNTIME_SWAPPED=1"' in text
+        copy_pos = text.index('copy /y "%EXE_NAME%.new"')
+        rollback_pos = text.index('ren ".runtime" ".runtime.new"', copy_pos)
+        backup_pos = text.index('ren ".runtime.bak" ".runtime"', copy_pos)
+        assert rollback_pos < backup_pos
+        assert text.index('if "%RUNTIME_SWAPPED%"=="1"', copy_pos) < rollback_pos
 
 
 class TestPendingSwap:
