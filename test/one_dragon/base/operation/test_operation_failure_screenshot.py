@@ -1,5 +1,7 @@
 """失败时的诊断截图。"""
 
+from types import SimpleNamespace
+
 import numpy as np
 
 from one_dragon.base.operation.operation import Operation
@@ -66,3 +68,30 @@ class TestSaveFailureScreenshot:
         op._save_failure_screenshot('执行超时')
 
         assert saved == ['fail_Operation_none']
+
+
+class TestTimeoutScreenshot:
+
+    def _make_operation(self, context_stop: bool) -> Operation:
+        op = _make_operation(has_screenshot=True)
+        op.ctx = SimpleNamespace(run_context=SimpleNamespace(is_context_stop=context_stop))
+        return op
+
+    def test_timeout_saves_screenshot(self) -> None:
+        op = self._make_operation(context_stop=False)
+        saved: list[str] = []
+        op._save_failure_screenshot = lambda reason: saved.append(reason)
+
+        op._save_timeout_screenshot()
+
+        assert saved == [Operation.STATUS_TIMEOUT]
+
+    def test_manual_stop_does_not_save(self) -> None:
+        """停止请求和超时同时到时按人工停止处理，不新增调试图。"""
+        op = self._make_operation(context_stop=True)
+        saved: list[str] = []
+        op._save_failure_screenshot = lambda reason: saved.append(reason)
+
+        op._save_timeout_screenshot()
+
+        assert saved == []

@@ -53,3 +53,34 @@ class TestPruneDebugImages:
 
         assert debug_utils.prune_debug_images(keep_count=1) == 1
         assert (image_dir / 'sub').is_dir()
+
+
+class TestPruneErrorHandling:
+
+    def test_scandir_failure_returns_zero(self, tmp_path: Path, monkeypatch) -> None:
+        """目录扫描中途失败时不能按不完整的列表删文件。"""
+        image_dir = tmp_path / 'images'
+        _make_images(image_dir, 3)
+        monkeypatch.setattr(debug_utils, 'get_debug_image_dir_path', lambda: str(image_dir))
+
+        def broken_scandir(path):
+            raise OSError('拒绝访问')
+
+        monkeypatch.setattr(debug_utils.os, 'scandir', broken_scandir)
+
+        assert debug_utils.prune_debug_images(keep_count=1) == 0
+        assert len(list(image_dir.iterdir())) == 3
+
+
+class TestSaveDebugImage:
+
+    def test_write_failure_returns_empty(self, tmp_path: Path, monkeypatch) -> None:
+        """写图失败时返回空串，调用方不能再报「截图已保存」。"""
+        import numpy as np
+
+        monkeypatch.setattr(debug_utils, 'get_debug_image_path', lambda name: str(tmp_path / f'{name}.png'))
+        monkeypatch.setattr(debug_utils.cv2, 'imwrite', lambda path, image: False)
+
+        result = debug_utils.save_debug_image(np.zeros((4, 4, 3), dtype=np.uint8), prefix='fail')
+
+        assert result == ''
