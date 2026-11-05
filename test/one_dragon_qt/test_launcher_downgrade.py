@@ -1,8 +1,6 @@
 """启动器不支持降级：目标版本低于当前版本时不提供下载。"""
 
-from one_dragon_qt.widgets.download_card.launcher_download_card import (
-    is_launcher_downgrade,
-)
+from one_dragon.envs.update_service import is_launcher_downgrade
 
 
 class TestIsLauncherDowngrade:
