@@ -1,0 +1,46 @@
+"""专业挑战室燃竭模式按计划开关调整，不再强制关闭。"""
+
+from zzz_od.application.charge_plan.charge_plan_config import ChargePlanItem
+from zzz_od.operation.compendium.expert_challenge import need_toggle_burnout_mode
+
+
+class TestNeedToggleBurnoutMode:
+
+    def test_already_on_and_want_on(self) -> None:
+        assert need_toggle_burnout_mode(True, True) is False
+
+    def test_already_off_and_want_off(self) -> None:
+        assert need_toggle_burnout_mode(False, False) is False
+
+    def test_off_but_want_on(self) -> None:
+        assert need_toggle_burnout_mode(False, True) is True
+
+    def test_on_but_want_off(self) -> None:
+        assert need_toggle_burnout_mode(True, False) is True
+
+
+class TestChargePlanItemBurnout:
+
+    def test_default_is_off(self) -> None:
+        """默认不勾选，保持旧行为。"""
+        assert ChargePlanItem().expert_challenge_burnout_on is False
+
+    def test_round_trip_keeps_value(self) -> None:
+        item = ChargePlanItem(
+            category_name='专业挑战室',
+            mission_type_name='代理人方案培养',
+            expert_challenge_burnout_on=True,
+        )
+
+        restored = ChargePlanItem.from_dict(item.to_dict())
+
+        assert restored.expert_challenge_burnout_on is True
+
+    def test_old_config_without_field_defaults_off(self) -> None:
+        """旧配置没有这个字段时按关闭处理。"""
+        restored = ChargePlanItem.from_dict({
+            'category_name': '专业挑战室',
+            'mission_type_name': '代理人方案培养',
+        })
+
+        assert restored.expert_challenge_burnout_on is False
