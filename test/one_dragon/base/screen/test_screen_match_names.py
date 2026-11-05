@@ -75,3 +75,27 @@ class TestGetMatchScreenNames:
         screen_utils.get_match_screen_names(ctx, SCREEN)
 
         assert ctx.screen_loader.screen_info_list == screens
+
+
+class TestCandidateSnapshot:
+
+    def test_reload_during_match_does_not_change_candidates(self, monkeypatch) -> None:
+        """比对比对期间列表被 reload 清空时，本次比对仍按原候选列表走完。"""
+        screens = [_FakeScreenInfo('画面A'), _FakeScreenInfo('画面B')]
+        ctx = _FakeCtx(screens)
+        seen: list[str] = []
+
+        def fake_is_target(_ctx, _screen, screen_info=None, crop_first=True) -> bool:
+            seen.append(screen_info.screen_name)
+            if len(seen) == 1:
+                # 模拟保存画面触发 reload：原地清空并重新填充
+                ctx.screen_loader.screen_info_list.clear()
+                ctx.screen_loader.screen_info_list.append(_FakeScreenInfo('画面C'))
+            return True
+
+        monkeypatch.setattr(screen_utils, 'is_target_screen', fake_is_target)
+
+        names = screen_utils.get_match_screen_names(ctx, SCREEN)
+
+        assert names == ['画面A', '画面B']
+        assert seen == ['画面A', '画面B']
