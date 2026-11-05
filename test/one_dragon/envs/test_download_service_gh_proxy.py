@@ -307,3 +307,41 @@ class TestSourceAwareRetry:
         assert service.download_and_extract_env_file('env.zip', str(tmp_path), str(out)) is False
         assert (out / 'keep.txt').exists(), '解压失败的临时目录不能替换现有环境'
         assert not (tmp_path / 'out_extract_tmp').exists(), '临时目录要清理干净'
+
+    def test_replace_failure_restores_previous_install(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """临时目录换成目标目录失败时 现有环境要还原。"""
+        service, _, _ = self._service_with_sources(['https://github.com/OneDragon-Anything'])
+        out = tmp_path / 'out'
+        out.mkdir()
+        (out / 'keep.txt').write_text('keep', encoding='utf-8')
+
+        def fake_download(url: str, save_file_path: str, proxy=None, progress_callback=None, **kwargs) -> bool:
+            Path(save_file_path).write_bytes(b'zip')
+            return True
+
+        def fake_unzip(zip_path: str, extract_dir: str) -> bool:
+            Path(extract_dir).mkdir(parents=True, exist_ok=True)
+            (Path(extract_dir) / 'new.txt').write_text('new', encoding='utf-8')
+            return True
+
+        monkeypatch.setattr('one_dragon.envs.download_service.http_utils.download_file', fake_download)
+        monkeypatch.setattr('one_dragon.envs.download_service.file_utils.unzip_file', fake_unzip)
+
+        original_rename = Path.rename
+        calls: list[int] = []
+
+        def failing_rename(self_path: Path, target) -> None:
+            calls.append(1)
+            if len(calls) == 2:
+                raise OSError('目录被占用')
+            original_rename(self_path, target)
+
+        monkeypatch.setattr(Path, 'rename', failing_rename)
+
+        assert service.download_and_extract_env_file('env.zip', str(tmp_path), str(out)) is False
+        assert (out / 'keep.txt').exists(), '替换失败要把原来的目录还回去'
+        assert not (out / 'new.txt').exists()
