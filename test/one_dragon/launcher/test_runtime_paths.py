@@ -25,7 +25,30 @@ class TestSwapScript:
         assert 'tasklist /FI "PID eq %TARGET_PID%"' in text
         assert text.index('%TARGET_PID%') < text.index('ren ".runtime" ".runtime.bak"')
         assert 'ren ".runtime.new" ".runtime"' in text
+        assert 'ping -n 2 127.0.0.1' in text
         assert script.read_bytes().count(bytes([13, 10])) > 5
+
+    def test_script_checks_new_runtime_before_moving_current(self, tmp_path: Path) -> None:
+        """先确认 .runtime.new 在，再动当前 .runtime，否则会把运行时搬走又没东西补上。"""
+        text = runtime_paths.write_swap_script(tmp_path).read_text(encoding='utf-8')
+        assert text.index('if not exist ".runtime.new"') < text.index('ren ".runtime" ".runtime.bak"')
+
+    def test_exe_copy_failure_keeps_new_file(self, tmp_path: Path) -> None:
+        """.new exe 复制失败要保留并返回非零，下次启动还能重试。"""
+        text = runtime_paths.write_swap_script(tmp_path).read_text(encoding='utf-8')
+        copy_pos = text.index('copy /y "%EXE_NAME%.new"')
+        assert text.index('if errorlevel 1 exit /b 1', copy_pos) < text.index(
+            'del "%EXE_NAME%.new"', copy_pos
+        )
+
+
+class TestPendingSwap:
+
+    def test_pending_new_exe_counts(self, tmp_path: Path) -> None:
+        (tmp_path / 'OneDragon-RuntimeLauncher.exe.new').write_bytes(b'new')
+
+        assert runtime_paths.has_pending_swap(tmp_path, 'OneDragon-RuntimeLauncher.exe') is True
+        assert runtime_paths.has_pending_swap(tmp_path) is False
 
 
 class TestScheduleRuntimeSwap:

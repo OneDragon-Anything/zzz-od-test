@@ -91,20 +91,21 @@ class TestApplyStagedLauncherUpdate:
         assert popen_calls[0][2] == 'OneDragon-RuntimeLauncher.exe'
         assert not staging.exists()
 
-    def test_identical_runtime_replaces_exe_immediately(
+    def test_identical_runtime_still_defers_exe(
         self, work_dir: Path, popen_calls: list[list[str]]
     ) -> None:
-        """运行时文件一致时新 exe 可以直接换，不需要等退出。"""
+        """运行时一致时只换 exe，但 exe 仍在退出后换，不覆盖正在运行的文件。"""
         _make_dir(work_dir / '.runtime', {'python.exe': b'same'})
         (work_dir / 'OneDragon-RuntimeLauncher.exe').write_bytes(b'old exe')
         staging = _make_runtime_package(work_dir, b'new exe', b'same')
 
         _service().apply_staged_launcher_update('runtime', staging)
 
-        assert (work_dir / 'OneDragon-RuntimeLauncher.exe').read_bytes() == b'new exe'
+        assert (work_dir / 'OneDragon-RuntimeLauncher.exe').read_bytes() == b'old exe'
         assert not (work_dir / runtime_paths.RUNTIME_DIR_NEW).exists()
-        assert not (work_dir / 'OneDragon-RuntimeLauncher.exe.new').exists()
-        assert popen_calls == []
+        assert (work_dir / 'OneDragon-RuntimeLauncher.exe.new').read_bytes() == b'new exe'
+        assert len(popen_calls) == 1
+        assert popen_calls[0][2] == 'OneDragon-RuntimeLauncher.exe'
 
     def test_changed_runtime_creates_no_exe_backup(
         self, work_dir: Path
@@ -146,17 +147,17 @@ class TestApplyStagedLauncherUpdate:
 
 class TestRestoreInterruptedLauncherUpdate:
 
-    def test_leftover_new_exe_dropped_when_exe_ok(
+    def test_leftover_new_exe_kept_when_exe_ok(
         self, work_dir: Path, popen_calls: list[list[str]]
     ) -> None:
-        """上次替换脚本没跑完、exe 还在：丢掉残留的 .new。"""
+        """上次替换脚本没跑完、exe 还在：保留 .new，等启动后再安排替换。"""
         (work_dir / 'OneDragon-RuntimeLauncher.exe').write_bytes(b'current exe')
         _make_dir(work_dir / '.runtime', {'python.exe': b'runtime'})
         (work_dir / 'OneDragon-RuntimeLauncher.exe.new').write_bytes(b'staged exe')
 
         _service().restore_interrupted_launcher_update()
 
-        assert not (work_dir / 'OneDragon-RuntimeLauncher.exe.new').exists()
+        assert (work_dir / 'OneDragon-RuntimeLauncher.exe.new').read_bytes() == b'staged exe'
         assert (work_dir / 'OneDragon-RuntimeLauncher.exe').read_bytes() == b'current exe'
 
     def test_new_exe_used_when_exe_missing(
@@ -235,4 +236,26 @@ class TestDowngradeGuard:
 
         _service().apply_staged_launcher_update('runtime', staging)
 
-        assert (work_dir / 'OneDragon-RuntimeLauncher.exe').read_bytes() == b'new exe'
+        # exe 延后到退出后替换，这里只确认暂存成功
+        assert (work_dir / 'OneDragon-RuntimeLauncher.exe.new').read_bytes() == b'new exe'
+
+
+class TestUnparseableVersion:
+
+    def _prepare(self, work_dir: Path) -> Path:
+        _make_dir(work_dir / '.runtime', {'python.exe': b'same'})
+        (work_dir / 'OneDragon-RuntimeLauncher.exe').write_bytes(b'old exe')
+        return _make_runtime_package(work_dir, b'new exe', b'same')
+
+    def test_rejects_unparseable_current_version(
+        self, work_dir: Path, exe_version: dict[str, str]
+    ) -> None:
+        """版本读出来但解析不了时不能放行，否则降级判断会失效。"""
+        from one_dragon.envs.update_service import is_version_parseable
+
+        assert is_version_parseable('unknown') is False
+        exe_version['value'] = 'unknown'
+        staging = self._prepare(work_dir)
+
+        with pytest.raises(RuntimeError, match='无法识别当前启动器版本'):
+            _service().apply_staged_launcher_update('runtime', staging)
