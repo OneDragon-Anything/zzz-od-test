@@ -5,12 +5,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 from one_dragon.utils.single_instance import (
     LOCK_FILE_NAME,
     SingleInstanceLock,
     acquire_instance_lock,
+    describe_lock_failure,
+    get_lock_error,
     release_instance_lock,
 )
 
@@ -105,3 +105,49 @@ class TestInstanceLockSingleton:
 
         assert acquire_instance_lock(tmp_path)
         release_instance_lock()
+class TestLockFailureReason:
+
+    def test_busy_lock_has_no_error(self, tmp_path: Path) -> None:
+        """被别的实例占着不算错误，提示「已经开了一个」。"""
+        lock = SingleInstanceLock(tmp_path / 'a.lock')
+        assert lock.acquire()
+        try:
+            assert lock.acquire() is False
+            assert lock.last_error is None
+        finally:
+            lock.release()
+
+    def test_open_failure_is_recorded(self, tmp_path: Path, monkeypatch) -> None:
+        """锁文件打不开时记下真实异常，而不是当成实例占用。"""
+        def fake_open(*args, **kwargs):
+            raise PermissionError('拒绝访问')
+
+        monkeypatch.setattr('builtins.open', fake_open)
+
+        lock = SingleInstanceLock(tmp_path / 'a.lock')
+        assert lock.acquire() is False
+        assert isinstance(lock.last_error, PermissionError)
+
+    def test_describe_failure_mentions_permission(self, tmp_path: Path, monkeypatch) -> None:
+        def fake_open(*args, **kwargs):
+            raise PermissionError('拒绝访问')
+
+        monkeypatch.setattr('builtins.open', fake_open)
+
+        release_instance_lock()
+        assert acquire_instance_lock(tmp_path) is False
+        assert isinstance(get_lock_error(), PermissionError)
+        assert '写入权限' in describe_lock_failure()
+        release_instance_lock()
+
+    def test_describe_busy(self, tmp_path: Path) -> None:
+        release_instance_lock()
+        lock = SingleInstanceLock(tmp_path / LOCK_FILE_NAME)
+        assert lock.acquire()
+        try:
+            assert acquire_instance_lock(tmp_path) is False
+            assert get_lock_error() is None
+            assert '已经有一个一条龙在运行' in describe_lock_failure()
+        finally:
+            lock.release()
+            release_instance_lock()
