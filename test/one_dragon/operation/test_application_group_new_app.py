@@ -47,16 +47,29 @@ class TestNewAppFlag:
 
         assert item.is_new is True
 
-    def test_set_app_order_persists_new_items(self) -> None:
-        """拖拽排序会把列表里的临时应用一并纳入保存顺序。"""
+    def test_set_app_order_persists_moved_item(self) -> None:
+        """拖拽排序只把被拖的那个应用纳入保存顺序。"""
+        config = _config()
+        moved = ApplicationGroupConfigItem(app_id='moved_app', enabled=False, is_persisted=False)
+        other = ApplicationGroupConfigItem(app_id='other_app', enabled=False, is_persisted=False)
+        config.app_list = [other, moved]
+
+        config.set_app_order(['moved_app', 'other_app'], persist_app_id='moved_app')
+
+        assert moved.is_new is False
+        assert other.is_new is True
+        assert config._all_apps == [moved]
+
+    def test_set_app_order_without_moved_item_keeps_new_flags(self) -> None:
+        """只是程序改顺序、没有指明被拖动的应用时，谁都不该失去 New 标记。"""
         config = _config()
         item = ApplicationGroupConfigItem(app_id='new_app', enabled=False, is_persisted=False)
         config.app_list = [item]
 
         config.set_app_order(['new_app'])
 
-        assert item.is_new is False
-        assert config._all_apps == [item]
+        assert item.is_new is True
+        assert config._all_apps == []
 
     def test_new_items_are_placed_at_head(self) -> None:
         """新应用排在已保存应用前面，列表里就是置顶效果。"""

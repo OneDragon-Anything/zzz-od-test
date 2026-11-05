@@ -24,6 +24,29 @@ class TestIsRunningPackagedLauncher:
         assert UpdateService.is_running_packaged_launcher() is True
 
 
+class TestLauncherSourceEnv:
+
+    def test_env_marks_gui_child_as_launcher(self, monkeypatch) -> None:
+        """原始启动器用 run_python 拉起的 GUI 不是 frozen，靠环境变量说明来源。"""
+        monkeypatch.setattr(update_service_module, 'sys', SimpleNamespace())
+        monkeypatch.setenv('ONE_DRAGON_LAUNCHER_SOURCE', 'launcher')
+
+        assert UpdateService.is_running_packaged_launcher() is True
+        assert UpdateService.detect_running_launcher_type() == 'launcher'
+
+    def test_env_runtime_source(self, monkeypatch) -> None:
+        monkeypatch.setattr(update_service_module, 'sys', SimpleNamespace())
+        monkeypatch.setenv('ONE_DRAGON_LAUNCHER_SOURCE', 'runtime')
+
+        assert UpdateService.detect_running_launcher_type() == 'runtime'
+
+    def test_unknown_env_falls_back_to_frozen(self, monkeypatch) -> None:
+        monkeypatch.delenv('ONE_DRAGON_LAUNCHER_SOURCE', raising=False)
+        monkeypatch.setattr(update_service_module, 'sys', SimpleNamespace(frozen=True, executable='C:/x/OneDragon-RuntimeLauncher.exe'))
+
+        assert UpdateService.detect_running_launcher_type() == 'runtime'
+
+
 class TestIsLauncherUpdateAvailable:
 
     def test_source_run_never_checks(self, monkeypatch) -> None:

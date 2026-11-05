@@ -258,6 +258,36 @@ def test_run_standalone_app_rejects_internal_app() -> None:
     backend._start_app.assert_not_called()
 
 
+def test_run_standalone_app_persists_default_group_after_start() -> None:
+    """HTTP / MCP 跑过独立应用也算用户用过，写进默认组顺序。"""
+    backend = _backend(ready=True)
+    backend.ctx.standalone_app_config.active_app_id = ''
+    backend.ctx.run_context.is_app_registered.return_value = True
+    backend.ctx.run_context.is_app_standalone_available.return_value = True
+    backend._start_app = MagicMock(return_value=(True, MagicMock()))
+    group_config = MagicMock()
+    backend.ctx.app_group_manager.get_one_dragon_group_config.return_value = group_config
+
+    backend.run_standalone_app('http', app_id='standalone_app')
+
+    group_config.persist_app.assert_called_once_with('standalone_app')
+
+
+def test_run_standalone_app_does_not_persist_when_rejected() -> None:
+    """被拒绝的运行没真的跑起来，不能清掉 New 标记。"""
+    backend = _backend(ready=True)
+    backend.ctx.standalone_app_config.active_app_id = ''
+    backend.ctx.run_context.is_app_registered.return_value = True
+    backend.ctx.run_context.is_app_standalone_available.return_value = True
+    backend._start_app = MagicMock(return_value=(False, None))
+    group_config = MagicMock()
+    backend.ctx.app_group_manager.get_one_dragon_group_config.return_value = group_config
+
+    backend.run_standalone_app('mcp', app_id='standalone_app')
+
+    group_config.persist_app.assert_not_called()
+
+
 def test_list_applications_filters_internal_and_saved_invalid_apps() -> None:
     ctx = MagicMock()
     ctx.ready_for_application = True
