@@ -44,3 +44,49 @@ class TestChargePlanItemBurnout:
         })
 
         assert restored.expert_challenge_burnout_on is False
+
+
+class TestAdjustBurnoutMode:
+    """确认点击计入重试次数，避免状态不生效时无限循环。"""
+
+    def _make_op(self, plan, confirm_success: bool, is_on: bool):
+        from unittest.mock import MagicMock
+
+        from zzz_od.operation.compendium.expert_challenge import ExpertChallenge
+
+        op = object.__new__(ExpertChallenge)
+        op.last_screenshot = None
+        op.plan = plan
+        op.round_by_find_and_click_area = MagicMock(
+            return_value=MagicMock(is_success=confirm_success, status='确认')
+        )
+        op.round_by_find_area = MagicMock(
+            return_value=MagicMock(is_success=is_on, status='开关')
+        )
+        op.round_by_click_area = MagicMock()
+        op.round_retry = MagicMock(return_value='RETRY')
+        op.round_wait = MagicMock(return_value='WAIT')
+        op.round_success = MagicMock(return_value='SUCCESS')
+        return op
+
+    def test_confirm_success_counts_as_retry(self) -> None:
+        from zzz_od.application.charge_plan.charge_plan_config import ChargePlanItem
+
+        plan = ChargePlanItem(expert_challenge_burnout_on=True)
+        op = self._make_op(plan, confirm_success=True, is_on=False)
+
+        op.adjust_burnout_mode()
+
+        op.round_retry.assert_called_once()
+        op.round_wait.assert_not_called()
+
+    def test_matching_state_succeeds(self) -> None:
+        from zzz_od.application.charge_plan.charge_plan_config import ChargePlanItem
+
+        plan = ChargePlanItem(expert_challenge_burnout_on=True)
+        op = self._make_op(plan, confirm_success=False, is_on=True)
+
+        op.adjust_burnout_mode()
+
+        op.round_success.assert_called_once()
+        op.round_by_click_area.assert_not_called()

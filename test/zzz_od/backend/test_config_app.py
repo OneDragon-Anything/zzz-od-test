@@ -446,6 +446,35 @@ def test_add_config_item_empty_mission_type_category_rejects_non_empty():
     assert not config.add_plan.called
 
 
+def test_add_config_item_rejects_non_bool_burnout_flag():
+    """字符串 "false" 传进来时会被当成真值，必须在写配置前拒掉。"""
+    backend, config = _make_backend_empty_mission_type()
+    tool = make_add_config_item(backend)
+    result = asyncio.run(tool('charge_plan', 'plan_list', {
+        'category_name': '空mission_type类别',
+        'mission_type_name': '',
+        'mission_name': None,
+        'plan_times': 1,
+        'expert_challenge_burnout_on': 'false',
+    }))
+    assert result['ok'] is False
+    assert 'expert_challenge_burnout_on' in result['error']
+    assert not config.add_plan.called
+
+
+def test_add_config_item_accepts_bool_burnout_flag():
+    backend, config = _make_backend_empty_mission_type()
+    tool = make_add_config_item(backend)
+    result = asyncio.run(tool('charge_plan', 'plan_list', {
+        'category_name': '空mission_type类别',
+        'mission_type_name': '',
+        'mission_name': None,
+        'plan_times': 1,
+        'expert_challenge_burnout_on': True,
+    }))
+    assert result['ok'] is True
+
+
 def test_delete_config_item_no_alias_on_item_id():
     """delete_config_item 的 item_id 参数不带 alias(commit 3d240da2)。
 
