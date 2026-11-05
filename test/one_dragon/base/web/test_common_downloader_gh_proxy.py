@@ -1,4 +1,5 @@
 """CommonDownloader 对 GitHub 源逐条尝试 ghproxy 候选线路。"""
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -286,3 +287,98 @@ class TestZipRetryAfterBrokenContent:
         ) is True
         # 第一次压缩包坏了要回调失败 第二次解压成功才回调成功
         assert events == [('failure', 'github'), ('success', 'github')]
+
+    def test_last_source_id_cleared_on_each_download(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """再次调用时文件已存在 不能拿上一次的源 ID 回调成功。"""
+        from one_dragon.base.web.zip_downloader import ZipDownloader
+
+        target = tmp_path / 'model.onnx'
+        param = CommonDownloaderParam(
+            save_file_path=str(tmp_path),
+            save_file_name='model.zip',
+            download_urls={'github': GITHUB_URL},
+            check_existed_list=[str(target)],
+        )
+        downloader = ZipDownloader(param)
+        events: list[str] = []
+
+        def fake_download(download_url: str, **kwargs) -> bool:
+            target.write_bytes(b'model')
+            return True
+
+        monkeypatch.setattr('one_dragon.base.web.common_downloader.http_utils.download_file', fake_download)
+        monkeypatch.setattr(downloader, 'unzip', lambda: True)
+
+        assert downloader.download(
+            source_order=['github'],
+            on_source_success=events.append,
+        ) is True
+        assert events == ['github']
+
+        # 第二次：文件已存在 基类直接返回 不应再拿上次的源 ID 回调
+        assert downloader.download(source_order=['github'], on_source_success=events.append) is True
+        assert events == ['github']
+
+    def test_unzip_failure_from_file_utils_cleans_partial_output(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """unzip_file 返回失败时不能因为残留文件存在就判成解压成功。"""
+        from one_dragon.base.web.zip_downloader import ZipDownloader
+
+        target = tmp_path / 'model.onnx'
+        param = CommonDownloaderParam(
+            save_file_path=str(tmp_path),
+            save_file_name='model.zip',
+            download_urls={'github': GITHUB_URL},
+            check_existed_list=[str(target)],
+        )
+        downloader = ZipDownloader(param)
+        (tmp_path / 'model.zip').write_bytes(b'zip')
+
+        def fake_unzip(**kwargs) -> bool:
+            # 模拟解压中途失败 只写出了一个半成品
+            target.write_bytes(b'partial')
+            return False
+
+        monkeypatch.setattr('one_dragon.base.web.zip_downloader.file_utils.unzip_file', fake_unzip)
+
+        assert downloader.unzip() is False
+        assert not target.exists(), '解压失败要清掉写了一半的产物'
+
+    def test_broken_zip_switches_to_next_source(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """首选源给坏包时 本次调用要换到下一个源 而不是一直重试首选源。"""
+        from one_dragon.base.web.zip_downloader import ZipDownloader
+
+        cnb_url = 'https://cnb.cool/OneDragon-Anything/OneDragon-Env/-/releases/download/m/x.zip'
+        param = CommonDownloaderParam(
+            save_file_path='.',
+            save_file_name='model.zip',
+            download_urls={'cnb': cnb_url, 'github': GITHUB_URL},
+            check_existed_list=['model.onnx'],
+        )
+        downloader = ZipDownloader(param)
+        requested: list[str] = []
+
+        def fake_download(download_url: str, **kwargs) -> bool:
+            requested.append(download_url)
+            return True
+
+        unzip_results: list[bool] = [False, True]
+        monkeypatch.setattr('one_dragon.base.web.common_downloader.http_utils.download_file', fake_download)
+        monkeypatch.setattr(downloader, 'unzip', lambda: unzip_results.pop(0))
+        monkeypatch.setattr(
+            'one_dragon.base.web.common_downloader.CommonDownloader.is_file_existed',
+            lambda _self: not unzip_results,
+        )
+
+        assert downloader.download(source_order=['cnb', 'github']) is True
+        assert requested == [cnb_url, GITHUB_URL], '坏包源本轮不再重试 直接换下一个源'

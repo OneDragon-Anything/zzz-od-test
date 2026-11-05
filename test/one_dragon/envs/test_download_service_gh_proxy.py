@@ -345,3 +345,63 @@ class TestSourceAwareRetry:
         assert service.download_and_extract_env_file('env.zip', str(tmp_path), str(out)) is False
         assert (out / 'keep.txt').exists(), '替换失败要把原来的目录还回去'
         assert not (out / 'new.txt').exists()
+
+    def test_leftover_backup_is_restored_before_replace(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """上次恢复失败留下的备份 要先还原再替换 不能直接删。"""
+        service, _, _ = self._service_with_sources(['https://github.com/OneDragon-Anything'])
+        backup = tmp_path / 'out_bak_tmp'
+        backup.mkdir()
+        (backup / 'old.txt').write_text('old', encoding='utf-8')
+
+        def fake_download(url: str, save_file_path: str, proxy=None, progress_callback=None, **kwargs) -> bool:
+            Path(save_file_path).write_bytes(b'zip')
+            return True
+
+        def fake_unzip(zip_path: str, extract_dir: str) -> bool:
+            Path(extract_dir).mkdir(parents=True, exist_ok=True)
+            (Path(extract_dir) / 'new.txt').write_text('new', encoding='utf-8')
+            return True
+
+        monkeypatch.setattr('one_dragon.envs.download_service.http_utils.download_file', fake_download)
+        monkeypatch.setattr('one_dragon.envs.download_service.file_utils.unzip_file', fake_unzip)
+
+        assert service.download_and_extract_env_file('env.zip', str(tmp_path), str(tmp_path / 'out')) is True
+        assert (tmp_path / 'out' / 'new.txt').exists()
+        assert not backup.exists(), '替换成功后备份可以删掉'
+
+    def test_backup_cleanup_failure_keeps_install_result(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """新目录已换好时 备份删不掉只记日志 不能把安装判成失败。"""
+        service, _, _ = self._service_with_sources(['https://github.com/OneDragon-Anything'])
+        out = tmp_path / 'out'
+        out.mkdir()
+
+        def fake_download(url: str, save_file_path: str, proxy=None, progress_callback=None, **kwargs) -> bool:
+            Path(save_file_path).write_bytes(b'zip')
+            return True
+
+        def fake_unzip(zip_path: str, extract_dir: str) -> bool:
+            Path(extract_dir).mkdir(parents=True, exist_ok=True)
+            return True
+
+        import shutil as _shutil
+
+        real_rmtree = _shutil.rmtree
+
+        def failing_rmtree(path, *args, **kwargs) -> None:
+            if str(path).endswith('_bak_tmp'):
+                raise OSError('备份目录被占用')
+            real_rmtree(path, *args, **kwargs)
+
+        monkeypatch.setattr('one_dragon.envs.download_service.http_utils.download_file', fake_download)
+        monkeypatch.setattr('one_dragon.envs.download_service.file_utils.unzip_file', fake_unzip)
+        monkeypatch.setattr('one_dragon.envs.download_service.shutil.rmtree', failing_rmtree)
+
+        assert service.download_and_extract_env_file('env.zip', str(tmp_path), str(out)) is True
