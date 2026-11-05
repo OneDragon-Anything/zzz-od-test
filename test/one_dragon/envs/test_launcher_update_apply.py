@@ -40,7 +40,7 @@ def popen_calls(monkeypatch) -> list[list[str]]:
 @pytest.fixture(autouse=True)
 def exe_version(monkeypatch) -> dict[str, str]:
     """当前启动器版本由测试控制，别真的去读 exe。"""
-    state = {'value': ''}
+    state = {'value': 'v2.5.0'}
     monkeypatch.setattr(
         update_service_module.app_utils,
         'get_exe_version',
@@ -61,7 +61,7 @@ def work_dir(tmp_path: Path, monkeypatch) -> Path:
 def _make_runtime_package(work_dir: Path, exe: bytes, runtime_file: bytes) -> Path:
     """造一个集成启动器更新包。"""
     return _make_dir(
-        work_dir / '.env' / 'launcher_update' / 'runtime' / 'v2',
+        work_dir / '.env' / 'launcher_update' / 'runtime' / 'v2.6.0',
         {
             'OneDragon-RuntimeLauncher.exe': exe,
             '.runtime/python.exe': runtime_file,
@@ -122,7 +122,7 @@ class TestApplyStagedLauncherUpdate:
     def test_missing_staged_runtime_rejects_package(self, work_dir: Path) -> None:
         (work_dir / 'OneDragon-RuntimeLauncher.exe').write_bytes(b'old exe')
         staging = _make_dir(
-            work_dir / '.env' / 'launcher_update' / 'runtime' / 'v2',
+            work_dir / '.env' / 'launcher_update' / 'runtime' / 'v2.6.0',
             {'OneDragon-RuntimeLauncher.exe': b'new exe'},
         )
 
@@ -135,7 +135,7 @@ class TestApplyStagedLauncherUpdate:
         """原始启动器不受运行中占用影响，备份当场删除。"""
         (work_dir / 'OneDragon-Launcher.exe').write_bytes(b'old exe')
         staging = _make_dir(
-            work_dir / '.env' / 'launcher_update' / 'launcher' / 'v2',
+            work_dir / '.env' / 'launcher_update' / 'launcher' / 'v2.6.0',
             {'OneDragon-Launcher.exe': b'new exe'},
         )
 
@@ -246,6 +246,16 @@ class TestUnparseableVersion:
         _make_dir(work_dir / '.runtime', {'python.exe': b'same'})
         (work_dir / 'OneDragon-RuntimeLauncher.exe').write_bytes(b'old exe')
         return _make_runtime_package(work_dir, b'new exe', b'same')
+
+    def test_rejects_installed_exe_with_empty_version(
+        self, work_dir: Path, exe_version: dict[str, str]
+    ) -> None:
+        """exe 装好了但版本读不出来，不能当未安装放行。"""
+        exe_version['value'] = ''
+        staging = self._prepare(work_dir)
+
+        with pytest.raises(RuntimeError, match='无法识别当前启动器版本'):
+            _service().apply_staged_launcher_update('runtime', staging)
 
     def test_rejects_unparseable_current_version(
         self, work_dir: Path, exe_version: dict[str, str]
