@@ -59,7 +59,11 @@ class TestDownloadRetry:
             return True
 
         monkeypatch.setattr('one_dragon.envs.download_service.http_utils.download_file', fake_download)
-        monkeypatch.setattr('one_dragon.envs.download_service.file_utils.unzip_file', lambda *args: True)
+        def fake_unzip(zip_path: str, extract_dir: str) -> bool:
+            Path(extract_dir).mkdir(parents=True, exist_ok=True)
+            return True
+
+        monkeypatch.setattr('one_dragon.envs.download_service.file_utils.unzip_file', fake_unzip)
 
         assert service.download_and_extract_env_file('env.zip', str(tmp_path), str(tmp_path / 'out')) is True
         assert len(attempts) == 2
@@ -99,9 +103,12 @@ class TestDownloadRetry:
             lambda url, save_file_path, proxy=None, progress_callback=None: downloads.append(url) or True,
         )
 
-        def fake_unzip(*args) -> bool:
+        def fake_unzip(zip_path: str, extract_dir: str) -> bool:
             unzip_calls.append(1)
-            return len(unzip_calls) > 1
+            if len(unzip_calls) > 1:
+                Path(extract_dir).mkdir(parents=True, exist_ok=True)
+                return True
+            return False
 
         monkeypatch.setattr('one_dragon.envs.download_service.file_utils.unzip_file', fake_unzip)
 

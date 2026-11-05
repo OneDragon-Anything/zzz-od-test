@@ -173,6 +173,27 @@ class TestCheckUrl:
 
         assert service.check_url('https://first.example') is False
 
+    def test_probe_prefix_split_across_chunks_is_accepted(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """[project] 被拆到两个分片时也要判定为可用。"""
+        service, _ = _create_service()
+
+        class _Response:
+            status_code = 200
+
+            def iter_content(self, chunk_size: int):
+                yield b'[pro'
+                yield b'ject]\nname = "x"'
+
+            def close(self) -> None:
+                pass
+
+        monkeypatch.setattr(
+            'one_dragon.envs.ghproxy_service.requests.get',
+            lambda url, timeout, stream: _Response(),
+        )
+
+        assert service.check_url('https://first.example') is True
+
 
 class TestRememberSuccess:
 
@@ -199,6 +220,30 @@ class TestRememberSuccess:
 
         assert service.remember_success_by_url('https://github.com/a/b.git') is None
         assert env_config.last_gh_proxy_url == ''
+
+    def test_config_write_failure_does_not_raise(self) -> None:
+        """第二次写 last_gh_proxy_url 失败只记日志 不能把已完成的下载判成失败。"""
+        class _UnwritableEnvConfig:
+            def __init__(self) -> None:
+                self.gh_proxy_url: str = 'https://first.example'
+                self.writes: int = 0
+
+            @property
+            def last_gh_proxy_url(self) -> str:
+                return ''
+
+            @last_gh_proxy_url.setter
+            def last_gh_proxy_url(self, value: str) -> None:
+                self.writes += 1
+                raise OSError('config/env.yml 不可写')
+
+        env_config = _UnwritableEnvConfig()
+        service = GhProxyService(env_config, SimpleNamespace(gh_proxy_urls=()))
+
+        service.remember_success('https://second.example')
+
+        assert env_config.gh_proxy_url == 'https://second.example'
+        assert env_config.writes == 1
 
 
 class TestFailedLines:

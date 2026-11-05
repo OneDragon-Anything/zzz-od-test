@@ -171,16 +171,25 @@ class TestProxyFallback:
         attempted: list[str] = []
         unzip_results: list[bool] = []
 
-        def fake_download(url: str, save_file_path: str, proxy=None, progress_callback=None) -> bool:
+        def fake_download(
+                url: str,
+                save_file_path: str,
+                proxy=None,
+                progress_callback=None,
+                **kwargs,
+        ) -> bool:
             attempted.append(url)
             Path(save_file_path).write_bytes(b'zip')
             return True
 
         monkeypatch.setattr('one_dragon.envs.download_service.http_utils.download_file', fake_download)
-        monkeypatch.setattr(
-            'one_dragon.envs.download_service.file_utils.unzip_file',
-            lambda *args: unzip_results.pop(0),
-        )
+        def fake_unzip(zip_path: str, extract_dir: str) -> bool:
+            if unzip_results.pop(0):
+                Path(extract_dir).mkdir(parents=True, exist_ok=True)
+                return True
+            return False
+
+        monkeypatch.setattr('one_dragon.envs.download_service.file_utils.unzip_file', fake_unzip)
 
         # 第一条源的两条线路都坏，第二个源下载成功
         unzip_results.extend([False, False, True])
@@ -195,3 +204,106 @@ class TestProxyFallback:
         ], 'cnb 源不是 github 地址 直接下载 不拼代理前缀'
         assert env_config.last_env_source == 'https://cnb.cool/OneDragon-Anything'
         assert env_config.last_gh_proxy_url == 'https://second.example'
+
+
+class TestSourceAwareRetry:
+
+    def _service_with_sources(
+        self,
+        sources: list[str],
+        lines: tuple[str, ...] = ('https://first.example', 'https://second.example'),
+    ) -> tuple[DownloadService, _FakeEnvConfig, GhProxyService]:
+        env_config = _FakeEnvConfig()
+        env_config.env_source = sources[0]
+        env_config.last_env_source = ''
+        env_config.get_env_source_candidates = lambda: list(sources)  # type: ignore[method-assign]
+        repo_config = SimpleNamespace(gh_proxy_urls=lines)
+        gh_proxy_service = GhProxyService(env_config, repo_config)
+        service = DownloadService(
+            project_config=SimpleNamespace(project_name='ZenlessZoneZero-OneDragon'),
+            env_config=env_config,
+            repo_config=repo_config,
+            gh_proxy_service=gh_proxy_service,
+        )
+        return service, env_config, gh_proxy_service
+
+    def test_non_github_source_keeps_retry_count(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """线路数只影响 github 源 CNB 等源仍按 retry_count 重试。"""
+        service, _, _ = self._service_with_sources(['https://cnb.cool/OneDragon-Anything'])
+        attempted: list[str] = []
+
+        def fake_download(url: str, save_file_path: str, proxy=None, progress_callback=None, **kwargs) -> bool:
+            attempted.append(url)
+            return False
+
+        monkeypatch.setattr('one_dragon.envs.download_service.http_utils.download_file', fake_download)
+
+        assert service.download_and_extract_env_file('env.zip', str(tmp_path), str(tmp_path / 'out')) is False
+        assert len(attempted) == 2, '非 github 源不该按线路数放大重试次数'
+
+    def test_failed_lines_are_not_requested_again(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """下载失败的线路记入排除集合 同源重试不再重复请求。"""
+        service, _, _ = self._service_with_sources(['https://github.com/OneDragon-Anything'])
+        attempted: list[str] = []
+
+        def fake_download(url: str, save_file_path: str, proxy=None, progress_callback=None, **kwargs) -> bool:
+            attempted.append(url)
+            return False
+
+        monkeypatch.setattr('one_dragon.envs.download_service.http_utils.download_file', fake_download)
+
+        assert service.download_and_extract_env_file('env.zip', str(tmp_path), str(tmp_path / 'out')) is False
+        assert len(attempted) == 2, '两条线路各请求一次 重试时不再重复'
+        assert attempted[0] != attempted[1]
+
+    def test_existing_zip_does_not_record_source(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """已有压缩包直接解压成功时 没下载过就不能记成上次成功源。"""
+        service, env_config, _ = self._service_with_sources(['https://github.com/OneDragon-Anything'])
+        (tmp_path / 'env.zip').write_bytes(b'zip')
+
+        def fail_download(url: str, save_file_path: str, proxy=None, progress_callback=None, **kwargs) -> bool:
+            raise AssertionError('已有压缩包不应该再下载')
+
+        def fake_unzip(zip_path: str, extract_dir: str) -> bool:
+            Path(extract_dir).mkdir(parents=True, exist_ok=True)
+            return True
+
+        monkeypatch.setattr('one_dragon.envs.download_service.http_utils.download_file', fail_download)
+        monkeypatch.setattr('one_dragon.envs.download_service.file_utils.unzip_file', fake_unzip)
+
+        assert service.download_and_extract_env_file('env.zip', str(tmp_path), str(tmp_path / 'out')) is True
+        assert env_config.last_env_source == ''
+
+    def test_extract_failure_keeps_existing_install(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """所有源都失败时不能把 existing 环境目录删掉。"""
+        service, _, _ = self._service_with_sources(['https://github.com/OneDragon-Anything'])
+        out = tmp_path / 'out'
+        out.mkdir()
+        (out / 'keep.txt').write_text('keep', encoding='utf-8')
+
+        def fake_download(url: str, save_file_path: str, proxy=None, progress_callback=None, **kwargs) -> bool:
+            Path(save_file_path).write_bytes(b'bad')
+            return True
+
+        monkeypatch.setattr('one_dragon.envs.download_service.http_utils.download_file', fake_download)
+        monkeypatch.setattr('one_dragon.envs.download_service.file_utils.unzip_file', lambda *args: False)
+
+        assert service.download_and_extract_env_file('env.zip', str(tmp_path), str(out)) is False
+        assert (out / 'keep.txt').exists(), '解压失败的临时目录不能替换现有环境'
+        assert not (tmp_path / 'out_extract_tmp').exists(), '临时目录要清理干净'

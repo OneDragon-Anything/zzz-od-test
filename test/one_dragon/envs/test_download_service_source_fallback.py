@@ -1,6 +1,7 @@
 """环境下载源回退：当前源失败后按候选顺序换源，并记住成功的源。"""
 
 from copy import deepcopy
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -60,6 +61,7 @@ def _make_service(
             save_file_path: str,
             progress_callback=None,
             exclude_proxy_urls=None,
+            attempted_proxy_urls=None,
     ) -> bool:
         calls.append(download_url)
         return results[len(calls) - 1]
@@ -203,13 +205,17 @@ class TestDownloadAndExtractFallback:
                 save_file_path: str,
                 progress_callback=None,
                 exclude_proxy_urls=None,
+                attempted_proxy_urls=None,
         ) -> bool:
             calls.append(download_url)
             return download_results[len(calls) - 1]
 
         def fake_unzip(zip_path: str, extract_dir: str) -> bool:
             assert calls, '必须先下载再解压'
-            return not any(source in calls[-1] for source in broken_sources)
+            if any(source in calls[-1] for source in broken_sources):
+                return False
+            Path(extract_dir).mkdir(parents=True, exist_ok=True)
+            return True
 
         service.download_file_from_url = fake_download  # type: ignore[method-assign]
         monkeypatch.setattr(download_service_module.file_utils, 'unzip_file', fake_unzip)
@@ -295,7 +301,11 @@ class TestRecordSourceFailure:
     def test_extract_succeeds_when_recording_source_fails(self, monkeypatch, tmp_path):
         env_config = _UnwritableEnvConfig(GITHUB, [GITHUB, CNB])
         service, _ = _make_service(env_config, [True])
-        monkeypatch.setattr(download_service_module.file_utils, 'unzip_file', lambda *args: True)
+        def fake_unzip(zip_path: str, extract_dir: str) -> bool:
+            Path(extract_dir).mkdir(parents=True, exist_ok=True)
+            return True
+
+        monkeypatch.setattr(download_service_module.file_utils, 'unzip_file', fake_unzip)
 
         ok = service.download_and_extract_env_file('env.zip', str(tmp_path / 'tmp'), str(tmp_path / 'out'))
 
