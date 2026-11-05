@@ -405,3 +405,22 @@ class TestSourceAwareRetry:
         monkeypatch.setattr('one_dragon.envs.download_service.shutil.rmtree', failing_rmtree)
 
         assert service.download_and_extract_env_file('env.zip', str(tmp_path), str(out)) is True
+
+    def test_leftover_backup_restored_even_if_all_sources_fail(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """上次替换中断留下备份时 这次即使全部失败也要先把环境还原回来。"""
+        service, _, _ = self._service_with_sources(['https://github.com/OneDragon-Anything'])
+        backup = tmp_path / 'out_bak_tmp'
+        backup.mkdir()
+        (backup / 'old.txt').write_text('old', encoding='utf-8')
+
+        def fake_download(url: str, save_file_path: str, proxy=None, progress_callback=None, **kwargs) -> bool:
+            return False
+
+        monkeypatch.setattr('one_dragon.envs.download_service.http_utils.download_file', fake_download)
+
+        assert service.download_and_extract_env_file('env.zip', str(tmp_path), str(tmp_path / 'out')) is False
+        assert (tmp_path / 'out' / 'old.txt').exists(), '旧环境要先还原回来'
