@@ -69,7 +69,9 @@ def test_plugin_screens_survive_all_reload_modes(work_dir) -> None:
     assert ctx.reload(from_separated_files=True) is True
     assert ctx.screen_info_map['plugin_screen'].app_id == 'bagel'
 
-    ctx.save(reload_after_save=False)  # 生成 _od_merged.yml    assert ctx.reload() is True  # init 的默认（合并文件）
+    ctx.save(reload_after_save=False)  # 生成 _od_merged.yml
+    # init 默认走合并文件 reload，必须真正执行并成功
+    assert ctx.reload() is True
     assert ctx.screen_info_map['plugin_screen'].app_id == 'bagel'
     assert 'global_screen' in ctx.screen_info_map
 
@@ -172,6 +174,90 @@ def test_from_memory_never_reads_plugin_dirs(work_dir, monkeypatch) -> None:
     assert calls == []
 
 
+def _make_plugin_ctx(work_dir) -> tuple[ScreenContext, Path, Path, Path]:
+    tmp, screen_dir = work_dir
+    _dump(screen_dir / 'base.yml', _screen('id_base', 'base_screen'))
+    dir_a = tmp / 'plugin_a'
+    dir_b = tmp / 'plugin_b'
+    _dump(dir_a / 'plugin_a.yml', _screen('id_plugin_a', 'plugin_a'))
+    _dump(dir_b / 'plugin_b.yml', _screen('id_plugin_b', 'plugin_b'))
+    ctx = ScreenContext()
+    ctx.set_extra_screen_source(lambda: [(dir_a, 'app_a'), (dir_b, 'app_b')])
+    assert ctx.reload(from_separated_files=True) is True
+    return ctx, dir_a, dir_b, screen_dir
+
+
+@pytest.mark.parametrize(('new_id', 'new_name'), [
+    ('id_base', 'plugin_a'),        # F1: 插件 id 改成 base 的 id
+    ('id_plugin_a', 'base_screen'),  # F2: 插件 name 改成 base 的 name
+    ('id_plugin_b', 'plugin_a'),     # F3: 改成另一个插件的 id
+])
+def test_plugin_screen_edit_cannot_steal_other_screen(work_dir, monkeypatch, new_id, new_name) -> None:
+    """P1 F1/F2/F3：插件画面改成 base/其它插件的 id 或 name → warning + 拒绝保存。"""
+    from one_dragon.base.screen import screen_loader as loader_module
+
+    ctx, dir_a, _dir_b, _screen_dir = _make_plugin_ctx(work_dir)
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        loader_module.log, 'warning',
+        lambda message, *args, **kwargs: warnings.append(message % args),
+    )
+
+    edited = ctx.get_screen('plugin_a', copy=True)
+    edited.screen_id = new_id
+    edited.screen_name = new_name
+    ctx.save_screen(edited)
+
+    assert any('不能改成其它画面' in message for message in warnings), warnings
+    assert ctx.screen_info_map['base_screen'].screen_id == 'id_base'
+    assert ctx.screen_info_map['plugin_a'].screen_id == 'id_plugin_a'
+    assert ctx.screen_info_map['plugin_b'].screen_id == 'id_plugin_b'
+    assert any(path.suffix == '.yml' for path in dir_a.iterdir())
+    saved = yaml.safe_load((dir_a / 'plugin_a.yml').read_text(encoding='utf-8'))
+    assert saved['screen_id'] == 'id_plugin_a'
+    assert saved['screen_name'] == 'plugin_a'
+
+
+def test_reload_logs_external_caller_and_internal_debug(work_dir) -> None:
+    """维护者第 5 点：外部调用 info 带模块名，save 内部 from_memory 重载走 debug。"""
+    import logging
+
+    from one_dragon.base.screen import screen_loader as loader_module
+
+    _tmp, screen_dir = work_dir
+    _dump(screen_dir / 'global.yml', _screen('id_global', 'global_screen'))
+    ctx = ScreenContext()
+    records: list[logging.LogRecord] = []
+
+    class CaptureHandler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    handler = CaptureHandler()
+    logger = loader_module.log
+    old_level = logger.level
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+    try:
+        assert ctx.reload(from_separated_files=True) is True
+        reload_records = [r for r in records if '画面重载 caller=' in r.getMessage()]
+        assert any(
+            r.levelno == logging.INFO and __name__ in r.getMessage()
+            for r in reload_records
+        ), [r.getMessage() for r in reload_records]
+
+        records.clear()
+        ctx.save(reload_after_save=True)  # save 内部触发 from_memory 重载
+        reload_records = [r for r in records if '画面重载 caller=' in r.getMessage()]
+        assert any(
+            r.levelno == logging.DEBUG and 'caller=screen_loader.save' in r.getMessage()
+            for r in reload_records
+        ), [r.getMessage() for r in reload_records]
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(old_level)
+
+
 def _read_dir(const: Any, attr: str, default: str = 'screen_info') -> str:
     return ApplicationFactoryManager._read_relative_dir(const, 'app', attr, default)
 
@@ -181,8 +267,9 @@ def test_screen_info_dir_const_validation(tmp_path: Path) -> None:
     assert _read_dir(SimpleNamespace(), 'SCREEN_INFO_DIR', SCREEN_INFO_DIR) == 'screen_info'
     assert _read_dir(SimpleNamespace(SCREEN_INFO_DIR='custom_screens'), 'SCREEN_INFO_DIR') == 'custom_screens'
     assert _read_dir(SimpleNamespace(SCREEN_INFO_DIR=''), 'SCREEN_INFO_DIR') == ''
+    assert _read_dir(SimpleNamespace(SCREEN_INFO_DIR='  screens  '), 'SCREEN_INFO_DIR') == 'screens'
 
-    bad_values = ['..', '../outside', '.', str(tmp_path / 'absolute')]
+    bad_values = ['..', '../outside', '.', './', str(tmp_path / 'absolute')]
     if os.name == 'nt':
         bad_values.extend(['C:foo', '\\outside'])
     for bad in bad_values:
@@ -267,7 +354,7 @@ def test_manual_and_callback_same_dir_loads_once(work_dir) -> None:
     assert ctx._extra_screen_ids == {'id_plugin'}
 
 
-@pytest.mark.parametrize('bad_value', ['..', '.', 'C:outside'])
+@pytest.mark.parametrize('bad_value', ['..', '.', './', 'C:outside'])
 def test_bad_relative_dir_values_raise(bad_value: str) -> None:
     """⑥续2 参数化覆盖几类越界目录名。"""
     if os.name != 'nt' and bad_value.startswith('C:'):
