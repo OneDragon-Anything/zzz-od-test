@@ -84,3 +84,34 @@ def test_match_template_source_smaller_than_template_returns_empty() -> None:
     template = np.zeros((20, 20, 3), dtype=np.uint8)
     result = cv2_utils.match_template(source, template, 0.7)
     assert result.max is None  # 空结果:无匹配项
+
+
+def test_save_image_returns_true_on_success(tmp_path) -> None:
+    """写盘成功返回 True。"""
+    img = _sample_rgb()
+    path = tmp_path / 'ok.png'
+
+    assert cv2_utils.save_image(img, str(path)) is True
+    assert path.exists()
+
+
+def test_save_image_returns_false_when_dir_missing(tmp_path) -> None:
+    """目录缺失时返回 False 而不是抛异常，调用方据此提示保存失败。"""
+    img = _sample_rgb()
+    missing = tmp_path / 'not_exist' / 'a.png'
+
+    assert cv2_utils.save_image(img, str(missing)) is False
+    assert not missing.exists()
+
+
+def test_save_image_keeps_single_channel_mask(tmp_path) -> None:
+    """单通道掩码原样按单通道写盘，不做 RGB→BGR 转换。"""
+    mask = np.zeros((6, 5), dtype=np.uint8)
+    mask[2, 3] = 255
+    path = tmp_path / 'mask.png'
+
+    assert cv2_utils.save_image(mask, str(path)) is True
+    back = cv2_utils.read_image(str(path))
+    assert back is not None
+    assert back.ndim == 2
+    assert np.array_equal(back, mask)
