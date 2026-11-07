@@ -626,3 +626,28 @@ def test_base_new_screen_target_file_occupied(work_dir) -> None:
     assert 'new_screen' not in ctx.screen_info_map
     assert ctx.screen_info_map['base_a'].screen_id == 'id_a'
 
+
+
+
+
+# ---------- devtools merge 失败提示 ----------
+
+
+def test_merge_clicked_shows_info_bar_on_reload_failure() -> None:
+    """merge 失败时除日志外还要 show_info_bar，避免静默。"""
+    import ast
+
+    import one_dragon
+
+    src_root = Path(one_dragon.__file__).resolve().parents[1]
+    source = (
+        src_root / 'one_dragon_qt/view/devtools/devtools_screen_manage_interface.py'
+    ).read_text(encoding='utf-8')
+    segment = None
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.FunctionDef) and node.name == '_on_merge_clicked':
+            segment = ast.get_source_segment(source, node)
+    assert segment is not None
+    assert 'if not self.ctx.screen_loader.reload(' in segment
+    assert 'show_info_bar(' in segment
+    assert "'重载失败'" in segment
