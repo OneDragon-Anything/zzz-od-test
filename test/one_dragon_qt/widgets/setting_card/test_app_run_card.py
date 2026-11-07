@@ -22,3 +22,18 @@ def test_app_run_card_has_no_migration_marker() -> None:
     assert card.content_widget.titleLabel.text() == '默认应用'
     assert not hasattr(card, 'migrated_label')
     assert not hasattr(card, 'migrated_info_btn')
+
+
+def test_new_app_with_run_record_shows_unused_text() -> None:
+    """一条龙新应用带运行记录时也要显示“还没使用过”，不能只说上次运行时间。"""
+    _app = QApplication.instance() or QApplication([])
+    item = ApplicationGroupConfigItem(app_id='new_app', enabled=False, is_persisted=False)
+    item.app_name = '新应用'
+    card = AppRunCard(item)
+    from types import SimpleNamespace
+
+    card.run_record = SimpleNamespace(run_time='2026-01-01 00:00:00')
+    card.update_display()
+
+    assert card.content_widget.titleLabel.text() == '【New！】新应用'
+    assert card.content_widget.contentLabel.text() == '新功能 还没使用过'
