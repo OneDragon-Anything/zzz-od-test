@@ -71,12 +71,12 @@ def test_reset_plans_all_zero_plan_times_is_noop() -> None:
     config.save.assert_not_called()
 
 
-def test_reset_plans_all_skipped_is_noop() -> None:
-    """全部 skipped:eligible 为空 → 早返,不扣减、不 save。"""
+def test_reset_plans_skipped_regular_plan_still_subtracts_completed_rounds() -> None:
+    """普通计划即使本轮跳过，已完成次数仍按整轮扣减。"""
     config = _make_config(plans=[_plan(run_times=2, skipped=True, plan_id='a')])
     config.reset_plans()
-    assert config.plan_list[0].run_times == 2
-    config.save.assert_not_called()
+    assert config.plan_list[0].run_times == 0
+    config.save.assert_called_once()
 
 
 def test_reset_plans_with_incomplete_does_nothing() -> None:
@@ -92,14 +92,14 @@ def test_reset_plans_with_incomplete_does_nothing() -> None:
 
 
 def test_reset_plans_all_complete_equal_subtracts_to_zero() -> None:
-    """全部完成且相等 → 逐轮扣到 0(每轮 save),最终终止、不死循环。"""
+    """全部完成且相等时扣到零，最终统一保存一次。"""
     config = _make_config(plans=[
         _plan(run_times=2, plan_times=1, plan_id='a'),
         _plan(run_times=2, plan_times=1, plan_id='b'),
     ])
     config.reset_plans()
     assert [p.run_times for p in config.plan_list] == [0, 0]
-    assert config.save.call_count == 2
+    config.save.assert_called_once()
 
 
 def test_reset_plans_mixed_subtracts_until_min_below_plan_times() -> None:
@@ -112,15 +112,25 @@ def test_reset_plans_mixed_subtracts_until_min_below_plan_times() -> None:
     assert [p.run_times for p in config.plan_list] == [2, 0]
 
 
-def test_reset_plans_skipped_not_subtracted() -> None:
-    """skipped 项不进 eligible,不被扣减;只扣 eligible 的(B 从 2→0,A 保持 5)。"""
+def test_reset_plans_skipped_regular_plan_preserves_extra_runs() -> None:
+    """普通跳过项参与整轮扣减，保留比其它计划多出的完成次数。"""
     config = _make_config(plans=[
         _plan(run_times=5, plan_times=1, skipped=True, plan_id='a'),
         _plan(run_times=2, plan_times=1, plan_id='b'),
     ])
     config.reset_plans()
-    assert config.plan_list[0].run_times == 5  # skipped 原样
+    assert config.plan_list[0].run_times == 3
     assert config.plan_list[1].run_times == 0
+
+
+def test_reset_plans_skipped_agent_plan_clears_runs() -> None:
+    """已跳过的代理人计划在下一轮清零，不与普通计划一起扣减。"""
+    agent_plan = _plan(run_times=5, skipped=True, plan_id='agent')
+    agent_plan.mission_type_name = '代理人方案培养'
+    config = _make_config(plans=[agent_plan, _plan(run_times=2, plan_id='regular')])
+    config.reset_plans()
+    assert [plan.run_times for plan in config.plan_list] == [0, 0]
+    config.save.assert_called_once()
 
 
 # ---------- get_next_plan ----------
@@ -216,13 +226,16 @@ def test_all_plan_finished_some_incomplete_is_false() -> None:
     assert config.all_plan_finished() is False
 
 
-def test_all_plan_finished_ignores_skipped() -> None:
-    """skipped 项不参与判定:skipped 未完成 + 其余完成 → True。"""
+@pytest.mark.parametrize('is_agent_plan', [False, True])
+def test_all_plan_finished_ignores_only_skipped_agent_plan(is_agent_plan: bool) -> None:
+    """只忽略已跳过的代理人计划，普通计划未完成仍阻止循环。"""
     config = _make_config(plans=[
         _plan(run_times=0, plan_times=1, skipped=True, plan_id='a'),
         _plan(run_times=1, plan_times=1, plan_id='b'),
     ])
-    assert config.all_plan_finished() is True
+    if is_agent_plan:
+        config.plan_list[0].mission_type_name = '代理人方案培养'
+    assert config.all_plan_finished() is is_agent_plan
 
 
 # ---------- add_plan_run_times ----------
@@ -400,6 +413,8 @@ plan_list:
   category_name: 区域巡防
   mission_type_name: 迅雷与裂爪
   mission_name: 谶羽之誓
+  predefined_team_idx: 2
+  battle_timeout_seconds: 120
 - tab_name: 训练
   category_name: 区域巡防
   mission_type_name: 迅脊与裂爪
@@ -433,3 +448,5 @@ plan_list:
         '迅脊与裂爪',
         '高塔与巨炮',
     ]
+    assert reloaded.plan_list[0].predefined_team_idx == 2
+    assert reloaded.plan_list[0].battle_timeout_seconds == 120
