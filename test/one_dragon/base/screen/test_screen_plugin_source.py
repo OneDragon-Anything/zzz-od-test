@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import os
+import stat
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -18,6 +19,7 @@ from one_dragon.base.operation.application.application_factory_manager import (
     ApplicationFactoryManager,
 )
 from one_dragon.base.operation.application.plugin_info import PluginInfo, PluginSource
+from one_dragon.base.screen.screen_area import ScreenArea
 from one_dragon.base.screen.screen_loader import ScreenContext
 from one_dragon.utils import os_utils
 
@@ -368,3 +370,147 @@ def test_plugin_info_default_screen_info_dir(tmp_path: Path) -> None:
     info = PluginInfo(app_id='a', app_name='a', default_group=False)
     assert info.screen_info_dir == 'screen_info'
     assert info.plugin_dir is None or isinstance(info.plugin_dir, Path)
+
+
+# ---------- commit 1: goto_list 过滤 ----------
+
+
+def test_goto_list_filters_invalid_elements() -> None:
+    """goto_list 非 str / 空串元素被过滤，正常元素保留且 to_dict 不变。"""
+    area = ScreenArea(
+        area_name='a', screen_name='s',
+        goto_list=['ok', 1, '', None],  # type: ignore[list-item]
+    )
+    assert area.goto_list == ['ok']
+    assert area.to_dict()['goto_list'] == ['ok']
+
+
+@pytest.mark.parametrize('bad_value', ['not-a-list', 1, {'a': 1}, None])
+def test_goto_list_invalid_container_becomes_empty(bad_value) -> None:
+    area = ScreenArea(area_name='a', screen_name='s', goto_list=bad_value)
+    assert area.goto_list == []
+
+
+def test_init_screen_route_skips_bad_goto_elements(work_dir) -> None:
+    """init_screen_route 对运行时塞入的坏 goto 元素不抛错。"""
+    _tmp, screen_dir = work_dir
+    _dump(screen_dir / 'global.yml', _screen(
+        'id_global', 'global_screen',
+        area_list=[{
+            'area_name': 'a', 'pc_rect': [1, 2, 3, 4], 'text': 'x',
+            'goto_list': ['global_screen'],
+        }],
+    ))
+    ctx = ScreenContext()
+    assert ctx.reload(from_separated_files=True) is True
+    area = ctx.get_screen('global_screen').area_list[0]
+    area.goto_list = [123, 'global_screen']  # type: ignore[list-item]
+    ctx.init_screen_route()  # 不应抛错
+    assert ctx.screen_route_map['global_screen']['global_screen'].can_go
+
+
+# ---------- commit 2: save/delete 返回 bool、写盘顺序 ----------
+
+
+def test_plugin_screen_rename_success(work_dir) -> None:
+    """正常唯一改名：新文件写成功、旧文件删除、内存更新。"""
+    ctx, dir_a, _dir_b, _tmp = _make_plugin_ctx(work_dir)
+    edited = ctx.get_screen('plugin_a', copy=True)
+    edited.screen_id = 'id_plugin_a2'
+    edited.screen_name = 'plugin_a2'
+
+    assert ctx.save_screen(edited) is True
+    assert (dir_a / 'id_plugin_a2.yml').exists()
+    assert not (dir_a / 'plugin_a.yml').exists()
+    assert ctx.screen_info_map['plugin_a2'].screen_id == 'id_plugin_a2'
+    assert ctx._extra_screen_paths['id_plugin_a2'] == dir_a / 'id_plugin_a2.yml'
+
+
+def test_plugin_screen_rename_invalid_id_keeps_old_file(work_dir) -> None:
+    """非法 id（含路径分隔符）→ False，旧 yml 与内存都保留。"""
+    ctx, dir_a, _dir_b, _tmp = _make_plugin_ctx(work_dir)
+    edited = ctx.get_screen('plugin_a', copy=True)
+    edited.screen_id = 'bad/id'
+
+    assert ctx.save_screen(edited) is False
+    assert (dir_a / 'plugin_a.yml').exists()
+    assert ctx.screen_info_map['plugin_a'].screen_id == 'id_plugin_a'
+    saved = yaml.safe_load((dir_a / 'plugin_a.yml').read_text(encoding='utf-8'))
+    assert saved['screen_id'] == 'id_plugin_a'
+
+
+def test_plugin_screen_write_oserror_keeps_old_state(work_dir, monkeypatch) -> None:
+    """写盘 OSError → False，旧文件与内存保持原样，临时文件清理。"""
+    from one_dragon.base.screen import screen_loader as loader_module
+
+    ctx, dir_a, _dir_b, _tmp = _make_plugin_ctx(work_dir)
+    before = (dir_a / 'plugin_a.yml').read_text(encoding='utf-8')
+    edited = ctx.get_screen('plugin_a', copy=True)
+    edited.screen_name = 'plugin_a_renamed'
+
+    def _boom(*args, **kwargs):
+        raise OSError('disk full')
+
+    monkeypatch.setattr(loader_module.os, 'replace', _boom)
+    assert ctx.save_screen(edited) is False
+    assert (dir_a / 'plugin_a.yml').read_text(encoding='utf-8') == before
+    assert ctx.screen_info_map['plugin_a'].screen_name == 'plugin_a'
+    assert list(dir_a.glob('.*.tmp')) == []
+
+
+def test_delete_screen_failure_keeps_memory(work_dir) -> None:
+    """删除插件文件失败（只读）→ False，内存与路由不变。"""
+    ctx, dir_a, _dir_b, _tmp = _make_plugin_ctx(work_dir)
+    file_path = dir_a / 'plugin_a.yml'
+    before_names = set(ctx.screen_info_map)
+    file_path.chmod(stat.S_IREAD)
+    try:
+        assert ctx.delete_screen('id_plugin_a') is False
+    finally:
+        file_path.chmod(stat.S_IWRITE)
+    assert file_path.exists()
+    assert set(ctx.screen_info_map) == before_names
+    assert 'id_plugin_a' in ctx._extra_screen_ids
+
+
+# ---------- commit 3: backend 消费返回值 ----------
+
+
+def test_backend_area_save_failure_returns_false(work_dir, monkeypatch) -> None:
+    """backend 保存失败时返回 success=False，不再误报成功。"""
+    from unittest.mock import MagicMock
+
+    from zzz_od.backend.backend_context import ZzzBackendContext
+
+    _tmp, screen_dir = work_dir
+    _dump(screen_dir / 'global.yml', _screen('id_global', 'global_screen'))
+    loader = ScreenContext()
+    assert loader.reload(from_separated_files=True) is True
+
+    ctx = MagicMock()
+    ctx.ready_for_application = True
+    ctx.screen_loader = loader
+    ctx.template_loader = MagicMock()
+    backend = ZzzBackendContext(ctx)
+
+    monkeypatch.setattr(loader, 'save_screen', lambda screen_info: False)
+    result = backend.upsert_screen_area('global_screen', 'area_a', [1, 2, 3, 4], text='x')
+    assert result['success'] is False
+    assert '保存失败' in result['error']
+    result = backend.delete_screen_area('global_screen', 'area_a')
+    assert result['success'] is False
+    assert '保存失败' in result['error']
+
+
+# ---------- commit 4: init 失败通知 ----------
+
+
+def test_init_reload_failure_dispatches_notify() -> None:
+    """init 的 reload 失败分支复用 ContextNotifyEvent 链路。"""
+    from one_dragon.base.operation import one_dragon_context as context_module
+
+    source = Path(context_module.__file__).read_text(encoding='utf-8')
+    assert 'if not self.screen_loader.reload():' in source
+    assert "ContextNotifyEvent.error('画面配置'" in source
+    assert 'ready_for_application = True' in source
+
