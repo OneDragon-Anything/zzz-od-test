@@ -132,3 +132,43 @@ def test_inverted_color_range_raises(ocr_service_and_matcher, image, color_range
         service.get_ocr_result_list(image, color_range=color_range)
 
     assert matcher.received_images == []
+
+
+def test_cached_color_range_is_revalidated_after_in_place_edit(
+    ocr_service_and_matcher: tuple[OcrService, RecordingOcrMatcher],
+) -> None:
+    """同一图片上，普通缓存命中后，原地改坏配置仍应报错。"""
+    service, matcher = ocr_service_and_matcher
+    color_range = [[0, 0, 0], [100, 255, 255]]
+
+    service.get_ocr_result_list(RGB_IMAGE, color_range=color_range)
+    service.get_ocr_result_list(RGB_IMAGE, color_range=[[0, 0, 0], [100, 255, 255]])
+    assert len(matcher.received_images) == 1
+
+    color_range[0][0] = 200
+    with pytest.raises(ValueError, match='下界不能高于上界'):
+        service.get_ocr_result_list(RGB_IMAGE, color_range=color_range)
+    assert len(matcher.received_images) == 1
+
+    color_range[0][0] = 0
+    service.get_ocr_result_list(RGB_IMAGE, color_range=color_range)
+    assert len(matcher.received_images) == 1
+
+
+def test_in_place_color_range_edit_recomputes_mask(
+    ocr_service_and_matcher: tuple[OcrService, RecordingOcrMatcher],
+) -> None:
+    """原地改成另一个合法范围时，重新生成掩码并执行 OCR。"""
+    service, matcher = ocr_service_and_matcher
+    color_range = [[0], [255]]
+
+    service.get_ocr_result_list(GRAY_IMAGE, color_range=color_range)
+    color_range[0][0] = 100
+    service.get_ocr_result_list(GRAY_IMAGE, color_range=color_range)
+
+    assert len(matcher.received_images) == 2
+    expected = np.array(
+        [[[255, 255, 255], [0, 0, 0]], [[255, 255, 255], [255, 255, 255]]],
+        dtype=np.uint8,
+    )
+    np.testing.assert_array_equal(matcher.received_images[1], expected)
