@@ -116,3 +116,22 @@ class TestDevPluginRegistration:
         assert sys.modules['dev_demo.const'].APP_ID == 'demo_dev'
         # 直接 from .const import APP_ID 的模块也要拿到改后的值
         assert sys.modules['dev_demo.config'].APP_ID == 'demo_dev'
+
+    def test_same_app_id_from_different_dirs_coexist(self, tmp_path: Path) -> None:
+        """两个插件声明同一个 APP_ID 时，后一个改成 demo_plugin，不报重复也不失败。"""
+        plugins_dir = tmp_path / 'plugins'
+        plugins_dir.mkdir()
+        _make_plugin(plugins_dir / 'demo')
+        _make_plugin(plugins_dir / 'demo_copy')
+
+        manager = ApplicationFactoryManager(
+            _FakeCtx(),
+            [(plugins_dir, PluginSource.THIRD_PARTY)],
+        )
+        factories = manager.discover_factories()
+
+        assert [factory.app_id for factory in factories] == ['demo', 'demo_plugin']
+        assert manager.scan_failures == []
+        infos = {info.app_id: info for info in manager.plugin_infos}
+        assert infos['demo'].app_name == '演示插件'
+        assert infos['demo_plugin'].app_name == '演示插件（插件版）'
