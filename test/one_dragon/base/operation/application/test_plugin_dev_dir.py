@@ -135,3 +135,27 @@ class TestDevPluginRegistration:
         infos = {info.app_id: info for info in manager.plugin_infos}
         assert infos['demo'].app_name == '演示插件'
         assert infos['demo_plugin'].app_name == '演示插件（插件版）'
+
+    def test_dev_app_id_survives_reload(self, tmp_path: Path) -> None:
+        """刷新重载（插件安装/更新后走的路径）后开发版身份不能被打回原值。
+
+        重载会先卸载插件模块，再重新执行 const.py；如果改写发生在卸载之前，
+        APP_ID 会恢复成 demo，开发版又和商店版撞上。
+        """
+        plugins_dir = tmp_path / 'plugins'
+        plugins_dir.mkdir()
+        _make_plugin(plugins_dir / 'demo')
+        dev_dir = plugins_dir / '.dev'
+        dev_dir.mkdir()
+        _make_plugin(dev_dir / 'demo')
+
+        manager = ApplicationFactoryManager(
+            _FakeCtx(),
+            [(plugins_dir, PluginSource.THIRD_PARTY), (dev_dir, PluginSource.DEV)],
+        )
+
+        for _ in range(2):
+            factories = manager.discover_factories(reload_modules=True)
+            assert [factory.app_id for factory in factories] == ['demo', 'demo_dev']
+            assert manager.scan_failures == []
+            assert sys.modules['dev_demo.const'].APP_ID == 'demo_dev'
