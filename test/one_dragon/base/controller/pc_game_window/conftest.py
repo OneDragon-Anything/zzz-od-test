@@ -26,8 +26,12 @@ def windows(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     lookup = Mock(side_effect=lambda title: [win for win in live.values() if title in win.title])
     monkeypatch.setattr(module.pyautogui, 'getWindowsWithTitle', lookup)
     monkeypatch.setattr(module.ctypes.windll.user32, 'IsWindow', lambda hwnd: hwnd in live)
-    monkeypatch.setattr(module.win32process, 'GetWindowThreadProcessId',
-                        lambda hwnd: (hwnd + 1000, processes[hwnd].pid))
+    def thread_and_pid(hwnd: int) -> tuple[int, int]:
+        if hwnd not in live:
+            raise OSError('窗口已关闭')
+        return hwnd + 1000, processes[hwnd].pid
+
+    monkeypatch.setattr(module, '_get_window_thread_and_pid', thread_and_pid)
     monkeypatch.setattr(module.psutil, 'Process',
                         lambda pid: next(p for p in processes.values() if p.pid == pid))
     game = module.PcGameWindow()
